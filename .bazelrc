@@ -1,0 +1,58 @@
+##########################################################################
+# Copyright (c) 2018-2019 NVIDIA Corporation. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# File: DL4AGX/.bazelrc
+# Description: Default bazel settings and toolchain configuration 
+##########################################################################
+
+# +------------------------------------------------------------+
+# | Build Configurations                                       |
+# +------------------------------------------------------------+
+# Enable colorful output of GCC
+build --cxxopt="-fdiagnostics-color=always"
+build --cxxopt='-std=c++11'
+
+# +------------------------------------------------------------+
+# | Toolchain Configurations                                   |
+# +------------------------------------------------------------+
+build:D5Q-toolchain --crosstool_top=//toolchains/D5Q:aarch64-unknown-nto-qnx
+build:D5Q-toolchain --cpu=aarch64
+build:D5Q-toolchain --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
+#These are env variables set in the base docker image, can be overridden here
+build:D5Q-toolchain --action_env QNX_HOST --action_env QNX_TARGET
+build:D5Q-toolchain --cxxopt=-I/usr/aarch64-unknown-nto-qnx/aarch64le/include
+build:D5Q-toolchain --cxxopt='-std=c++11'
+
+build:D5Q-toolchain-debug --linkopt=-Wl,--verbose
+build:D5Q-toolchain-debug --crosstool_top=//toolchains/D5Q:aarch64-unknown-nto-qnx
+build:D5Q-toolchain-debug --cpu=aarch64
+build:D5Q-toolchain-debug --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
+#These are env variables set in the base docker image, can be overridden here
+build:D5Q-toolchain-debug --action_env QNX_HOST --action_env QNX_TARGET
+build:D5Q-toolchain-debug --cxxopt=-I/usr/aarch64-unknown-nto-qnx/aarch64le/include
+build:D5Q-toolchain-debug --cxxopt='-std=c++11'
+    
+build:D5L-toolchain --crosstool_top=//toolchains/D5L:aarch64-unknown-linux-gnu
+build:D5L-toolchain --cpu=aarch64
+build:D5L-toolchain --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
+build:D5L-toolchain --cxxopt='-std=c++11'
+
+# D5L Alias
+build:L4T-toolchain --crosstool_top=//toolchains/D5L:aarch64-unknown-linux-gnu
+build:L4T-toolchain --cpu=aarch64
+build:L4T-toolchain --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
+build:L4T-toolchain --cxxopt='-std=c++11'
+
+run --python_path=/usr/bin/python3 --force_python=py3
