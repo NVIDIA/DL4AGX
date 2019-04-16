@@ -1,0 +1,10 @@
+bazel*
+docker/pdk_files/*
+docker/qnx_toolchain/*
+.vscode/
+.dazel_run
+.nvvp
+__pycache__/
+# The experiments space can be used to keep things you
+# don't want to push up but want to use the build system 
+experiments/ 

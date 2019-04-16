@@ -1,0 +1,465 @@
+#############################################################################
+# Copyright (c) 2018-2019 NVIDIA Corporation. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# File: DL4AGX/docker/Jetson/Dockerfile.aarch64-linux.5.1.3.0
+# Description: Docker image for DRIVE PDK 5.1.3.0 for aarch64-linux
+############################################################################
+FROM nvidia/cuda:10.1-devel-ubuntu16.04
+
+ARG pdk_version=5.1.3.0
+
+ENV CUDA_VERSION=10.1   
+ARG cuda_version_dash=10-1
+ARG cuda_version_long=10.1.107
+ARG driver_version=418.40
+
+ARG cudnn_version=7.5
+ARG cudnn_version_long=7.5.0.53
+
+ARG trt_version=5.1
+ARG trt_version_short=5.1.1
+ARG trt_version_long=5.1.1.4
+ARG target_driver=10.1-r418
+
+ARG cuda_repo_x86_64=cuda-repo-ubuntu1604-${cuda_version_dash}-local-${cuda_version_long}-${driver_version}_1.0-1_amd64.deb
+ARG cuda_repo_cross_aarch64_linux=cuda-repo-cross-aarch64-${cuda_version_dash}-local-${cuda_version_long}_1.0-1_all.deb
+
+ENV CUDNN_x86_64_DEBS="libcudnn7_${cudnn_version_long}-1+cuda${CUDA_VERSION}_amd64.deb \
+                       libcudnn7-dev_${cudnn_version_long}-1+cuda${CUDA_VERSION}_amd64.deb"
+
+ENV CUDNN_AARCH64_LINUX_DEBS="libcudnn7-cross-aarch64_${cudnn_version_long}-1+cuda${CUDA_VERSION}_all.deb \
+                              libcudnn7-dev-cross-aarch64_${cudnn_version_long}-1+cuda${CUDA_VERSION}_all.deb"
+
+ENV TENSORRT_x86_64_DEBS "libnvinfer5_${trt_version_short}-1+cuda${CUDA_VERSION}_amd64.deb \
+                          libnvinfer-dev_${trt_version_short}-1+cuda${CUDA_VERSION}_amd64.deb \
+                          python-libnvinfer_${trt_version_short}-1+cuda${CUDA_VERSION}_amd64.deb \
+                          python-libnvinfer-dev_${trt_version_short}-1+cuda${CUDA_VERSION}_amd64.deb \
+                          python3-libnvinfer_${trt_version_short}-1+cuda${CUDA_VERSION}_amd64.deb \
+                          python3-libnvinfer-dev_${trt_version_short}-1+cuda${CUDA_VERSION}_amd64.deb \
+                          uff-converter-tf_${trt_version_short}-1+cuda${CUDA_VERSION}_amd64.deb \
+                          graphsurgeon-tf_${trt_version_short}-1+cuda${CUDA_VERSION}_amd64.deb"
+
+ENV TRT_AARCH64_LINUX_DEBS="libnvinfer5-cross-aarch64_${trt_version_short}-1+cuda${CUDA_VERSION}_all.deb \
+                      libnvinfer-dev-cross-aarch64_${trt_version_short}-1+cuda${CUDA_VERSION}_all.deb"
+
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/* 
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libtool \
+        rsync \
+        pkg-config \
+        python \
+        python-dev \
+        python3 \
+        python3-dev \
+        x264 v4l-utils \
+        gcc-aarch64-linux-gnu  \
+        g++-aarch64-linux-gnu \ 
+        libjpeg-dev \
+        curl \
+        ca-certificates \
+        wget \
+        unzip \ 
+        git \
+        nasm \
+        pkg-config \
+        dh-autoreconf \
+        make\
+        g++\
+        libboost-all-dev \
+        unzip && \
+    rm -rf /var/lib/apt/lists/*   
+        
+RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
+    python get-pip.py && \
+    rm get-pip.py
+
+RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
+    python3 get-pip.py && \
+    rm get-pip.py
+
+
+RUN pip install --upgrade --no-cache-dir numpy
+
+RUN pip install --upgrade --no-cache-dir \
+    enum34 \
+    pillow \
+    pip \
+    protobuf \
+    pycuda \
+    setuptools
+
+
+RUN pip3 install --upgrade --no-cache-dir numpy
+
+RUN pip3 install --upgrade --no-cache-dir \
+    enum34 \
+    pillow \
+    pip \
+    protobuf \
+    pycuda \
+    setuptools
+
+COPY pdk_files /pdk_files
+###########################################################
+# CUDA 
+###########################################################
+RUN mv /usr/local/cuda-${CUDA_VERSION} /tmp/cuda-backup
+RUN mv /pdk_files/${cuda_repo_x86_64} cuda.deb
+RUN mv /pdk_files/${cuda_repo_cross_aarch64_linux} cuda-repo-cross-aarch64.deb
+
+ENV REPO_DEBS="cuda.deb \
+               cuda-repo-cross-aarch64.deb"
+    
+RUN dpkg -i $REPO_DEBS
+ 
+ENV CUDA_PACKAGES="nvrtc nvgraph cusolver cufft curand cusparse npp nvjpeg cudart cupti compiler misc-headers command-line-tools nvrtc-dev nvml-dev nvgraph-dev cusolver-dev cufft-dev curand-dev cusparse-dev npp-dev nvjpeg-dev cudart-dev driver-dev"
+RUN echo "for i in \$CUDA_PACKAGES; do echo \"cuda-\$i-\${cuda_version_dash}\";done" | bash > /tmp/cuda-packages.txt
+
+#Install CUDA 10
+RUN apt-get update \
+    && apt-get -o Dpkg::Options::="--force-overwrite"  install -y $(cat /tmp/cuda-packages.txt) \
+    # Random cuda libs in random places...
+    && apt-get install -y libcublas-dev \ 
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/cuda-packages.txt
+
+RUN mv /usr/lib/x86_64-linux-gnu/libcublas.so* /usr/local/cuda-${CUDA_VERSION}/lib64 && \
+    mv /usr/include/cublas* /usr/local/cuda-${CUDA_VERSION}/include
+
+RUN rm -rf /usr/local/cuda \
+    && ln -s /usr/local/cuda-${CUDA_VERSION} /usr/local/cuda
+    
+RUN ls /tmp
+RUN rsync -a --ignore-existing /tmp/cuda-backup/lib64 /usr/local/cuda/lib64
+
+RUN apt-get update \
+    && apt-get install -y cuda-cross-aarch64 \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/cuda-packages.txt 
+
+
+RUN cp -r /usr/local/cuda-${CUDA_VERSION}/bin /usr/local/cuda-${CUDA_VERSION}/targets/x86_64-linux \
+    && mv /usr/local/cuda-${CUDA_VERSION}/extras /usr/local/cuda-${CUDA_VERSION}/targets/x86_64-linux \
+    && ln -s /usr/local/cuda-${CUDA_VERSION}/targets/x86_64-linux/extras /usr/local/cuda-${CUDA_VERSION}/extras \
+    
+RUN rm -rf /usr/local/cuda-${CUDA_VERSION}/doc
+RUN find / -name "*cublas*"
+RUN mv /usr/lib/aarch64-linux-gnu/libcublas* /usr/local/cuda/targets/aarch64-linux/lib && \
+    mv /usr/include/aarch64-linux-gnu/cublas* /usr/local/cuda/targets/aarch64-linux/include 
+
+RUN cd /pdk_files \
+    && dpkg -i ${CUDNN_x86_64_DEBS}
+
+#TODO: REMOVE THE LIBNVINFER SAMPLES DEPENDENCY
+RUN cd /pdk_files \ 
+    && dpkg -i ${TENSORRT_x86_64_DEBS} \
+    && rm -rf ${TENSORRT_x86_64_DEBS}
+
+RUN mkdir -p /usr/local/cuda-${CUDA_VERSION}/dl/targets/x86_64-linux \
+    && cd /usr/local/cuda-${CUDA_VERSION}/dl/targets/x86_64-linux \
+    && mkdir include lib lib64\
+    && mv /usr/lib/x86_64-linux-gnu/libnv* lib \
+    && mv /usr/include/x86_64-linux-gnu/Nv* include \
+    && mv /usr/lib/x86_64-linux-gnu/libcudnn* lib \
+    && mv /usr/include/x86_64-linux-gnu/cudnn* include/cudnn.h \
+    && cd lib \
+    && rm /etc/alternatives/libcudnn* \
+    && ln -s /usr/local/cuda-${CUDA_VERSION}/dl/targets/x86_64-linux/include/cudnn.h /etc/alternatives/libcudnn \
+    && ln -s /usr/local/cuda-${CUDA_VERSION}/dl/targets/x86_64-linux/lib/libcudnn.so.7 /etc/alternatives/libcudnn_so \
+    && rm -rf /usr/local/cuda-${CUDA_VERSION}/*sight* /usr/local/cuda-${CUDA_VERSION}/samples
+
+###########################################################
+# ARM Linux Libs
+###########################################################
+RUN cd /pdk_files \
+    && dpkg -i ${CUDNN_AARCH64_LINUX_DEBS}
+
+RUN cd /pdk_files \
+    && dpkg -i ${TRT_AARCH64_LINUX_DEBS}
+
+RUN mkdir -p /usr/local/cuda-${CUDA_VERSION}/dl/targets/aarch64-linux/include /usr/local/cuda-${CUDA_VERSION}/dl/targets/aarch64-linux/lib \
+    && mv /usr/lib/aarch64-linux-gnu/* /usr/local/cuda-${CUDA_VERSION}/dl/targets/aarch64-linux/lib \
+    && mv /usr/include/aarch64-linux-gnu/* /usr/local/cuda-${CUDA_VERSION}/dl/targets/aarch64-linux/include
+
+###########################################################
+# Sample Dependencies
+###########################################################
+
+WORKDIR /
+# CMake
+RUN CMAKE_VERSION=3.5 && \
+    CMAKE_BUILD=3.5.0 && \
+    curl -L https://cmake.org/files/v${CMAKE_VERSION}/cmake-${CMAKE_BUILD}.tar.gz | tar -xzf - && \
+    cd /cmake-${CMAKE_BUILD} && \
+    ./bootstrap --parallel=$(grep ^processor /proc/cpuinfo | wc -l) && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
+    rm -rf /cmake-${CMAKE_BUILD}
+
+# protobuf v3.5.1
+ENV PROTOBUF_VERSION=3.5.1 
+RUN curl -L https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/protobuf-all-${PROTOBUF_VERSION}.tar.gz | tar -xzf -
+
+RUN cd /protobuf-${PROTOBUF_VERSION} && \
+    ./autogen.sh && \
+    ./configure CXXFLAGS="-fPIC" --prefix=/usr/local --disable-shared 2>&1 > /dev/null && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install 2>&1 > /dev/null && \
+    make clean
+
+RUN cd /protobuf-${PROTOBUF_VERSION} \
+    && ./autogen.sh && ./configure \
+    CC=aarch64-linux-gnu-gcc \
+    CXX=aarch64-linux-gnu-g++ \
+      --host=aarch64-unknown-linux-gnu \
+      --with-protoc=/usr/local/bin/protoc \
+      --prefix=/usr/aarch64-linux-gnu/ && make -j$(nproc) install && \
+    make clean 
+
+ENV JPEG_TURBO_VERSION=1.5.3
+RUN curl -L https://github.com/libjpeg-turbo/libjpeg-turbo/archive/${JPEG_TURBO_VERSION}.tar.gz | tar -xzf -
+
+RUN cd /libjpeg-turbo-${JPEG_TURBO_VERSION} && \
+    autoreconf -fiv && \
+    ./configure \
+      --enable-shared \
+      --prefix=/usr/local/ && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
+    make clean
+
+RUN cd /libjpeg-turbo-${JPEG_TURBO_VERSION} && \
+    autoreconf -fiv && \
+    ./configure \
+      --enable-shared \
+      CC=aarch64-linux-gnu-gcc \
+      CXX=aarch64-linux-gnu-g++ \
+      --host=aarch64-unknown-linux-gnu \
+      --prefix=/usr/aarch64-linux-gnu/ && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
+    make clean 
+    
+RUN rm -rf /libjpeg-turbo-${JPEG_TURBO_VERSION}
+
+# FFMpeg
+ENV FFMPEG_VERSION=3.4.2
+RUN cd /tmp && wget https://developer.download.nvidia.com/compute/redist/nvidia-dali/ffmpeg-${FFMPEG_VERSION}.tar.bz2 && \
+    tar xf ffmpeg-$FFMPEG_VERSION.tar.bz2 && \
+    rm ffmpeg-$FFMPEG_VERSION.tar.bz2
+
+RUN cd /tmp/ffmpeg-$FFMPEG_VERSION && \
+    ./configure \
+      --arch=aarch64 \
+      --target_os=linux \
+      --prefix=/usr/aarch64-linux-gnu/ \
+      --disable-static \
+      --disable-all \
+      --disable-autodetect \
+      --disable-iconv \
+      --enable-shared \
+      --enable-avformat \
+      --enable-avcodec \
+      --enable-avfilter \
+      --enable-protocol=file \
+      --enable-cross-compile \
+      --enable-demuxer=mov,matroska \
+      --enable-bsf=h264_mp4toannexb,hevc_mp4toannexb \
+      --cc=aarch64-linux-gnu-gcc \
+      --cxx=aarch64-linux-gnu-g++ \
+      --disable-stripping \
+      --extra-cflags="-D_XOPEN_SOURCE=600 -std=gnu99 -fPIC" && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" && make install && \
+    make clean
+
+RUN cd /tmp/ffmpeg-$FFMPEG_VERSION && \
+    ./configure \
+      --target_os=linux \
+      --prefix=/usr/local/ \
+      --disable-static \
+      --disable-all \
+      --disable-autodetect \
+      --disable-iconv \
+      --enable-shared \
+      --enable-avformat \
+      --enable-avcodec \
+      --enable-avfilter \
+      --enable-protocol=file \
+      --enable-demuxer=mov,matroska \
+      --enable-bsf=h264_mp4toannexb,hevc_mp4toannexb \
+      --disable-stripping \
+      --extra-cflags="-D_XOPEN_SOURCE=600 -std=gnu99 -fPIC" && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" && make install && \
+    make clean
+
+# OpenCV
+ENV OPENCV_VERSION=3.4.3
+RUN curl -L https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.tar.gz | tar -xzf -
+
+RUN cd /opencv-${OPENCV_VERSION} && mkdir build && cd build && \
+    cmake -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_TOOLCHAIN_FILE=$PWD/../platforms/linux/aarch64-gnu.toolchain.cmake \
+          -DCMAKE_INSTALL_PREFIX=/usr/aarch64-linux-gnu/ \
+          -DBUILD_LIST=core,improc,imgcodecs \
+          -DBUILD_PNG=ON \
+          -DBUILD_TIFF=OFF \
+          -DBUILD_TBB=OFF \
+          -DBUILD_WEBP=OFF \
+          -DBUILD_JPEG=ON \
+          -DBUILD_JASPER=OFF \
+          -DBUILD_ZLIB=ON \
+          -DBUILD_EXAMPLES=OFF \
+          -DBUILD_FFMPEG=ON \
+          -DBUILD_opencv_java=OFF \
+          -DBUILD_opencv_python2=OFF \
+          -DBUILD_opencv_python3=OFF \
+          -DENABLE_NEON=OFF \
+          -DWITH_PROTOBUF=OFF \
+          -DWITH_PTHREADS_PF=OFF \
+          -DWITH_OPENCL=OFF \
+          -DWITH_OPENMP=OFF \
+          -DWITH_FFMPEG=OFF \
+          -DWITH_GSTREAMER=OFF \
+          -DWITH_GSTREAMER_0_10=OFF \
+          -DWITH_CUDA=OFF \
+          -DWITH_GTK=OFF \
+          -DWITH_VTK=OFF \
+          -DWITH_TBB=OFF \
+          -DWITH_1394=OFF \
+          -DWITH_OPENEXR=OFF \
+          -DINSTALL_C_EXAMPLES=OFF \
+          -DINSTALL_TESTS=OFF \
+          -DVIBRANTE=TRUE \
+          VERBOSE=1 ../  && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
+    cd .. && rm -rf build
+
+RUN cd /opencv-${OPENCV_VERSION} && mkdir build && cd build && \
+    cmake -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=/usr/local/ \
+          -DBUILD_LIST=core,improc,imgcodecs \
+          -DBUILD_PNG=ON \
+          -DBUILD_TIFF=OFF \
+          -DBUILD_TBB=OFF \
+          -DBUILD_WEBP=OFF \
+          -DBUILD_JPEG=ON \
+          -DBUILD_JASPER=OFF \
+          -DBUILD_ZLIB=ON \
+          -DBUILD_EXAMPLES=OFF \
+          -DBUILD_FFMPEG=ON \
+          -DBUILD_opencv_java=OFF \
+          -DBUILD_opencv_python2=OFF \
+          -DBUILD_opencv_python3=OFF \
+          -DENABLE_NEON=OFF \
+          -DWITH_PROTOBUF=OFF \
+          -DWITH_PTHREADS_PF=OFF \
+          -DWITH_OPENCL=OFF \
+          -DWITH_OPENMP=OFF \
+          -DWITH_FFMPEG=OFF \
+          -DWITH_GSTREAMER=OFF \
+          -DWITH_GSTREAMER_0_10=OFF \
+          -DWITH_CUDA=OFF \
+          -DWITH_GTK=OFF \
+          -DWITH_VTK=OFF \
+          -DWITH_TBB=OFF \
+          -DWITH_1394=OFF \
+          -DWITH_OPENEXR=OFF \
+          -DINSTALL_C_EXAMPLES=OFF \
+          -DINSTALL_TESTS=OFF \
+          VERBOSE=1 ../  && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
+    cd .. && rm -rf build
+# Boost
+RUN BOOST_VERSION=1_66_0 \
+    && cd /usr/local \
+    && curl -L https://dl.bintray.com/boostorg/release/1.66.0/source/boost_${BOOST_VERSION}.tar.gz | tar -xzf - \
+    && cp -r  boost_${BOOST_VERSION}/boost  /usr/include/boost \
+    && cp -r  boost_${BOOST_VERSION}/boost  /usr/aarch64-linux-gnu/include/boost \
+    && rm -rf boost_${BOOST_VERSION}
+
+RUN rm -rf /opencv-${OPENCV_VERSION} 
+
+RUN cd /tmp && rm -rf ffmpeg-$FFMPEG_VERSION
+
+ENV PATH=/usr/local/cuda-${CUDA_VERSION}/bin:$PATH
+
+RUN git clone https://github.com/andi4191/DALI --recursive && cd DALI && git checkout anuragd/aarch64_dl4agx
+
+RUN cd DALI && mkdir -p build && cd build && cmake \ 
+      -DCMAKE_INSTALL_PREFIX=./install \
+      -DCMAKE_COLOR_MAKEFILE=ON \
+      -DBUILD_NVJPEG=OFF \
+      -DBUILD_TENSORFLOW=OFF \
+      -DBUILD_TEST=OFF \
+      -DBUILD_JPEG_TURBO=ON \
+      -DJPEG_INCLUDE_DIR=/usr/local/include \
+      -DJPEG_LIBRARY=/usr/local/lib \
+      -DBUILD_PYTHON=OFF \
+      -DBUILD_LMDB=OFF \
+      -DBUILD_NVTX=OFF \
+      -DBUILD_BENCHMARK=OFF \
+      -DOPENCV_PATH=/usr/local/ \
+      -DFFMPEG_ROOT_DIR=/usr/local/ \
+      -DProtobuf_LIBRARIES=/usr/local/lib \
+      -DFFMPEG_ROOT_DIR=/usr/local/ \
+      ../ && make install -j12 && \
+    cp dali/python/nvidia/dali/libdali.so /usr/local/lib/ && \
+    rsync -a  dali/python/nvidia/dali/include /usr/local/ && \
+    rsync -a install/include /usr/local/ && \
+    rm -rf build
+
+RUN cd DALI && mkdir -p build_aarch64-linux && cd build_aarch64-linux && cmake \ 
+      -DCMAKE_INSTALL_PREFIX=./install \
+      -DARCH=aarch64-linux \
+      -DCMAKE_COLOR_MAKEFILE=ON \
+      -DBUILD_NVJPEG=OFF \
+      -DBUILD_TENSORFLOW=OFF \
+      -DBUILD_TEST=OFF \
+      -DBUILD_JPEG_TURBO=ON \
+      -DJPEG_INCLUDE_DIR=/usr/aarch64-linux-gnu/include \
+      -DJPEG_LIBRARY=/usr/aarch64-linux-gnu/lib \
+      -DBUILD_PYTHON=OFF \
+      -DBUILD_LMDB=OFF \
+      -DBUILD_NVTX=OFF \
+      -DCMAKE_TOOLCHAIN_FILE:STRING="$PWD/../platforms/aarch64-linux/aarch64-linux.toolchain.cmake" \
+      -DBUILD_BENCHMARK=OFF \
+      -DCUDA_HOST=/usr/local/cuda-${CUDA_VERSION} \
+      -DOPENCV_PATH=/usr/aarch64-linux-gnu/ \
+      -DCUDA_TARGET=/usr/local/cuda-${CUDA_VERSION}/targets/aarch64-linux \
+      -DPROTOBUF_TARGET=/usr/aarch64-linux-gnu/ \
+      -DProtobuf_LIBRARIES=/usr/aarch64-linux-gnu/lib \
+      -DFFMPEG_ROOT_DIR=/usr/aarch64-linux-gnu/ \
+      -E env LDFLAGS="-ljpeg" \
+      -DVERBOSE=1 \
+      ../ && make install -j12 && \
+    cp dali/python/nvidia/dali/libdali.so /usr/aarch64-linux-gnu/lib/ && \
+    rsync -a  dali/python/nvidia/dali/include /usr/aarch64-linux-gnu/ && \
+    rsync -a install/include /usr/aarch64-linux-gnu/ && \
+    rm -rf build
+
+RUN rm -rf DALI
+
+# Weird bugs with having this compiled first 
+RUN cd /protobuf-${PROTOBUF_VERSION} && \
+    ./autogen.sh && \
+    ./configure CXXFLAGS="-fPIC" --prefix=/usr/local 2>&1 > /dev/null && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install 2>&1 > /dev/null && \
+    make clean
+
+RUN rm -rf /protobuf-${PROTOBUF_VERSION}
+RUN rm -rf *.deb *.patch
+RUN rm -rf /pdk_files
+RUN mkdir /usr/local/cuda/targets/aarch64-qnx /usr/local/cuda/dl/targets/aarch64-qnx
+
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/local/cuda/lib64:/usr/local/cuda/dl/targets/x86_64-linux/lib:/usr/local/cuda/dl/targets/x86_64-linux/lib64:/usr/lib:/lib:$LD_LIBRARY_PATH

@@ -1,0 +1,144 @@
+##########################################################################
+# Copyright (c) 2018-2019 NVIDIA Corporation. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# File: DL4AGX/toolchains/D5L/CROSSTOOL
+# Description: Create a aarch64 toolchain spec mapped to --config=[L4T/D5L]-toolchain 
+############################################################################
+major_version: "1"
+minor_version: "0"
+default_target_cpu: "aarch64"
+
+default_toolchain {
+    cpu: "aarch64"
+    toolchain_identifier: "aarch64-unknown-linux-gnu"
+}
+
+toolchain {
+    abi_version: "aarch64"
+    abi_libc_version: "aarch64"
+    builtin_sysroot: ""
+    compiler: "compiler"
+    host_system_name: "x86_64-unknown-linux-gnu"
+    needsPic: true
+    supports_gold_linker: true
+    supports_incremental_linker: false
+    supports_fission: false
+    supports_interface_shared_objects: false
+    supports_normalizing_ar: false
+    supports_start_end_lib: true
+    target_libc: "aarch64"
+    target_cpu: "aarch64"
+    target_system_name: "aarch64"
+    toolchain_identifier: "aarch64-unknown-linux-gnu"
+    
+    cxx_flag: "-std=c++11"
+    linker_flag: "-lstdc++"
+    linker_flag: "-lm"
+    linker_flag: "-fuse-ld=gold"
+    #linker_flag: "-fuse-ld=bfd"
+    linker_flag: "-Wl,--no-as-needed"
+    #WARN: This may cause issues, need to verify executables work with this option
+    linker_flag: "-Wl,--unresolved-symbols=ignore-in-shared-libs"
+    linker_flag: "-Wl,-z,relro,-z,now"
+    linker_flag: "-pass-exit-codes"
+    
+    cxx_builtin_include_directory: "/usr/aarch64-linux-gnu/include/c++/5/"
+    cxx_builtin_include_directory: "/usr/aarch64-linux-gnu/include/c++/5/backward"
+    cxx_builtin_include_directory: "/usr/aarch64-linux-gnu/include/"
+    cxx_builtin_include_directory: "/usr/lib/gcc-cross/aarch64-linux-gnu/5/include"
+    cxx_builtin_include_directory: "/usr/lib/gcc-cross/aarch64-linux-gnu/5/include-fixed"
+
+    objcopy_embed_flag: "-I"
+    objcopy_embed_flag: "binary"
+
+    unfiltered_cxx_flag: "-fno-canonical-system-headers"
+    unfiltered_cxx_flag: "-Wno-builtin-macro-redefined"
+    unfiltered_cxx_flag: "-D__DATE__=\"redacted\""
+    unfiltered_cxx_flag: "-D__TIMESTAMP__=\"redacted\""
+    unfiltered_cxx_flag: "-D__TIME__=\"redacted\""
+    compiler_flag: "-U_FORTIFY_SOURCE"
+    compiler_flag: "-fstack-protector"
+    compiler_flag: "-Wall"
+    compiler_flag: "-Wunused-but-set-parameter"
+    compiler_flag: "-Wno-free-nonheap-object"
+    compiler_flag: "-fno-omit-frame-pointer"
+    
+    tool_path { name: "ld" path: "/usr/bin/aarch64-linux-gnu-ld.gold" }
+    tool_path { name: "cpp" path: "/usr/bin/aarch64-linux-gnu-cpp" }
+    tool_path { name: "dwp" path: "/usr/bin/aarch64-linux-gnu-dwp" }
+    tool_path { name: "gcov" path: "/usr/bin/aarch64-linux-gnu-gcov" }
+    tool_path { name: "nm" path: "/usr/bin/aarch64-linux-gnu-nm" }
+    tool_path { name: "objcopy" path: "/usr/bin/aarch64-linux-gnu-objcopy" }
+    tool_path { name: "objdump" path: "/usr/bin/aarch64-linux-gnu-objdump" }
+    tool_path { name: "strip" path: "/usr/bin/aarch64-linux-gnu-strip" }
+    tool_path { name: "gcc" path: "/usr/bin/aarch64-linux-gnu-g++" }
+    tool_path { name: "ar" path: "/usr/bin/aarch64-linux-gnu-ar" }
+    
+    compilation_mode_flags {
+        mode: DBG
+        # Enable debug symbols.
+        compiler_flag: "-g"
+    }
+    compilation_mode_flags {
+        mode: OPT
+        
+        # No debug symbols.
+        # Maybe we should enable https://gcc.gnu.org/wiki/DebugFission for opt or
+        # even generally? However, that can't happen here, as it requires special
+        # handling in Bazel.
+        compiler_flag: "-g0"
+        
+        # Conservative choice for -O
+        # -O3 can increase binary size and even slow down the resulting binaries.
+        # Profile first and / or use FDO if you need better performance than this.
+        compiler_flag: "-O2"
+        compiler_flag: "-D_FORTIFY_SOURCE=1"
+        
+        # Disable assertions
+        compiler_flag: "-DNDEBUG"
+        
+        # Removal of unused code and data at link time (can this increase binary size in some cases?).
+        compiler_flag: "-ffunction-sections"
+        compiler_flag: "-fdata-sections"
+        linker_flag: "-Wl,--gc-sections"
+    }
+    linking_mode_flags { mode: DYNAMIC }
+    
+    feature {
+        name: 'coverage'
+        provides: 'profile'
+        flag_set {
+            action: 'preprocess-assemble'
+            action: 'c-compile'
+            action: 'c++-compile'
+            action: 'c++-header-parsing'
+            action: 'c++-header-preprocessing'
+            action: 'c++-module-compile'
+            flag_group {
+                flag: '-fprofile-arcs'
+                flag: '-ftest-coverage'
+            }
+        }
+        
+        flag_set {
+            action: 'c++-link-interface-dynamic-library'
+            action: 'c++-link-dynamic-library'
+            action: 'c++-link-executable'
+            flag_group {
+                flag: '-lgcov'
+            }
+        }
+    }
+}
