@@ -17,6 +17,12 @@
 # Description: Pulling in aarch64 toolchain files from the system 
 ############################################################################
 package(default_visibility = ["//visibility:public"])
+load("//toolchains/D5L:D5L_cc_toolchain_config.bzl", "D5L_cc_toolchain_config")
+
+D5L_cc_toolchain_config(
+    name = "D5L_toolchain_config",
+    cpu = "aarch64",
+)
 
 cc_toolchain_suite(
     name = "aarch64-unknown-linux-gnu",
@@ -34,15 +40,13 @@ cc_toolchain(
     name = "gcc-linux-aarch64",
     all_files = ":empty",
     compiler_files = ":empty",
-    cpu = "aarch64",
     dwp_files = ":empty",
-    #dynamic_runtime_libs = [':empty'],
     linker_files = ":empty",
     objcopy_files = "empty",
-    #static_runtime_libs = [':empty'],
     strip_files = "empty",
     supports_param_files = 1,
     toolchain_identifier = "aarch64-unknown-linux-gnu",
+    toolchain_config = ":D5L_toolchain_config"
 )
 
 filegroup(

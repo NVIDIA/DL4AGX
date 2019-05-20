@@ -18,6 +18,7 @@
 ##########################################################################
 workspace(name = "DL4AGX")
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 git_repository(
     name = "io_bazel_rules_python",
     remote = "https://github.com/bazelbuild/rules_python.git",
@@ -33,10 +34,12 @@ pip_import(
 load("@pylinter_deps//:requirements.bzl", "pip_install")
 pip_install()
 
-git_repository(
+skylib_version = "0.8.0"
+http_archive(
     name = "bazel_skylib",
-    remote = "https://github.com/bazelbuild/bazel-skylib.git",
-    tag = "0.1.0",  # change this to use a different release
+    type = "tar.gz",
+    url = "https://github.com/bazelbuild/bazel-skylib/releases/download/{}/bazel-skylib.{}.tar.gz".format (skylib_version, skylib_version),
+    sha256 = "2ef429f5d7ce7111263289644d233707dba35e39696377ebab8b0bc701f7818e",
 )
 
 ####################################################################

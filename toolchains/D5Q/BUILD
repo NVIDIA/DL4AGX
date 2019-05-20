@@ -17,6 +17,13 @@
 # Description: Pulling in QNX toolchain files from the system 
 ##########################################################################
 package(default_visibility = ["//visibility:public"])
+load("//toolchains/D5Q:D5Q_cc_toolchain_config.bzl", "D5Q_cc_toolchain_config")
+
+D5Q_cc_toolchain_config(
+    name = "D5Q_toolchain_config",
+    cpu = "aarch64",
+)
+
 
 cc_toolchain_suite(
     name = "aarch64-unknown-nto-qnx",
@@ -34,15 +41,13 @@ cc_toolchain(
     name = "gcc-qnx-aarch64",
     all_files = ":empty",
     compiler_files = ":empty",
-    cpu = "aarch64",
     dwp_files = ":empty",
-    #dynamic_runtime_libs = [':empty'],
     linker_files = ":empty",
     objcopy_files = ":empty",
-    #static_runtime_libs = [':empty'],
     strip_files = ":empty",
     supports_param_files = 1,
     toolchain_identifier = "aarch64-unknown-nto-qnx",
+    toolchain_config = ":D5Q_toolchain_config"
 )
 
 filegroup(
