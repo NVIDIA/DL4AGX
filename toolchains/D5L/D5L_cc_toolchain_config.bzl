@@ -130,7 +130,24 @@ def _impl(ctx):
         provides = ["profile"],
     )
 
-    features = [coverage_feature]
+    debug_feature = feature(
+        name = "debug",
+        flag_sets = [
+            flag_set (
+                actions = [
+                    "ACTION_NAMES.c_compile",
+                    "ACTION_NAMES.cpp_compile"
+                ],
+                flag_groups = [
+                    flag_group(
+                        flags = ["-g"],
+                    ),
+                ],
+            )
+        ],
+    )
+
+    features = [coverage_feature, debug_feature]
 
     cxx_builtin_include_directories = [
             "/usr/aarch64-linux-gnu/include/c++/5/",

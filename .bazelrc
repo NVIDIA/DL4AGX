@@ -33,7 +33,6 @@ build:D5Q-toolchain --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
 #These are env variables set in the base docker image, can be overridden here
 build:D5Q-toolchain --action_env QNX_HOST --action_env QNX_TARGET
 build:D5Q-toolchain --cxxopt=-I/usr/aarch64-unknown-nto-qnx/aarch64le/include
-build:D5Q-toolchain --cxxopt='-std=c++11'
 build:D5Q-toolchain --linkopt='-Wl,--unresolved-symbols=ignore-in-shared-libs'
 
 build:D5Q-toolchain-debug --linkopt=-Wl,--verbose
@@ -43,20 +42,18 @@ build:D5Q-toolchain-debug --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
 #These are env variables set in the base docker image, can be overridden here
 build:D5Q-toolchain-debug --action_env QNX_HOST --action_env QNX_TARGET
 build:D5Q-toolchain-debug --cxxopt=-I/usr/aarch64-unknown-nto-qnx/aarch64le/include
-build:D5Q-toolchain-debug --cxxopt='-std=c++11'
 build:D5Q-toolchain-debug --linkopt='-Wl,--unresolved-symbols=ignore-in-shared-libs'
 
 build:D5L-toolchain --crosstool_top=//toolchains/D5L:aarch64-unknown-linux-gnu
 build:D5L-toolchain --cpu=aarch64
 build:D5L-toolchain --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
-build:D5L-toolchain --cxxopt='-std=c++11'
 build:D5L-toolchain --linkopt='-Wl,--unresolved-symbols=ignore-in-shared-libs'
 
 # D5L Alias
 build:L4T-toolchain --crosstool_top=//toolchains/D5L:aarch64-unknown-linux-gnu
 build:L4T-toolchain --cpu=aarch64
 build:L4T-toolchain --host_crosstool_top=@bazel_tools//tools/cpp:toolchain
-build:L4T-toolchain --cxxopt='-std=c++11'
 build:L4T-toolchain --linkopt='-Wl,--unresolved-symbols=ignore-in-shared-libs'
 
 build --cxxopt='-std=c++11'
+build --cxxopt='-fPIC'
