@@ -20,7 +20,7 @@ load("@pylinter_deps//:requirements.bzl", "requirement")
 py_binary(
     name = "cpplint",
     srcs = ["cpplint.py"],
-    default_python_version = "PY3",
+    python_version = "PY3",
     srcs_version = "PY3",
     visibility = ["//visibility:public"],
     deps = [":utils"],
@@ -29,7 +29,7 @@ py_binary(
 py_binary(
     name = "cpplint_diff",
     srcs = ["cpplint_diff.py"],
-    default_python_version = "PY3",
+    python_version = "PY3",
     srcs_version = "PY3",
     visibility = ["//visibility:public"],
     deps = [":utils"],
@@ -38,7 +38,7 @@ py_binary(
 py_binary(
     name = "pylint",
     srcs = ["pylint.py"],
-    default_python_version = "PY3",
+    python_version = "PY3",
     srcs_version = "PY3",
     visibility = ["//visibility:public"],
     deps = [
@@ -50,7 +50,7 @@ py_binary(
 py_binary(
     name = "pylint_diff",
     srcs = ["pylint_diff.py"],
-    default_python_version = "PY3",
+    python_version = "PY3",
     srcs_version = "PY3",
     visibility = ["//visibility:public"],
     deps = [

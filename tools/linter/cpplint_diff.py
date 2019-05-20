@@ -23,8 +23,6 @@ import glob
 import subprocess
 import utils
 
-print(sys.version)
-
 VALID_CPP_FILE_TYPES = [".cpp", ".cc", ".c", ".cu", ".hpp", ".h", ".cuh"]
 
 

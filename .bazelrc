@@ -57,3 +57,4 @@ build:L4T-toolchain --linkopt='-Wl,--unresolved-symbols=ignore-in-shared-libs'
 
 build --cxxopt='-std=c++11'
 build --cxxopt='-fPIC'
+run --python_path=/usr/bin/python3
