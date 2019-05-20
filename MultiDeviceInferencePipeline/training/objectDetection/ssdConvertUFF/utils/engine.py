@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 # File: DL4AGX/MultiDeviceInferencePipeline/training/objectDetection/ssdConvertUFF/utils/engine.py
-# Description: Utility functions for building/saving/loading TensorRT Engines 
+# Description: Utility functions for building/saving/loading TensorRT Engines
 #####################################################################################################
 import sys
 import os
@@ -24,6 +24,7 @@ import pycuda.driver as cuda
 import numpy as np
 
 from utils.model import ModelData
+
 
 # Simple helper data class that's a little nicer to use than a 2-tuple.
 class HostDeviceMem(object):
@@ -37,6 +38,7 @@ class HostDeviceMem(object):
 
     def __repr__(self):
         return self.__str__()
+
 
 def allocate_buffers(engine):
     """Allocates host and device buffer for TRT engine inference.

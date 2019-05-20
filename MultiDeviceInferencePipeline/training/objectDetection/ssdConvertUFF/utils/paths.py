@@ -68,8 +68,8 @@ class Paths(object):
             trt.DataType.INT32: 'INT32',
             trt.DataType.INT8: 'INT8'
         }
-        return os.path.join(self.get_engines_dir_path(), inference_type_to_str[inference_type], '{}_{}.buf'.format(
-            model_name, max_batch_size))
+        return os.path.join(self.get_engines_dir_path(), inference_type_to_str[inference_type],
+                            '{}_{}.buf'.format(model_name, max_batch_size))
 
     def get_voc_annotation_cache_path(self):
         return os.path.join(self.get_workspace_dir_path(), 'annotations_cache')

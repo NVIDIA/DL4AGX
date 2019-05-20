@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 # File: DL4AGX/MultiDeviceInferencePipeline/training/laneSegmentation/pb2uff.py
-# Description: Convert pb file to uff file 
+# Description: Convert pb file to uff file
 #####################################################################################################
 import tensorrt as trt
 import uff
@@ -23,26 +23,24 @@ import argparse
 
 def main():
     parser = argparse.ArgumentParser(description="Generate UFF file from protobuf file.")
-    parser.add_argument(
-        "-p",
-        "--pb_file_name",
-        type=str,
-        required=True,
-        help="""A protobuf file containing a frozen tensorflow graph""")
+    parser.add_argument("-p",
+                        "--pb_file_name",
+                        type=str,
+                        required=True,
+                        help="""A protobuf file containing a frozen tensorflow graph""")
     parser.add_argument("-u", "--uff_filename", type=str, required=True, help="""Output UFF file""")
     parser.add_argument("-o", "--out_tensor_names", type=str, required=True, help="""Output Tensor names""")
     args, unknown_args = parser.parse_known_args()
 
     out_tensor_names = [args.out_tensor_names]
 
-    uff.from_tensorflow_frozen_model(
-        args.pb_file_name,
-        out_tensor_names,
-        output_filename=args.uff_filename,
-        text=True,
-        quiet=False,
-        write_preprocessed=True,
-        debug_mode=False)
+    uff.from_tensorflow_frozen_model(args.pb_file_name,
+                                     out_tensor_names,
+                                     output_filename=args.uff_filename,
+                                     text=True,
+                                     quiet=False,
+                                     write_preprocessed=True,
+                                     debug_mode=False)
 
 
 if __name__ == '__main__':

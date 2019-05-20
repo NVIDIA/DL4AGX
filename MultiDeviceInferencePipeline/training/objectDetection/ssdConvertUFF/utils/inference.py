@@ -32,8 +32,10 @@ import utils.model as model_utils  # UFF conversion uttils
 # TensorRT logger singleton
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
+
 def GiB(val):
     return val * 1 << 30
+
 
 # This function is generalized for multiple inputs/outputs.
 # inputs and outputs are expected to be lists of HostDeviceMem objects.
@@ -48,6 +50,7 @@ def do_inference(context, bindings, inputs, outputs, stream, batch_size=1):
     stream.synchronize()
     # Return only the host outputs.
     return [out.host for out in outputs]
+
 
 class TRTInference(object):
     """Manages TensorRT objects for model inference."""
@@ -90,12 +93,11 @@ class TRTInference(object):
             # This function uses supplied .uff file
             # alongside with UffParser to build TensorRT
             # engine. For more details, check implmentation
-            self.trt_engine = engine_utils.build_engine(
-                uff_model_path,
-                TRT_LOGGER,
-                trt_engine_datatype=trt_engine_datatype,
-                input_shape=self.input_shape,
-                batch_size=batch_size)
+            self.trt_engine = engine_utils.build_engine(uff_model_path,
+                                                        TRT_LOGGER,
+                                                        trt_engine_datatype=trt_engine_datatype,
+                                                        input_shape=self.input_shape,
+                                                        batch_size=batch_size)
             # Save the engine to file
             engine_utils.save_engine(self.trt_engine, trt_engine_path)
 
@@ -134,8 +136,11 @@ class TRTInference(object):
         inference_start_time = time.time()
 
         # Fetch output from the model
-        [detection_out, keepCount_out] = do_inference(
-            self.context, bindings=self.bindings, inputs=self.inputs, outputs=self.outputs, stream=self.stream)
+        [detection_out, keepCount_out] = do_inference(self.context,
+                                                      bindings=self.bindings,
+                                                      inputs=self.inputs,
+                                                      outputs=self.outputs,
+                                                      stream=self.stream)
 
         # Output inference time
         print("TensorRT inference time: {} ms".format(int(round((time.time() - inference_start_time) * 1000))))
@@ -165,13 +170,12 @@ class TRTInference(object):
         np.copyto(self.inputs[0].host, imgs.ravel())
 
         # ...fetch model outputs...
-        [detection_out, keep_count_out] = do_inference(
-            self.context,
-            bindings=self.bindings,
-            inputs=self.inputs,
-            outputs=self.outputs,
-            stream=self.stream,
-            batch_size=max_batch_size)
+        [detection_out, keep_count_out] = do_inference(self.context,
+                                                       bindings=self.bindings,
+                                                       inputs=self.inputs,
+                                                       outputs=self.outputs,
+                                                       stream=self.stream,
+                                                       batch_size=max_batch_size)
         # ...and return results.
         return detection_out, keep_count_out
 

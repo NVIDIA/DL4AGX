@@ -79,23 +79,21 @@ def main(args):
 
     # TODO: create calibrator here!
 
-    inference_utils.TRTInference(
-        trt_engine_path,
-        uff_path,
-        TRT_PRECISION_TO_DATATYPE[args.precision],
-        input_shape=args.input_dims,
-        batch_size=args.max_batch_size)
+    inference_utils.TRTInference(trt_engine_path,
+                                 uff_path,
+                                 TRT_PRECISION_TO_DATATYPE[args.precision],
+                                 input_shape=args.input_dims,
+                                 batch_size=args.max_batch_size)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convert a TF pb file to a TRT engine.')
-    parser.add_argument(
-        '-p',
-        '--precision',
-        type=int,
-        choices=[32, 16],
-        default=32,
-        help='desired TensorRT float precision to build an engine with')
+    parser.add_argument('-p',
+                        '--precision',
+                        type=int,
+                        choices=[32, 16],
+                        default=32,
+                        help='desired TensorRT float precision to build an engine with')
     parser.add_argument('-m', '--model', help='model file')
     parser.add_argument('-o', '--output_dir', help='output directory')
     parser.add_argument('-fc', '--flatten_concat', help='path of built FlattenConcat plugin')
@@ -103,8 +101,12 @@ if __name__ == '__main__':
     #     help='VOC2007 root directory (for calibration)')
     parser.add_argument('-b', '--max_batch_size', type=int, default=64, help='max TensorRT engine batch size')
     parser.add_argument('-c', '--n_classes', type=int, default=90, help='number of classes')
-    parser.add_argument(
-        '-d', '--input_dims', type=int, default=[3, 300, 300], nargs=3, help='channel, height, and width of input')
+    parser.add_argument('-d',
+                        '--input_dims',
+                        type=int,
+                        default=[3, 300, 300],
+                        nargs=3,
+                        help='channel, height, and width of input')
     parser.add_argument(
         '-f',
         '--feature_dims',

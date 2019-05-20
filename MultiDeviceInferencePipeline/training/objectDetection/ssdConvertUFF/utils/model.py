@@ -46,21 +46,20 @@ def build_nms_node(
         shareLocation=True,
         varianceEncodedInTarget=False,
         **kw_args):
-    return gs.create_plugin_node(
-        name,
-        op=op,
-        backgroundLabelId=backgroundLabelId,
-        confSigmoid=confSigmoid,
-        confidenceThreshold=confidenceThreshold,
-        isNormalized=isNormalized,
-        topK=topK,
-        keepTopK=keepTopK,
-        nmsThreshold=nmsThreshold,
-        numClasses=numClasses,
-        scoreConverter=scoreConverter,
-        shareLocation=shareLocation,
-        varianceEncodedInTarget=varianceEncodedInTarget,
-        **kw_args)
+    return gs.create_plugin_node(name,
+                                 op=op,
+                                 backgroundLabelId=backgroundLabelId,
+                                 confSigmoid=confSigmoid,
+                                 confidenceThreshold=confidenceThreshold,
+                                 isNormalized=isNormalized,
+                                 topK=topK,
+                                 keepTopK=keepTopK,
+                                 nmsThreshold=nmsThreshold,
+                                 numClasses=numClasses,
+                                 scoreConverter=scoreConverter,
+                                 shareLocation=shareLocation,
+                                 varianceEncodedInTarget=varianceEncodedInTarget,
+                                 **kw_args)
 
 
 def build_grid_anchor_node(name="GridAnchor",
@@ -72,16 +71,15 @@ def build_grid_anchor_node(name="GridAnchor",
                            numLayers=6,
                            variance=[0.1, 0.1, 0.2, 0.2],
                            **kw_args):
-    return gs.create_plugin_node(
-        name,
-        op=op,
-        aspectRatios=aspectRatios,
-        featureMapShapes=featureMapShapes,
-        maxSize=maxSize,
-        minSize=minSize,
-        numLayers=numLayers,
-        variance=variance,
-        **kw_args)
+    return gs.create_plugin_node(name,
+                                 op=op,
+                                 aspectRatios=aspectRatios,
+                                 featureMapShapes=featureMapShapes,
+                                 maxSize=maxSize,
+                                 minSize=minSize,
+                                 numLayers=numLayers,
+                                 variance=variance,
+                                 **kw_args)
 
 
 # This class contains converted (UFF) model metadata
@@ -154,8 +152,10 @@ def ssd_unsupported_nodes_to_plugin_nodes(ssd_graph, n_classes, input_dims, feat
     if include_anchors:
         Concat = gs.create_node("concat_priorbox", op="ConcatV2", dtype=tf.float32, axis=2)
 
-    Input = gs.create_plugin_node(
-        ModelData.INPUT_NAME, op="Placeholder", dtype=tf.float32, shape=[1, channels, height, width])
+    Input = gs.create_plugin_node(ModelData.INPUT_NAME,
+                                  op="Placeholder",
+                                  dtype=tf.float32,
+                                  shape=[1, channels, height, width])
     FlattenConcat_box_conf = gs.create_plugin_node(
         "concat_box_conf",
         op="FlattenConcat_TRT",
@@ -259,8 +259,9 @@ def model_to_uff(model_path, output_uff_path, n_classes, input_dims, feature_dim
 
     dynamic_graph.write_tensorboard(os.path.join(os.path.dirname(output_uff_path), 'trt_tensorboard'))
 
-    uff.from_tensorflow(
-        dynamic_graph.as_graph_def(), [ModelData.OUTPUT_NAME], output_filename=output_uff_path, text=True)
+    uff.from_tensorflow(dynamic_graph.as_graph_def(), [ModelData.OUTPUT_NAME],
+                        output_filename=output_uff_path,
+                        text=True)
 
 
 # Model download functionality

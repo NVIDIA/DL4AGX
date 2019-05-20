@@ -31,23 +31,21 @@ def parse_command_line():
     Returns:
         Namespace with members for all parsed arguments.
     """
-    parser = argparse.ArgumentParser(
-        description='Run evaluation on COCO dataset.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='Run evaluation on COCO dataset.',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument(
-        '-a',
-        '--annotation_file',
-        required=True,
-        type=str,
-        default='instances_val2017.json',
-        help='Full path to the annotation.json file.')
-    parser.add_argument(
-        '-r',
-        '--result_file',
-        required=True,
-        type=str,
-        default='COCO_val2017_float_eval_MV2-tmp2.json',
-        help='Full path to result.json file.')
+    parser.add_argument('-a',
+                        '--annotation_file',
+                        required=True,
+                        type=str,
+                        default='instances_val2017.json',
+                        help='Full path to the annotation.json file.')
+    parser.add_argument('-r',
+                        '--result_file',
+                        required=True,
+                        type=str,
+                        default='COCO_val2017_float_eval_MV2-tmp2.json',
+                        help='Full path to result.json file.')
     return parser.parse_args()
 
 
