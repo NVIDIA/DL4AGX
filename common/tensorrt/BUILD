@@ -34,8 +34,8 @@ cc_library(
     ],
     visibility = ["//visibility:public"],
     deps = select({
-        ":aarch64_linux": ["@tensorrt5_aarch64_linux//:nvinfer"],
-        ":aarch64_qnx": ["@tensorrt5_aarch64_qnx//:nvinfer"],
-        "//conditions:default": ["@tensorrt5_x86_64_linux//:nvinfer"],
+        ":aarch64_linux": ["@tensorrt_aarch64_linux//:nvinfer"],
+        ":aarch64_qnx": ["@tensorrt_aarch64_qnx//:nvinfer"],
+        "//conditions:default": ["@tensorrt_x86_64_linux//:nvinfer"],
     }),
 )

@@ -37,9 +37,9 @@ cc_library(
         "//common/image:image",
         "//common/datasets/coco:coco_json",
     ] + select({
-        ":aarch64_linux": ["@cuda10_aarch64_linux//:cudart"],
-        ":aarch64_qnx": ["@cuda10_aarch64_qnx//:cudart"],
-        "//conditions:default": ["@cuda10_x86_64_linux//:cudart"],
+        ":aarch64_linux": ["@cuda_aarch64_linux//:cudart"],
+        ":aarch64_qnx": ["@cuda_aarch64_qnx//:cudart"],
+        "//conditions:default": ["@cuda_x86_64_linux//:cudart"],
     }),
 )
 
@@ -67,10 +67,10 @@ cc_library(
 #     srcs = glob(["cuptiUtils.h"]),
 #     hdrs = glob(["cuptiUtils.h"]),
 #     visibility = ["//visibility:public"],
-#     deps = select({":aarch64_linux":["@cuda10_aarch64_linux//:cuda",
+#     deps = select({":aarch64_linux":["@cuda_aarch64_linux//:cuda",
 #                                    "@cupti10_aarch64_linux//:cupti"],
-#                  ":aarch64_qnx":["@cuda10_aarch64_qnx//:cuda",
+#                  ":aarch64_qnx":["@cuda_aarch64_qnx//:cuda",
 #                                  "@cupti10_aarch64_qnx//:cupti"],
-#                  "//conditions:default":["@cuda10_x86_64_linux//:cuda",
+#                  "//conditions:default":["@cuda_x86_64_linux//:cuda",
 #                                         "@cupti10_x86_64_linux//:cupti"]})
 # )

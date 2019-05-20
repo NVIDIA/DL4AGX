@@ -63,19 +63,19 @@ new_local_repository(
 ####################################################################
 
 new_local_repository(
-    name = "cuda10_x86_64_linux",
+    name = "cuda_x86_64_linux",
     path = "/usr/local/cuda/targets/x86_64-linux/",
     build_file = "libs/cuda.BUILD"
 )
 
 new_local_repository(
-    name = "tensorrt5_x86_64_linux",
+    name = "tensorrt_x86_64_linux",
     path = "/usr/local/cuda/dl/targets/x86_64-linux/",
     build_file = "libs/tensorrt.BUILD"
 )
 
 new_local_repository(
-    name = "cudnn7_x86_64_linux",
+    name = "cudnn_x86_64_linux",
     path = "/usr/local/cuda/dl/targets/x86_64-linux/",
     build_file = "libs/cudnn.BUILD"
 )
@@ -135,19 +135,19 @@ cc_library(
 ####################################################################
 
 new_local_repository(
-    name = "cuda10_aarch64_linux",
+    name = "cuda_aarch64_linux",
     path = "/usr/local/cuda/targets/aarch64-linux/",
     build_file = "libs/cuda.BUILD"
 )
 
 new_local_repository(
-    name = "tensorrt5_aarch64_linux",
+    name = "tensorrt_aarch64_linux",
     path = "/usr/local/cuda/dl/targets/aarch64-linux/",
     build_file = "libs/tensorrt.BUILD"
 )
 
 new_local_repository(
-    name = "cudnn7_aarch64_linux",
+    name = "cudnn_aarch64_linux",
     path = "/usr/local/cuda/dl/targets/aarch64-linux/",
     build_file = "libs/cudnn.BUILD"
 )
@@ -212,19 +212,19 @@ new_local_repository(
 )
 
 new_local_repository(
-    name = "cuda10_aarch64_qnx",
+    name = "cuda_aarch64_qnx",
     path = "/usr/local/cuda/targets/aarch64-qnx/",
     build_file = "libs/cuda.BUILD"
 )
 
 new_local_repository(
-    name = "tensorrt5_aarch64_qnx",
+    name = "tensorrt_aarch64_qnx",
     path = "/usr/local/cuda/dl/targets/aarch64-qnx/",
     build_file = "libs/tensorrt.BUILD"
 )
 
 new_local_repository(
-    name = "cudnn7_aarch64_qnx",
+    name = "cudnn_aarch64_qnx",
     path = "/usr/local/cuda/dl/targets/aarch64-qnx/",
     build_file = "libs/cudnn.BUILD"
 )

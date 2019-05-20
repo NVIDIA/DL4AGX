@@ -39,16 +39,16 @@ cc_binary(
     deps = ["//common:common"] +
            select({
                ":aarch64_linux": [
-                   "@tensorrt5_aarch64_linux//:nvinferplugin",
-                   "@cuda10_aarch64_linux//:cublas",
+                   "@tensorrt_aarch64_linux//:nvinferplugin",
+                   "@cuda_aarch64_linux//:cublas",
                ],
                ":aarch64_qnx": [
-                   "@tensorrt5_aarch64_qnx//:nvinferplugin",
-                   "@cuda10_aarch64_qnx//:cublas",
+                   "@tensorrt_aarch64_qnx//:nvinferplugin",
+                   "@cuda_aarch64_qnx//:cublas",
                ],
                "//conditions:default": [
-                   "@tensorrt5_x86_64_linux//:nvinferplugin",
-                   "@cuda10_x86_64_linux//:cublas",
+                   "@tensorrt_x86_64_linux//:nvinferplugin",
+                   "@cuda_x86_64_linux//:cublas",
                ],
            }),
 )
@@ -64,16 +64,16 @@ cc_library(
     deps = ["//common:common"] +
            select({
                ":aarch64_linux": [
-                   "@tensorrt5_aarch64_linux//:nvinferplugin",
-                   "@cuda10_aarch64_linux//:cublas",
+                   "@tensorrt_aarch64_linux//:nvinferplugin",
+                   "@cuda_aarch64_linux//:cublas",
                ],
                ":aarch64_qnx": [
-                   "@tensorrt5_aarch64_qnx//:nvinferplugin",
-                   "@cuda10_aarch64_qnx//:cublas",
+                   "@tensorrt_aarch64_qnx//:nvinferplugin",
+                   "@cuda_aarch64_qnx//:cublas",
                ],
                "//conditions:default": [
-                   "@tensorrt5_x86_64_linux//:nvinferplugin",
-                   "@cuda10_x86_64_linux//:cublas",
+                   "@tensorrt_x86_64_linux//:nvinferplugin",
+                   "@cuda_x86_64_linux//:cublas",
                ],
            }),
 )

@@ -64,21 +64,21 @@ cc_binary(
     deps = select({
         ":aarch64_linux": [
             "@dali_aarch64_linux//:dali",
-            "@tensorrt5_aarch64_linux//:nvinfer",
-            "@tensorrt5_aarch64_linux//:nvinferplugin",
-            "@cuda10_aarch64_linux//:cudart",
+            "@tensorrt_aarch64_linux//:nvinfer",
+            "@tensorrt_aarch64_linux//:nvinferplugin",
+            "@cuda_aarch64_linux//:cudart",
         ],
         ":aarch64_qnx": [
             "@dali_aarch64_qnx//:dali",
-            "@tensorrt5_aarch64_qnx//:nvinfer",
-            "@tensorrt5_aarch64_qnx//:nvinferplugin",
-            "@cuda10_aarch64_qnx//:cudart",
+            "@tensorrt_aarch64_qnx//:nvinfer",
+            "@tensorrt_aarch64_qnx//:nvinferplugin",
+            "@cuda_aarch64_qnx//:cudart",
         ],
         "//conditions:default": [
             "@dali_x86_64_linux//:dali",
-            "@tensorrt5_x86_64_linux//:nvinfer",
-            "@tensorrt5_x86_64_linux//:nvinferplugin",
-            "@cuda10_x86_64_linux//:cudart",
+            "@tensorrt_x86_64_linux//:nvinfer",
+            "@tensorrt_x86_64_linux//:nvinferplugin",
+            "@cuda_x86_64_linux//:cudart",
         ],
     }),
 )

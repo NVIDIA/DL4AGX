@@ -50,19 +50,19 @@ cc_library(
         "nvinfer_lib"
     ] + select({
         ":aarch64_linux": [
-            "@cuda10_aarch64_linux//:cudart",
-            "@cuda10_aarch64_linux//:cublas",
-            "@cudnn7_aarch64_linux//:cudnn"
+            "@cuda_aarch64_linux//:cudart",
+            "@cuda_aarch64_linux//:cublas",
+            "@cudnn_aarch64_linux//:cudnn"
         ],
         ":aarch64_qnx": [
-            "@cuda10_aarch64_qnx//:cudart",
-            "@cuda10_aarch64_qnx//:cublas",
-            "@cudnn7_aarch64_qnx//:cudnn"
+            "@cuda_aarch64_qnx//:cudart",
+            "@cuda_aarch64_qnx//:cublas",
+            "@cudnn_aarch64_qnx//:cudnn"
         ],
         "//conditions:default": [
-            "@cuda10_x86_64_linux//:cudart",
-            "@cuda10_x86_64_linux//:cublas",
-            "@cudnn7_x86_64_linux//:cudnn"
+            "@cuda_x86_64_linux//:cudart",
+            "@cuda_x86_64_linux//:cublas",
+            "@cudnn_x86_64_linux//:cudnn"
         ]
     }),
     visibility = ["//visibility:public"],
@@ -96,9 +96,9 @@ cc_library(
         "nvparsers_headers",
         "nvparsers_lib"
     ] + select({
-        ":aarch64_linux":["@tensorrt5_aarch64_linux//:nvinfer"],
-        ":aarch64_qnx":["@tensorrt5_aarch64_qnx//:nvinfer"],
-        "//conditions:default":["@tensorrt5_x86_64_linux//:nvinfer"]
+        ":aarch64_linux":["@tensorrt_aarch64_linux//:nvinfer"],
+        ":aarch64_qnx":["@tensorrt_aarch64_qnx//:nvinfer"],
+        "//conditions:default":["@tensorrt_x86_64_linux//:nvinfer"]
     }),
    visibility = ["//visibility:public"],
 )
@@ -128,9 +128,9 @@ cc_library(
         "nvonnxparser_headers",
         "nvonnxparser_lib"
     ] + select({
-        ":aarch64_linux":["@tensorrt5_aarch64_linux//:nvinfer"],
-        ":aarch64_qnx":["@tensorrt5_aarch64_qnx//:nvinfer"],
-        "//conditions:default":["@tensorrt5_x86_64_linux//:nvinfer"]
+        ":aarch64_linux":["@tensorrt_aarch64_linux//:nvinfer"],
+        ":aarch64_qnx":["@tensorrt_aarch64_qnx//:nvinfer"],
+        "//conditions:default":["@tensorrt_x86_64_linux//:nvinfer"]
     }),
    visibility = ["//visibility:public"],
 )
@@ -156,9 +156,9 @@ cc_library(
         "nvparsers_headers",
         "nvparsers_lib"
     ] + select({
-        ":aarch64_linux":["@tensorrt5_aarch64_linux//:nvinfer"],
-        ":aarch64_qnx":["@tensorrt5_aarch64_qnx//:nvinfer"],
-        "//conditions:default":["@tensorrt5_x86_64_linux//:nvinfer"]
+        ":aarch64_linux":["@tensorrt_aarch64_linux//:nvinfer"],
+        ":aarch64_qnx":["@tensorrt_aarch64_qnx//:nvinfer"],
+        "//conditions:default":["@tensorrt_x86_64_linux//:nvinfer"]
     }),
    visibility = ["//visibility:public"],
 )
@@ -184,9 +184,9 @@ cc_library(
         "nvcaffeparser_headers",
         "nvcaffeparser_lib"
     ] + select({
-        ":aarch64_linux":["@tensorrt5_aarch64_linux//:nvinfer"],
-        ":aarch64_qnx":["@tensorrt5_aarch64_qnx//:nvinfer"],
-        "//conditions:default":["@tensorrt5_x86_64_linux//:nvinfer"]
+        ":aarch64_linux":["@tensorrt_aarch64_linux//:nvinfer"],
+        ":aarch64_qnx":["@tensorrt_aarch64_qnx//:nvinfer"],
+        "//conditions:default":["@tensorrt_x86_64_linux//:nvinfer"]
     }),
     visibility = ["//visibility:public"],
 )
@@ -212,9 +212,9 @@ cc_library(
         "nvinferplugin_headers",
         "nvinferplugin_lib"
     ] + select({
-        ":aarch64_linux":["@tensorrt5_aarch64_linux//:nvinfer"],
-        ":aarch64_qnx":["@tensorrt5_aarch64_qnx//:nvinfer"],
-        "//conditions:default":["@tensorrt5_x86_64_linux//:nvinfer"]
+        ":aarch64_linux":["@tensorrt_aarch64_linux//:nvinfer"],
+        ":aarch64_qnx":["@tensorrt_aarch64_qnx//:nvinfer"],
+        "//conditions:default":["@tensorrt_x86_64_linux//:nvinfer"]
     }),
     visibility = ["//visibility:public"],
 )

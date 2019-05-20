@@ -97,12 +97,12 @@ Since external libraries (CUDA, cuDNN, TensorRT) do not auto resolve based on to
       srcs=["FlattenConcat.h",
             "FlattenConcat.cpp"],
       deps=["//common:common"]
-      + select({":aarch64_linux":["@tensorrt5_aarch64_linux//:nvinferplugin",
-                                  "@cuda10_aarch64_linux//:cublas"],
-                ":aarch64_qnx":["@tensorrt5_aarch64_qnx//:nvinferplugin",
-                                "@cuda10_aarch64_qnx//:cublas"],
-                "//conditions:default":["@tensorrt5_x86_64_linux//:nvinferplugin",
-                                       "@cuda10_x86_64_linux//:cublas"]}),
+      + select({":aarch64_linux":["@tensorrt_aarch64_linux//:nvinferplugin",
+                                  "@cuda_aarch64_linux//:cublas"],
+                ":aarch64_qnx":["@tensorrt_aarch64_qnx//:nvinferplugin",
+                                "@cuda_aarch64_qnx//:cublas"],
+                "//conditions:default":["@tensorrt_x86_64_linux//:nvinferplugin",
+                                       "@cuda_x86_64_linux//:cublas"]}),
   )
   ```
 
@@ -148,19 +148,19 @@ FROM my_custom_tf_drive_os_pdk_container
 
    ```py
    new_local_repository(
-       name="tensorrt5_x86_64_linux",
+       name="tensorrt_x86_64_linux",
        path="/usr/local/cuda-10.1/dl/targets/x86_64-linux/",
        build_file="libs/tensorrt.BUILD"
    )
    
    new_local_repository(
-       name="tensorrt5_aarch64_linux",
+       name="tensorrt_aarch64_linux",
        path="/usr/local/cuda-10.1/dl/targets/aarch64-linux/",
        build_file="libs/tensorrt.BUILD"
    )
    
    new_local_repository(
-       name="tensorrt5_aarch64_qnx",
+       name="tensorrt_aarch64_qnx",
        path="/usr/local/cuda-10.1/dl/targets/aarch64-qnx/",
        build_file="libs/tensorrt.BUILD"
    )
@@ -201,15 +201,15 @@ FROM my_custom_tf_drive_os_pdk_container
        name="nvinfer",
        deps=["nvinfer_headers",
              "nvinfer_lib"]
-       + select({":aarch64_linux":["@cuda10_aarch64_linux//:cudart",
-                                   "@cuda10_aarch64_linux//:cublas",
-                                   "@cudnn7_aarch64_linux//:cudnn"],
-                 ":aarch64_qnx":["@cuda10_aarch64_qnx//:cudart",
-                                 "@cuda10_aarch64_qnx//:cublas",
-                                 "@cudnn7_aarch64_qnx//:cudnn"],
-                 "//conditions:default":["@cuda10_x86_64_linux//:cudart",
-                                        "@cuda10_x86_64_linux//:cublas",
-                                        "@cudnn7_x86_64_linux//:cudnn"]}),
+       + select({":aarch64_linux":["@cuda_aarch64_linux//:cudart",
+                                   "@cuda_aarch64_linux//:cublas",
+                                   "@cudnn_aarch64_linux//:cudnn"],
+                 ":aarch64_qnx":["@cuda_aarch64_qnx//:cudart",
+                                 "@cuda_aarch64_qnx//:cublas",
+                                 "@cudnn_aarch64_qnx//:cudnn"],
+                 "//conditions:default":["@cuda_x86_64_linux//:cudart",
+                                        "@cuda_x86_64_linux//:cublas",
+                                        "@cudnn_x86_64_linux//:cudnn"]}),
        visibility=["//visibility:public"],
    )
    ```
@@ -382,12 +382,12 @@ cc_binary (
     srcs=["main.cpp"],
     deps=["//VecAdd:vector_addition_kernel",
           "//VecAdd:myprintf"]
-        + select({":aarch64_linux":["@cuda10_aarch64_linux//:cuda",
-                                    "@cuda10_aarch64_linux//:cudart"],
-                  ":aarch64_qnx":["@cuda10_aarch64_qnx//:cuda",
-                                  "@cuda10_aarch64_qnx//:cudart"],
-                  "//conditions:default":["@cuda10_x86_64_linux//:cuda",
-                                          "@cuda10_x86_64_linux//:cudart"]}),
+        + select({":aarch64_linux":["@cuda_aarch64_linux//:cuda",
+                                    "@cuda_aarch64_linux//:cudart"],
+                  ":aarch64_qnx":["@cuda_aarch64_qnx//:cuda",
+                                  "@cuda_aarch64_qnx//:cudart"],
+                  "//conditions:default":["@cuda_x86_64_linux//:cuda",
+                                          "@cuda_x86_64_linux//:cudart"]}),
 )
 
 cu_library(
@@ -399,12 +399,12 @@ cu_library(
               "arch=compute_70,code=sm_70",  
               "arch=compute_61,code=sm_61",], 
     deps=["//VecAdd:myprintf"] 
-         + select({":aarch64_linux":["@cuda10_aarch64_linux//:cuda",
-                                     "@cuda10_aarch64_linux//:cudart"],
-                   ":aarch64_qnx":["@cuda10_aarch64_qnx//:cuda",
-                                   "@cuda10_aarch64_qnx//:cudart"],
-                   "//conditions:default":["@cuda10_x86_64_linux//:cuda",
-                                           "@cuda10_x86_64_linux//:cudart"]}),
+         + select({":aarch64_linux":["@cuda_aarch64_linux//:cuda",
+                                     "@cuda_aarch64_linux//:cudart"],
+                   ":aarch64_qnx":["@cuda_aarch64_qnx//:cuda",
+                                   "@cuda_aarch64_qnx//:cudart"],
+                   "//conditions:default":["@cuda_x86_64_linux//:cuda",
+                                           "@cuda_x86_64_linux//:cudart"]}),
 )
 
 cc_library(

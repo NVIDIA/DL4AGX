@@ -43,16 +43,16 @@ cc_library(
         "//MultiDeviceInferencePipeline/enginecreator/DALIStream:dali_stream",
     ] + select({
         ":aarch64_linux": [
-            "@tensorrt5_aarch64_linux//:nvinfer",
-            "@tensorrt5_aarch64_linux//:nvinferplugin",
+            "@tensorrt_aarch64_linux//:nvinfer",
+            "@tensorrt_aarch64_linux//:nvinferplugin",
         ],
         ":aarch64_qnx": [
-            "@tensorrt5_aarch64_qnx//:nvinfer",
-            "@tensorrt5_aarch64_qnx//:nvinferplugin",
+            "@tensorrt_aarch64_qnx//:nvinfer",
+            "@tensorrt_aarch64_qnx//:nvinferplugin",
         ],
         "//conditions:default": [
-            "@tensorrt5_x86_64_linux//:nvinfer",
-            "@tensorrt5_x86_64_linux//:nvinferplugin",
+            "@tensorrt_x86_64_linux//:nvinfer",
+            "@tensorrt_x86_64_linux//:nvinferplugin",
         ],
     }),
 )
