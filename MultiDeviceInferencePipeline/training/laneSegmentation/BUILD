@@ -20,7 +20,7 @@ package(default_visibility = ["//visibility:public"])
 py_binary(
     name = "pb2uff",
     srcs = ["pb2uff.py"],
-    default_python_version = "PY2",
+    python_version = "PY2",
 )
 
 filegroup(

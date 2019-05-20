@@ -20,7 +20,7 @@ package(default_visibility = ["//visibility:public"])
 py_binary(
     name = "convert_to_trt",
     srcs = ["convert_to_trt.py"],
-    default_python_version = "PY3",
+    python_version = "PY3",
     deps = ["//MultiDeviceInferencePipeline/training/objectDetection/ssdConvertUFF/utils"],
 )
 
