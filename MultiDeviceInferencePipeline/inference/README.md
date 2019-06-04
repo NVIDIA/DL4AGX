@@ -15,9 +15,9 @@ The Inference Pipeline is configured using a TOML file. An example configuration
 ```
 
 ## How to compile
-It is recommended to cross compile this program instead of natively compiling it on the Development Kit. In setting up this project you should have gone through the instructions to create a Docker image (if you have not done this refer to `//docker/README.md`) which will have the cross compiling toolchain and necessary libraries setup. 
+It is recommended to cross compile this program instead of natively compiling it on the Development Kit. In setting up this project you should have gone through the instructions to create a Docker image (if you have not done this refer to `//docker/README.md`) which will have the cross compiling toolchain and necessary libraries setup.
 
-There are two components to compile, the applications (i.e., preprocessing pipeline, engine creator, and inference pipeline) as well as the TensorRT plugin (i.e., Flatten Concatenation) for the object detector. All the applications and plugins can be compiled in one step.
+There are three main components to compile, the application (i.e Inference pipeline), the DALI plugin intergrating TensorRT into DALI as well as the TensorRT plugin (i.e., Flatten Concatenation) for the object detector. All the applications and plugins can be compiled in one step.
 
 _For aarch64-linux:_
 ```Shell

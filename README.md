@@ -24,7 +24,7 @@ This repo uses bazel via a tool called dazel ([https://github.com/nadirizr/dazel
 
 4. Build the relevant docker container using one of the Dockerfiles provided in `//docker`
 
-   - More precise instructions can be found in that directory's ([README.md](https://github.com/NVIDIA/DL4AGX/blob/master/docker/README.md))
+   - More precise instructions can be found in that directory's ([README.md](docker/README.md))
 
 5. Modify Dockerfile.dazel to be based on the image you just built
 
@@ -54,17 +54,17 @@ There are two supported toolchains:
 
 To cross-compile targets for aarch64-linux append the following flag to your build command: `--config=D5L-toolchain`
 
-​- e.g. `dazel build //plugins/dali/TensorRTInferOp:libtensorrtinferop.so --config=D5L-toolchain`
+- e.g. `dazel build //plugins/dali/TensorRTInferOp:libtensorrtinferop.so --config=D5L-toolchain`
 
 You will find the associated binaries in `//bazel-out/aarch64-fastbuild/plugins/dali/TensorRTInferOp/libtensorrtinferop.so`
 
-> Note: D5L-toolchain is aliased to L4T-toolchain for Jetson users' convenience
+> Note: `D5L-toolchain` is aliased to `L4T-toolchain` for Jetson users' convenience
 
 #### aarch64-qnx
 
 ##### Applicable to DRIVE AGX Platforms flashed with the QNX PDK
 
-> In order to use this toolchain you must obtain the QNX Toolchain (found here: ) and have built a container that supports QNX (Dockerfiles will have names that contain `aarch64-qnx` or `both`)
+> In order to use this toolchain you must obtain the QNX Toolchain and have built a container that supports QNX (Dockerfiles will have names that contain `aarch64-qnx` or `both`)
 
 To cross-compile targets for aarch64-qnx append the following flag to your build command: `--config=D5Q-toolchain`
 
@@ -74,7 +74,7 @@ You will find the associated binaries in `//bazel-out/aarch64-fastbuild/plugins/
 
 ### Running Compiled Targets in a Container
 
-If you want to run a target in a container, the following command should work:
+If you want to run a target in a container, use a command similar to the following:
 
 ```sh
 docker run --runtime=nvidia -v $(realpath bazel-bin):/DL4AGX -it <NAME OF ENV DOCKER IMAGE> /DL4AGX/<PATH TO YOUR SAMPLE IN bazel-bin>

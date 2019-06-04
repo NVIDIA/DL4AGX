@@ -75,9 +75,9 @@ Then, follow the instructions in the DL4AGX README to install dazel and build.
 
 You may want to change assorted settings in `.dazelrc` to your liking, especially `DAZEL_IMAGE_NAME`
 
-**You may also want to move the pdk files out of the workspace to avoid long build times due to increasing the size of the docker context**
+**You may also want to move the pdk files out of the workspace after you are done building the container to avoid long build times due to increased the size of the docker context**
 
-> Note: depending on the container only one toolchain will work. The dockerfile has steps to ensure you 
+> Note: depending in some containers only one toolchain will work. The Dockerfiles have steps to ensure you 
 > will not encounter errors for missing directories when trying to build but for a QNX container only the `D5Q-toolchain` will 
 > actually compile targets, similarly only the `D5L-toolchain` wil only compile targets when using a 
-> container with the AArch64 Linux PDK
+> container with the aarch64 Linux PDK

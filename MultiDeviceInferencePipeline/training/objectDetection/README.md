@@ -13,11 +13,13 @@ cd models
 git checkout f2b702a056ba08a2f2344425f116a673a302abdd
 ```
 
-In the cloned directory, git apply ssd_resnet18.patch located in `sampleDriveOS/training/objectDetection`.
+In the cloned directory, git apply ssd_resnet18.patch located in `MultiDeviceInferencePipeline/training/objectDetection`.
 
 ```bash
-git apply /path/to/driveos_sample.patch
+git apply /path/to/ssd_resnet18.patch
 ```
+
+Follow these instructions to complete the installation [https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/installation.md](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/installation.md)
 
 ### 2. Download the [COCO dataset (object detection annotations)](http://cocodataset.org/#download) and the [KITTI dataset (2D object detection)](http://www.cvlibs.net/datasets/kitti/eval_object.php?obj_benchmark=2d)
 
@@ -35,9 +37,11 @@ git apply /path/to/driveos_sample.patch
 
 ### 3. Use the API's dataset [conversion script](https://github.com/tensorflow/models/blob/master/research/object_detection/dataset_tools/create_coco_tf_record.py) to create the requisite tfrecords (be sure to enable the desired classes for the [KITTI conversion script](https://github.com/tensorflow/models/blob/master/research/object_detection/dataset_tools/create_kitti_tf_record.py))
 
+> Note: For Kitti a particular directory structure is required for the conversion script, run `create_kitti_tf_record.py --help` for more information
+
 For the COCO dataset:
 ```bash
-OD_DIRECTORY=<path to the tensorflow model directory>
+OD_DIRECTORY=<path to the tensorflow model/research directory>
 TRAIN_IMAGE_DIR=<path to the directory containing the training images in JPEG format>
 VAL_IMAGE_DIR=<path to the directory containing the validation images in JPEG format>
 TEST_IMAGE_DIR=<path to the directory containing the testing images in JPEG format>
@@ -83,6 +87,7 @@ python $OD_DIRECTORY/object_detection/dataset_tools/create_kitti_tf_record.py \
 * be sure to properly [configure the pipeline](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/configuring_jobs.md) (start from one of the provided configurations in the [model zoo](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md) or the template for COCO in `demo_pipeline.config`)
   * you can specify "ssd_resnet18_v1" for the feature extractor type
   * point the config file to the appropriate `<dataset>_label_map.pbtxt` located in `models/research/object_detection/data`
+    * make sure to use absolute paths if possible, will reduce chance for failure
 
 ```bash
 OD_DIRECTORY=<path to the tensorflow model directory>

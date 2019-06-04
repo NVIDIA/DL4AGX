@@ -16,7 +16,7 @@ git apply /path/to/deeplab.patch
 ```
 #### Install DeepLab and download KITTI Road dataset
 Follow the [instructions](https://github.com/tensorflow/models/blob/master/research/deeplab/g3doc/installation.md) to install DeepLab.  
-In this sample, we will only use one category of road scene, um - urban marked. This category is annotated with ground truth of ego lane where the vehicle is currently driving on. The data can be downloaded from [here](http://www.cvlibs.net/download.php?file=data_road.zip).
+In this app, we will only use one category of road scene, um - urban marked. This category is annotated with ground truth of ego lane where the vehicle is currently driving on. The data can be downloaded from [here](http://www.cvlibs.net/download.php?file=data_road.zip).
 
 #### Process the KITTI lane data
 Assuming the data is located in /home/user/data_road, lets reorganize the data using **datasets/process_kitti_lane.py**
@@ -76,7 +76,7 @@ python export_model_nvidia.py \
     --crop_size=795 \
     --num_classes=2
 
-# From sampleDriveOS/laneSegmentation
+# From MultiDeviceInferencePipeline/training/laneSegmentation
 python pb2uff.py \
     -p /path_to_export_pb_file/model_resnet18_240x795.pb \
     -u /path_to_export_uff_file/model_resnet18_240x795.uff \

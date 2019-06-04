@@ -1,26 +1,6 @@
 # Contributing to DL4AGX
 
-Forking and modifying the applications and tools in this repo to suite your own use cases is welcomed. If you think you have something that the community may benefit from, upstreaming those changes to this repo would be appreciated but will be accepted at the discretion of the maintainers (currently NVIDIA's Automotive Deep Learning Solution Architects Group). The goal of this repo is to help people using NVIDIA AGX platforms, so make sure PRs to this repo serve that purpose.  
-
-New source files must include the following license header:
-```md
-Copyright (c) 2018-2019 NVIDIA Corporation. All rights reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-File: [FILE PATH]
-Description: [WHAT THE FILE DOES]
-```
+Forking and modifying the applications and tools in this repo to suite your own use cases is welcomed. If you think you have something that the community may benefit from, upstreaming those changes to this repo would be appreciated but will be accepted at the discretion of the maintainers (currently NVIDIA's Automotive Deep Learning Solution Architects Group). The goal of this repo is to help people using NVIDIA AGX platforms, so make sure PRs serve that purpose.  
 
 ## Getting Started
 
@@ -70,7 +50,7 @@ dazel build //<project name>
 
 #### Cross Compilation
 
-The toolchains are setup based on which enviorment container you are using and are accessible via the `--config=[D5L/L4T]-toolchain` (aarch64-linux) and `--config=D5Q-toolchain` (aarch64-qnx)flags 
+The toolchains are setup based on which environment container you are using and are accessible via the `--config=[D5L/L4T]-toolchain` (aarch64-linux) and `--config=D5Q-toolchain` (aarch64-qnx) flags 
 
 #### Setting up the `BUILD` file
 
@@ -123,7 +103,7 @@ Sometimes its useful to work inside of the container so you can move outside the
 docker run --runtime=nvidia --rm -it -v $(realpath .):/DL4AGX nvidia/dl4agx #The name of the container built by Dockerfile.dazel (see above)
 ```
 
-This will mount the repo as a volume (so file changes propogate into the container). The only difference is inside the container use the command `bazel` instead of `dazel`
+This will mount the repo as a volume (so file changes propogate in and out of the container). The only difference is inside the container use the command `bazel` instead of `dazel`
 
 ## Installing New System Libraries
 
@@ -217,10 +197,12 @@ FROM my_custom_tf_drive_os_pdk_container
 ### Library Location Conventions 
 We try our best to stay as close to what DRIVE Software does:
 Hence:
-NVIDIA Libs: CUDA should be installed at `/usr/local`, CUDA for various platforms should be in the target directory of `/usr/local/cuda-X` 
-NVIDIA AI Libs: TensorRT and cuDNN should be located at `/usr/local/cuda-X/dl/targets/<PLATFORM>/{include, lib}`
-Other system dependencies: Dependencies should be located in `/usr/local/{include, lib}` for x86_64, `/usr/aarch64-linux-gnu/` for aarch64-linux
-and `/usr/aarch64-unknown-nto-qnx/aarch64le` for aarch64-qnx
+
+- CUDA: Should be installed at `/usr/local`, CUDA for various platforms should be in the target directory of `/usr/local/cuda-X`
+  - e.g. aarch64-linux CUDA 10.1 should be located at `/usr/local/cuda-10.1/targets/aarch64-linux`	 
+- CUDA-X DL Libs (i.e. TensorRT and cuDNN): Should be located at `/usr/local/cuda-X/dl/targets/<PLATFORM>/{include, lib}`
+- Other system dependencies: Dependencies should be located in `/usr/local/{include, lib}` for x86_64, `/usr/aarch64-linux-gnu/` for aarch64-linux
+  and `/usr/aarch64-unknown-nto-qnx/aarch64le` for aarch64-qnx	
 
 ## Commit Messages
 
@@ -228,7 +210,31 @@ We would like commit messages to stay as close to the Conventional Commits Stand
 
 ## CI/CD
 
-For the time being CI/CD will be done manually, code must compile for at least x86_64-linux and one of the aarch64-linux platforms (DRIVE or Jetson) using the latest enviorment container  before we will consider merging the code. We will test the code internally on aarch64-qnx platforms and provide feedback / patches to support. 
+For the time being CI/CD will be done manually, code must compile for at least x86_64-linux and one of the aarch64-linux platforms (DRIVE or Jetson) using the latest enviorment container before we will consider merging the code. We will test the code internally on aarch64-qnx platforms and provide feedback / patches to support. 
+
+## License Header for New Files
+
+New source files must include the following license header:
+
+```txt
+Copyright (c) 2018-2019 NVIDIA Corporation. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+File: [FILE PATH]
+Description: [WHAT THE FILE DOES]
+
+```
 
 ## Sign Your Work
 
@@ -248,25 +254,25 @@ By doing this you certify the below:
 
     Developer Certificate of Origin
     Version 1.1
-
+    
     Copyright (C) 2004, 2006 The Linux Foundation and its contributors.
     1 Letterman Drive
     Suite D4700
     San Francisco, CA, 94129
-
+    
     Everyone is permitted to copy and distribute verbatim copies of this license document, but changing it is not allowed.
 
 
     Developer's Certificate of Origin 1.1
-
+    
     By making a contribution to this project, I certify that:
-
+    
     (a) The contribution was created in whole or in part by me and I have the right to submit it under the open source license indicated in the file; or
-
+    
     (b) The contribution is based upon previous work that, to the best of my knowledge, is covered under an appropriate open source license and I have the right under that license to submit that work with modifications, whether created in whole or in part by me, under the same open source license (unless I am permitted to submit under a different license), as indicated in the file; or
-
+    
     (c) The contribution was provided directly to me by some other person who certified (a), (b) or (c) and I have not modified it.
-
+    
     (d) I understand and agree that this project and the contribution are public and that a record of the contribution (including all personal information I submit with it, including my sign-off) is maintained indefinitely and may be redistributed consistent with this project or the open source license(s) involved.
 
 ## Conforming to Coding Guidelines
@@ -357,9 +363,9 @@ There is experimental support for CUDA in bazel included in this repository. Onl
 load("//tools/nvcc:cuda.bzl", "cu_library")
 ```
 
-`cu_library` can be considered the CUDA analogy to `cc_library`. It behaves very similar but with a couple differences:
+`cu_library` can be considered the CUDA analog to `cc_library`. It behaves very similar but with a couple differences:
 
-Source files passed into this rule are assumed as CUDA code only (i.e. will be compiled with NVCC with the `-x cu` flag). This may dictate code structuring. The output of `cu_library` will be a shared library and static library, these can be consumed by `cc_*` rules as deps to create full apps. cu_libraries can consume cc_libraries as dependencies themselves as well. In addition to the standard options for `cc_library` are two additional ones: `gpu_arch` and `gen_code`. These options map directly to NVCC's `--gpu-architecutre` and `-gencode` flags respectively. Cross-compilation is also supported via CROSSTOOL configuration. `cc_library`'s `include_prefix` and `strip_include_prefix` are not currently implemented and, `copts` and `linkopts` refer to host compiler options (i.e. will be passed to NVCC perpended with `--Xcompiler` and `--Xlinker` respectively). For options to be passed to NVCC itself use `nvcc_copts` and `nvcc_linkopts`
+Source files passed into this rule are assumed as CUDA code only (i.e. will be compiled with NVCC with the `-x cu` flag). This may dictate code structuring. The output of `cu_library` will be a shared library and static library, these can be consumed by `cc_*` rules as deps to create full apps. cu_libraries can consume cc_libraries as dependencies themselves as well. In addition to the standard options for `cc_library` are two additional ones: `gpu_arch` and `gen_code`. These options map directly to NVCC's `--gpu-architecutre` and `-gencode` flags respectively. Cross-compilation is also supported via CROSSTOOL/cc_toolchain_config configuration. `cc_library`'s `include_prefix` and `strip_include_prefix` are not currently implemented and, `copts` and `linkopts` refer to host compiler options (i.e. will be passed to NVCC perpended with `--Xcompiler` and `--Xlinker` respectively). For options to be passed to NVCC itself use `nvcc_copts` and `nvcc_linkopts`
 
 An example BUILD file is the following:
 

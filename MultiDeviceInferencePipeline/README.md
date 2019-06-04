@@ -44,7 +44,7 @@ Then after making sure all dependencies are on the target and available for link
 
 ## Steps
 ### 1. Model training and conversion
-We provide training recipes based on Tensorflow for the two applications in this sample: object detection and ego-lane segmentation. 
+We provide training recipes based on Tensorflow for the two applications in this app: object detection and ego-lane segmentation. 
 
 #### Object detection
 The object detection model is trained on [KITTI object detection dataset](http://www.cvlibs.net/datasets/kitti/eval_object.php?obj_benchmark=2d). The object categories include car, pedestrian, and cyclist. Details on training can be found [here](training/objectDetection/README.md). 
