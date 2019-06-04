@@ -69,10 +69,10 @@ int appMain(conf::ExecutionSettings settings,
             JPEGDecoderPipeline& JPEGPipeline,
             DALITRTPipeline& detPipeline,
             DALITRTPipeline& segPipeline);
-int profileSample(conf::ExecutionSettings settings,
-                  JPEGDecoderPipeline& JPEGPipeline,
-                  DALITRTPipeline& detPipeline,
-                  DALITRTPipeline& segPipeline);
+int profileApp(conf::ExecutionSettings settings,
+               JPEGDecoderPipeline& JPEGPipeline,
+               DALITRTPipeline& detPipeline,
+               DALITRTPipeline& segPipeline);
 
 int main(int argc, char* argv[])
 {
@@ -120,10 +120,10 @@ Pipeline (should be named \""
 
     if (settings.profile)
     {
-        return profileSample(settings,
-                             JPEGPipeline,
-                             DetectionPipeline,
-                             SegmentationPipeline);
+        return profileApp(settings,
+                          JPEGPipeline,
+                          DetectionPipeline,
+                          SegmentationPipeline);
     }
 
     return appMain(settings,
@@ -137,9 +137,9 @@ Pipeline (should be named \""
  * and writes it to a file to view 
  **/
 int appMain(conf::ExecutionSettings settings,
-               JPEGDecoderPipeline& JPEGPipeline,
-               DALITRTPipeline& detPipeline,
-               DALITRTPipeline& segPipeline)
+            JPEGDecoderPipeline& JPEGPipeline,
+            DALITRTPipeline& detPipeline,
+            DALITRTPipeline& segPipeline)
 {
     /// Load JPEG image from file and make a DALI batch (once per pipeline)
     std::cout << "Load JPEG images" << std::endl;
@@ -211,10 +211,10 @@ int appMain(conf::ExecutionSettings settings,
     return 0;
 }
 
-int profileSample(conf::ExecutionSettings settings,
-                  JPEGDecoderPipeline& JPEGPipeline,
-                  DALITRTPipeline& detPipeline,
-                  DALITRTPipeline& segPipeline)
+int profileApp(conf::ExecutionSettings settings,
+               JPEGDecoderPipeline& JPEGPipeline,
+               DALITRTPipeline& detPipeline,
+               DALITRTPipeline& segPipeline)
 {
     auto decodeTimer = common::timers::PreciseCpuTimer();
     auto executionTimer = common::timers::PreciseCpuTimer();
