@@ -64,7 +64,7 @@ bool enginecreator::DALIStream::next()
         return false;
     }
     assert(mBatchSize > 0);
-    std::cout << "Processig batch " << mImageCount / mBatchSize << std::endl;
+    std::cout << "Processing batch " << mImageCount / mBatchSize << std::endl;
     std::vector<std::string> jpegNames;
     for (int i = 0; (i < mBatchSize) && (mFileIter != mFiles.end()); ++i)
     {
