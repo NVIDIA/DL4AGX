@@ -1,6 +1,7 @@
 bazel*
 docker/DRIVE/pdk_files/*
 docker/DRIVE/qnx_toolchain/*
+docker/Jetson/jetpack_files/*
 .vscode/
 .dazel_run
 .nvvp
