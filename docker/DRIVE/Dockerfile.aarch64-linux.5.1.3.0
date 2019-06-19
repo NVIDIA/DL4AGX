@@ -127,18 +127,19 @@ ENV REPO_DEBS="cuda.deb \
     
 RUN dpkg -i $REPO_DEBS
  
-ENV CUDA_PACKAGES="nvrtc nvgraph cusolver cufft curand cusparse npp nvjpeg cudart cupti compiler misc-headers command-line-tools nvrtc-dev nvml-dev nvgraph-dev cusolver-dev cufft-dev curand-dev cusparse-dev npp-dev nvjpeg-dev cudart-dev driver-dev"
-RUN echo "for i in \$CUDA_PACKAGES; do echo \"cuda-\$i-\${cuda_version_dash}\";done" | bash > /tmp/cuda-packages.txt
+ENV CUDA_PACKAGES="nvrtc nvgraph cusolver cufft curand cusparse npp nvjpeg cudart cupti compiler misc-headers command-line-tools nvrtc-dev nvml-dev nvgraph-dev cusolver-dev cufft-dev curand-dev cusparse-dev npp-dev nvjpeg-dev cudart-dev driver-dev nvcc toolkit libraries-dev tools visual-tools"
+RUN echo "for i in \$CUDA_PACKAGES; do echo \"cuda-\$i-\${cuda_version_dash}=\${cuda_version_long}-1\";done" | bash > /tmp/cuda-packages.txt
 
 #Install CUDA 10
 RUN apt-get update \
-    && apt-get -o Dpkg::Options::="--force-overwrite"  install -y $(cat /tmp/cuda-packages.txt) \
+    && apt-get -o Dpkg::Options::="--force-overwrite"  install -y $(cat /tmp/cuda-packages.txt) --reinstall --allow-downgrades \
     # Random cuda libs in random places...
-    && apt-get install -y libcublas-dev \ 
+    && apt-get install -y libcublas-dev --reinstall --allow-downgrades \
+    && apt-mark hold $(cat /tmp/cuda-packages.txt) \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/cuda-packages.txt
 
-RUN mv /usr/lib/x86_64-linux-gnu/libcublas.so* /usr/local/cuda-${CUDA_VERSION}/lib64 && \
+RUN mv /usr/lib/x86_64-linux-gnu/libcublas.so* /usr/local/cuda-${CUDA_VERSION}/targets/x86_64-linux/lib && \
     mv /usr/include/cublas* /usr/local/cuda-${CUDA_VERSION}/include
 
 RUN rm -rf /usr/local/cuda \
@@ -148,7 +149,7 @@ RUN ls /tmp
 RUN rsync -a --ignore-existing /tmp/cuda-backup/lib64 /usr/local/cuda/lib64
 
 RUN apt-get update \
-    && apt-get install -y cuda-cross-aarch64 \
+    && apt-get install -y cuda-cross-aarch64 cuda-cross-aarch64-${cuda_version_dash} --reinstall --allow-downgrades \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/cuda-packages.txt 
 
