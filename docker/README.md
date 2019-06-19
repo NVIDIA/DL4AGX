@@ -15,14 +15,14 @@ Using the SDK manager, download the host componets of the PDK version or Jetpack
 2. [**SDK Manager Step 01**] Select the correct platform and PDK version (should be corresponding to the name of the Dockerfile you are building (e.g. `Linux - DRIVE OS 5.1.0.0 PDK`), then click `Continue`
 3. [**SDK Manager Step 02**] Under `Download & Install Options` make note of or change the download folder **and Select Download now. Install later.** then agree to the license terms and click `Continue`
 
-You should now have all expected files to build the container. Move these into the same directory as the Dockerfile in a directory called `**pdk_files**` with the names unmodified.
+You should now have all expected files to build the container. Move these into the `docker/DRIVE/pdk_files` for DRIVE platform OR `docker/Jetson/jetpack_files` for Jetson platform.
 
 ### For DRIVE OS versions <= 5.0.13.0
 Take a look at the included Dockerfiles for a complete list of necessary files but in general, these containers will depend on all of the PDK run files for a platform and any additional tarballs or debian files provided to you. These files should be located in a directory called `pdk_files` with the names unmodified. Note that if you want to use specific versions of TensorRT or cudnn, those tar files shall also be placed in the `pdk_files` folder.
 
 ### QNX Toolchain
 
-If the container is targeted at QNX, the QNX Toolchain is expected in a directory named `qnx_toolchain` with a layout similar to:
+If the container is targeted at QNX, the QNX Toolchain is expected in a directory named `docker/DRIVE/qnx_toolchain` with a layout similar to:
 
 ```
 qnx_toolchain
