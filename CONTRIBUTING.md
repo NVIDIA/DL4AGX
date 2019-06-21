@@ -443,7 +443,7 @@ src_package(
     components = [
         "//MultiDeviceInferencePipeline:MultiDeviceInferencePipeline",
         "//plugins/tensorrt/FlattenConcatPlugin:libflattenconcatplugin.so",
-        "//plugins/dali/TensorRTInferOp:libtrtinferop.so",
+        "//plugins/dali/TensorRTInferOp:libtensorrtinferop.so",
     ],
     documentation = """
 ## DRIVE OS Reference Application

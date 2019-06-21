@@ -28,7 +28,7 @@ config_setting(
 )
 
 cc_binary(
-    name = "libtrtinferop.so",
+    name = "libtensorrtinferop.so",
     srcs = [
         "tensorrtInferOp.cpp",
         "tensorrtInferOp.h",
