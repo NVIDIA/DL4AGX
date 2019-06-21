@@ -83,29 +83,29 @@ __Note that to run engines on Xavier's iGPU, --device=1 is needed. For int8 cali
 
 Build ResNet18-SSD engine in fp32 precision:
 ```Shell
-./enginecreator --uffModel=/path/to/ssd_res18_kitti.uff --outputEngine=/path/to/ssd_resnet18_fp32.engine --inputBlob=Input --inputDim=3,300,300 --outputBlob=NMS --pipeline=/path/to/pipe_SSD --plugin=/path/to/libflattenconcatplugin.so --trtoplib=/path/to/libtrtinferop.so--device=1
+./enginecreator --uffModel=/path/to/ssd_res18_kitti.uff --outputEngine=/path/to/ssd_resnet18_fp32.engine --inputBlob=Input --inputDim=3,300,300 --outputBlob=NMS --pipeline=/path/to/pipe_SSD --plugin=/path/to/libflattenconcatplugin.so --trtoplib=/path/to/libtensorrtinferop.so --device=1
 ```
 
 Build ResNet18-SSD engine with int8 quantization:
 ```Shell
-./enginecreator --uffModel=/path/to/ssd_res18_kitti.uff --outputEngine=/path/to/ssd_resnet18_int8.engine --inputBlob=Input --inputDim=3,300,300 --outputBlob=NMS --pipeline=/path/to/pipe_SSD --int8 --calibFolder=/path/to/COCO/val2017 --calibJSON=/path/to/COCO/instances_val2017.json --plugin=/path/to/libflattenconcatplugin.so --trtoplib=/path/to/libtrtinferop.so --device=1
+./enginecreator --uffModel=/path/to/ssd_res18_kitti.uff --outputEngine=/path/to/ssd_resnet18_int8.engine --inputBlob=Input --inputDim=3,300,300 --outputBlob=NMS --pipeline=/path/to/pipe_SSD --int8 --calibFolder=/path/to/COCO/val2017 --calibJSON=/path/to/COCO/instances_val2017.json --plugin=/path/to/libflattenconcatplugin.so --trtoplib=/path/to/libtensorrtinferop.so --device=1
 ```
 
 Build DeepLabV3 segmentation model in fp16 precision for DLA:
 Build engine:
 ```Shell
-./enginecreator --uffModel=/path/to/model_resnet18_240x795.uff --outputEngine=/path/to/deeplabv3_resnet18_fp16.engine --inputBlob=ImageTensor --inputDim=3,240,795 --outputBlob=logits/semantic/BiasAdd --fp16 --useDLA --trtoplib=/path/to/libtrtinferop.so --device=1
+./enginecreator --uffModel=/path/to/model_resnet18_240x795.uff --outputEngine=/path/to/deeplabv3_resnet18_fp16.engine --inputBlob=ImageTensor --inputDim=3,240,795 --outputBlob=logits/semantic/BiasAdd --fp16 --useDLA --trtoplib=/path/to/libtensorrtinferop.so --device=1
 ```
 
 ### How to build engine and write detection results to JSON file
 Build MobileNetV1-SSD engine and perform detection on COCO val 2017 set:
 ```Shell
-./enginecreator --uffModel=/path/to/ssd_mobileV1.uff --outputEngine=/path/to/ssd_mobileV1_fp32.engine --inputBlob=Input  --inputDim=3,300,300 --outputBlob=NMS --pipeline=/path/to/pipe_SSD --testFolder=/path/to/COCO/val2017 --testJSON=/path/to/COCO/instances_val2017.json --plugin=/path/to/libflattenconcatplugin.so --evalJSON=/path/to/result.json --trtoplib=/path/to/libtrtinferop.so --device=1
+./enginecreator --uffModel=/path/to/ssd_mobileV1.uff --outputEngine=/path/to/ssd_mobileV1_fp32.engine --inputBlob=Input  --inputDim=3,300,300 --outputBlob=NMS --pipeline=/path/to/pipe_SSD --testFolder=/path/to/COCO/val2017 --testJSON=/path/to/COCO/instances_val2017.json --plugin=/path/to/libflattenconcatplugin.so --evalJSON=/path/to/result.json --trtoplib=/path/to/libtensorrtinferop.so --device=1
 ```
 
 Build MobileNetV2-SSD engine with int8 quantization and perform detection on COCO val 2017 set:
 ```Shell
-./enginecreator --uffModel=/path/to/ssd_mobileV2.uff --outputEngine=/path/to/ssd_mobileV2_int8.engine --inputBlob=Input --inputDim=3,300,300 --outputBlob=NMS --pipeline=/path/to/pipe_SSD --int8 --calibFolder=/path/to/COCO/val2017 --calibJSON=/path/to/COCO/instances_val2017.json --testFolder=/path/to/COCO/val2017 --testJSON=/path/to/COCO/instances_val2017.json --plugin=/path/to/libflattenconcatplugin.so --evalJSON=/path/to/result.json --trtoplib=/path/to/libtrtinferop.so --device=1
+./enginecreator --uffModel=/path/to/ssd_mobileV2.uff --outputEngine=/path/to/ssd_mobileV2_int8.engine --inputBlob=Input --inputDim=3,300,300 --outputBlob=NMS --pipeline=/path/to/pipe_SSD --int8 --calibFolder=/path/to/COCO/val2017 --calibJSON=/path/to/COCO/instances_val2017.json --testFolder=/path/to/COCO/val2017 --testJSON=/path/to/COCO/instances_val2017.json --plugin=/path/to/libflattenconcatplugin.so --evalJSON=/path/to/result.json --trtoplib=/path/to/libtensorrtinferop.so --device=1
 ```
 
 ## Object Detection Benchmark on COCO Dataset
