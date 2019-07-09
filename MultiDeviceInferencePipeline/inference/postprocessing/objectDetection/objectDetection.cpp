@@ -54,10 +54,10 @@ void postprocessing::objectdetection::visualizeObjectDetection(cv::Mat& img, std
                 switch (category_id)
                 {
                 case 1:
-                    cv::rectangle(output, box, cv::Scalar(255, 0, 0), 2);
+                    cv::rectangle(output, box, cv::Scalar(0, 255, 0), 2);
                     break;
                 case 2:
-                    cv::rectangle(output, box, cv::Scalar(0, 255, 0), 2);
+                    cv::rectangle(output, box, cv::Scalar(255, 255, 0), 2);
                     break;
                 case 3:
                     cv::rectangle(output, box, cv::Scalar(200, 200, 0), 2);
