@@ -19,9 +19,23 @@
 package(default_visibility = ["//visibility:public"])
 load("//toolchains/D5L:D5L_cc_toolchain_config.bzl", "D5L_cc_toolchain_config")
 
+config_setting(
+    name = "gcc_7.4",
+    values = {"define": "platforms=drive_pdk_5.1.6.0+linux"}
+)
+
+config_setting(
+    name = "gcc_5.4",
+    values = {"define": "platforms=drive_pdk_5.1.3.0+linux"}
+)
+
 D5L_cc_toolchain_config(
     name = "D5L_toolchain_config",
     cpu = "aarch64",
+    gcc_toolchain_version = select({
+        ":gcc_5.4": "gcc5.4",
+        "//conditions:default": "gcc7.4",
+    })
 )
 
 cc_toolchain_suite(
