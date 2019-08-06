@@ -9,7 +9,7 @@ This short example modfies the MultiDeviceInferencePipeline application to run a
 Convert the ONNX Model using TRT Exec
 
 ``` sh
-trtexec --onnx=RetinaNet.onnx --saveEngine=retinanet.trt --int8 --useDLACore=1
+CUDA_VISIBLE_DEVICES=1 trtexec --onnx=RetinaNet.onnx --saveEngine=retinanet.trt --int8 --useDLACore=1
 ```
 
 The Inference Pipeline is configured using a TOML file. An example configuration is provided below. In order to run the application, pass the path to the TOML file with the `--conf` flag:
@@ -70,7 +70,7 @@ profile = false
 # Configurations for the Object Detection Pipeline 
 [[inference_pipeline]]
 name = "RetinaNet"
-device = 0
+device = 1
 dla_core = 1
 batch_size = 1
 async_execution = true
