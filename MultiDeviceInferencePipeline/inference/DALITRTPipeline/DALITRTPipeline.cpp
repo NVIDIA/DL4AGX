@@ -125,7 +125,7 @@ DALITRTPipeline::DALITRTPipeline(const std::string pipelinePrefix,
         .AddArg("num_outputs", engineOutputBindings.size())
         .AddArg("input_nodes", engineInputBindings)
         .AddArg("output_nodes", engineOutputBindings)
-        .AddArg("log_severity", 3);
+        .AddArg("log_severity", 4);
 
     if (DLACore >= 0)
     {

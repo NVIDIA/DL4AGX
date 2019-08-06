@@ -21,6 +21,7 @@
 #include "dali/pipeline/operators/operator.h"
 #include <NvInfer.h>
 #include <NvInferPlugin.h>
+#include <NvOnnxParserRuntime.h>
 #include <cstring>
 #include <cuda_runtime_api.h>
 #include <dlfcn.h>
@@ -113,12 +114,13 @@ public:
         }
         this->trt_logger_ = new Logger((nvinfer1::ILogger::Severity) spec.GetArgument<int>("log_severity"));
 
-        initLibNvInferPlugins(trt_logger_, "");
+        initLibNvInferPlugins(this->trt_logger_, "");
         runtime_ = nvinfer1::createInferRuntime(*trt_logger_);
         if (use_dla_core_ >= 0 && use_dla_core_ < MAX_ALLOWED_DLA_CORE)
         {
             runtime_->setDLACore(use_dla_core_);
         }
+
         engine_ = runtime_->deserializeCudaEngine(engine_data_.data(), engine_data_.size(), nullptr);
         context_ = engine_->createExecutionContext();
 

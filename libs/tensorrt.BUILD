@@ -153,12 +153,21 @@ cc_library(
 cc_library(
     name = "nvonnxparser_runtime",
     deps = [
-        "nvparsers_headers",
-        "nvparsers_lib"
+        "nvonnxparser_runtime_header",
+        "nvonnxparser_runtime_lib"
     ] + select({
-        ":aarch64_linux":["@tensorrt_aarch64_linux//:nvinfer"],
-        ":aarch64_qnx":["@tensorrt_aarch64_qnx//:nvinfer"],
-        "//conditions:default":["@tensorrt_x86_64_linux//:nvinfer"]
+        ":aarch64_linux":[
+            "@tensorrt_aarch64_linux//:nvinfer",
+            "@tensorrt_aarch64_linux//:nvonnxparser",
+        ],
+        ":aarch64_qnx":[
+            "@tensorrt_aarch64_qnx//:nvinfer",
+            "@tensorrt_aarch64_qnx//:nvonnxparser"
+        ],
+        "//conditions:default":[
+            "@tensorrt_x86_64_linux//:nvinfer",
+            "@tensorrt_x86_64_linux//:nvonnxparser"
+        ]
     }),
    visibility = ["//visibility:public"],
 )

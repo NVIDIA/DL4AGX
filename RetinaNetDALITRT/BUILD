@@ -1,4 +1,4 @@
-##########################################################################
+#############################################################################
 # Copyright (c) 2018-2019 NVIDIA Corporation. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# File: DL4AGX/plugins/dali/TensorRTInferOp/BUILD 
+# File: DL4AGX/MultiDeviceInferencePipeline/inference/BUILD
 ############################################################################
 package(default_visibility = ["//visibility:public"])
 
@@ -28,30 +28,9 @@ config_setting(
 )
 
 cc_binary(
-    name = "libtensorrtinferop.so",
-    srcs = [
-        "tensorrtInferOp.cpp",
-        "tensorrtInferOp.h",
-    ],
-    copts = [
-        "-pthread",
-        "-fPIC",
-    ] + select({
-        ":aarch64_linux": [
-            "-D__AARCH64_GNU__",
-            "-DGOOGLE_PROTOBUF_ARCH_64_BIT",
-        ],
-        ":aarch64_qnx": [
-            "-D__AARCH64_QNX__",
-            "-DGOOGLE_PROTOBUF_ARCH_64_BIT",
-            "-DGOOGLE_PROTOBUF_ARCH_X64",
-            "-Dgoogle=google_private",
-        ],
-        "//conditions:default": [
-            "-DGOOGLE_PROTOBUF_ARCH_64_BIT",
-            "-DGOOGLE_PROTOBUF_ARCH_X64",
-        ],
-    }),
+    name = "retinanet_inference",
+    srcs = ["main.cpp"],
+    copts = ["-pthread"],
     linkopts = select({
         ":aarch64_qnx": ["-lc"],
         "//conditions:default": [
@@ -60,28 +39,23 @@ cc_binary(
             "-ldl",
         ],
     }),
-    linkshared = True,
-    deps = select({
+    deps = [
+        "//common:argparser",
+        "//common:timers",
+        "//MultiDeviceInferencePipeline/inference/conf:conf",
+        "//MultiDeviceInferencePipeline/inference/utils:dali_utils",
+        "//MultiDeviceInferencePipeline/inference/DALITRTPipeline:dali_trt_pipeline",
+        "//RetinaNetDALITRT/JPEGDecoderPipeline:jpeg_decoder_pipeline",
+        "//MultiDeviceInferencePipeline/inference/preprocessing:preprocessing",
+    ] + select({
         ":aarch64_linux": [
             "@dali_aarch64_linux//:dali",
-            "@tensorrt_aarch64_linux//:nvinfer",
-            "@tensorrt_aarch64_linux//:nvinferplugin",
-            "@tensorrt_aarch64_linux//:nvonnxparser_runtime",
-            "@cuda_aarch64_linux//:cudart",
         ],
         ":aarch64_qnx": [
             "@dali_aarch64_qnx//:dali",
-            "@tensorrt_aarch64_qnx//:nvinfer",
-            "@tensorrt_aarch64_qnx//:nvinferplugin",
-            "@tensorrt_aarch64_qnx//:nvonnxparser_runtime",
-            "@cuda_aarch64_qnx//:cudart",
         ],
         "//conditions:default": [
             "@dali_x86_64_linux//:dali",
-            "@tensorrt_x86_64_linux//:nvinfer",
-            "@tensorrt_x86_64_linux//:nvinferplugin",
-            "@tensorrt_x86_64_linux//:nvonnxparser_runtime",
-            "@cuda_x86_64_linux//:cudart",
         ],
     }),
 )

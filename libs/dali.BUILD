@@ -50,8 +50,6 @@ cc_library(
     ] + select({
         ":aarch64_linux": [
             "@protobuf_aarch64_linux//:protobuf",
-            "@protobuf_aarch64_linux//:protobuf_lite",
-            "@protobuf_aarch64_linux//:protoc",
             "@cuda_aarch64_linux//:cudart",
             "@cuda_aarch64_linux//:cuda_dali_deps",
             "@opencv_aarch64_linux//:opencv_core",
@@ -62,8 +60,6 @@ cc_library(
         ],
         ":aarch64_qnx": [
             "@protobuf_aarch64_qnx//:protobuf",
-            "@protobuf_aarch64_qnx//:protobuf_lite",
-            "@protobuf_aarch64_qnx//:protoc",
             "@cuda_aarch64_qnx//:cudart",  
             "@cuda_aarch64_qnx//:cuda_dali_deps",
             "@opencv_aarch64_qnx//:opencv_core",
@@ -74,8 +70,6 @@ cc_library(
         ],
         "//conditions:default": [
             "@protobuf_x86_64_linux//:protobuf",
-            "@protobuf_x86_64_linux//:protobuf_lite",
-            "@protobuf_x86_64_linux//:protoc",
             "@cuda_x86_64_linux//:cudart",
             "@cuda_x86_64_linux//:cuda_dali_deps",
             "@opencv_x86_64_linux//:opencv_core",
