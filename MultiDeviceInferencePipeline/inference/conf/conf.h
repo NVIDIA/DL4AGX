@@ -68,8 +68,11 @@ inline void parseInferencePipelineConfFile(std::string specFile,
     }
 
     auto postprocessingConf = config->get_table("postprocessing");
-    settings.detectionThreshold = (float) postprocessingConf->get_as<double>("detection_threshold").value_or(0.5);
-    std::cout << "Postprocessing: \n    Detection Threshold: " << settings.detectionThreshold << std::endl;
+    if (postprocessingConf != nullptr)
+    {
+        settings.detectionThreshold = (float) postprocessingConf->get_as<double>("detection_threshold").value_or(0.5);
+        std::cout << "Postprocessing: \n    Detection Threshold: " << settings.detectionThreshold << std::endl;
+    }
 }
 } // namespace conf
 } // namespace inference
