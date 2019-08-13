@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# File: DL4AGX/docker/Jetson/Dockerfile.aarch64-qnx.5.1.3.0
+# File: DL4AGX/docker/DRIVE/Dockerfile.aarch64-qnx.5.1.3.0
 # Description: Docker image for DRIVE PDK 5.1.3.0 for QNX
 ############################################################################
 FROM nvidia/cuda:10.1-devel-ubuntu16.04

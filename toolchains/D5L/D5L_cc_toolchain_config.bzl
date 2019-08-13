@@ -149,14 +149,24 @@ def _impl(ctx):
 
     features = [coverage_feature, debug_feature]
 
-    cxx_builtin_include_directories = [
+    gcc_include_directories_by_version = {
+        "gcc5.4": [
             "/usr/aarch64-linux-gnu/include/c++/5/",
             "/usr/aarch64-linux-gnu/include/c++/5/backward",
             "/usr/aarch64-linux-gnu/include/",
             "/usr/lib/gcc-cross/aarch64-linux-gnu/5/include",
             "/usr/lib/gcc-cross/aarch64-linux-gnu/5/include-fixed",
+        ],
+        "gcc7.4": [
+            "/usr/aarch64-linux-gnu/include/c++/7/",
+            "/usr/aarch64-linux-gnu/include/c++/7/backward",
+            "/usr/aarch64-linux-gnu/include/",
+            "/usr/lib/gcc-cross/aarch64-linux-gnu/7/include",
+            "/usr/lib/gcc-cross/aarch64-linux-gnu/7/include-fixed",
         ]
-
+    }
+    
+    cxx_builtin_include_directories = gcc_include_directories_by_version[ctx.attr.gcc_toolchain_version]
     artifact_name_patterns = []
 
     make_variables = []
@@ -235,6 +245,7 @@ D5L_cc_toolchain_config =  rule(
     implementation = _impl,
     attrs = {
         "cpu": attr.string(mandatory=True, values=["aarch64"]),
+        "gcc_toolchain_version": attr.string(mandatory=True, values=["gcc5.4", "gcc7.4"]),
     },
     provides = [CcToolchainConfigInfo],
     executable = True,

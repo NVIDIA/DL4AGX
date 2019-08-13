@@ -72,6 +72,13 @@ To cross-compile targets for aarch64-qnx append the following flag to your build
 
 You will find the associated binaries in `//bazel-out/aarch64-fastbuild/plugins/dali/TensorRTInferOp/libtensorrtinferop.so`
 
+#### Building for older PDKs
+
+By default `--config=[D5L/D5Q/L4T]-toolchain` will target the latest supported version. Since versions might use slightly different dependencies, to build using an older build container
+you will also need to specify the exact PDK version you are targeting.
+
+- e.g. `dazel build //plugins/dali/TensorRTInferOp:libtensorrtinferop.so --config=D5L-toolchain --define platforms=drive_pdk_5.1.6.0+linux` 
+
 ### Running Compiled Targets in a Container
 
 If you want to run a target in a container, use a command similar to the following:
