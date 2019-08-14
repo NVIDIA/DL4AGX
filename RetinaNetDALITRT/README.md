@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This short example modfies the MultiDeviceInferencePipeline application to run a ONNX based RetinaNet Model using DALI and TensorRT. It constructs an inference pipeline that will decode a JPEG Image, conduct preprocessing, and perform inference.
+This short example modfies the MultiDeviceInferencePipeline application to run a ONNX based RetinaNet Model using DALI and TensorRT. It constructs an inference pipeline that will decode a JPEG Image, and perform inference.
 
 ## Usage 
 
