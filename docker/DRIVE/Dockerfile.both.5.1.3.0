@@ -103,7 +103,6 @@ RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
 RUN pip install --upgrade --no-cache-dir numpy
 
 RUN pip install --upgrade --no-cache-dir \
-    enum34 \
     pillow \
     pip \
     protobuf \
@@ -114,7 +113,6 @@ RUN pip install --upgrade --no-cache-dir \
 RUN pip3 install --upgrade --no-cache-dir numpy
 
 RUN pip3 install --upgrade --no-cache-dir \
-    enum34 \
     pillow \
     pip \
     protobuf \
