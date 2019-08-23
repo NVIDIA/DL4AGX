@@ -88,26 +88,9 @@ RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
     python get-pip.py && \
     rm get-pip.py
 
-RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
-    python3 get-pip.py && \
-    rm get-pip.py
-
-
-RUN pip install --upgrade --no-cache-dir numpy
-
-RUN pip install --upgrade --no-cache-dir \
-    enum34 \
-    pillow \
-    pip \
-    protobuf \
-    pycuda \
-    setuptools
-
-
 RUN pip3 install --upgrade --no-cache-dir numpy
 
 RUN pip3 install --upgrade --no-cache-dir \
-    enum34 \
     pillow \
     pip \
     protobuf \
