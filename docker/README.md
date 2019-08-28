@@ -4,6 +4,7 @@
 
 The Dockerfile(s) in this directory are setup to install the DRIVE OS PDK in a container to be used to build apps 
 
+> Note: All platform specific containers support x86_64 compilation in addition to target platforms.
 
 ## Expected Files
 
@@ -48,25 +49,28 @@ docker build -t nvidia/drive_os_pdk -f <NAME OF DOCKERFILE> .
 > For the Jetson container, you need to access NGC's container registry [https://ngc.nvidia.com/catalog/containers/nvidia:tensorrt](https://ngc.nvidia.com/catalog/containers/nvidia:tensorrt) to download the TensorRT base image. 
 
 ### Recipes 
-#### DRIVE PDK 5.1.3.0 aarch64-linux 
+
+Build PDK docker image followed by application docker image
+
+#### DRIVE PDK 5.1.6.0 aarch64-linux
 ``` sh
-docker build -t nvidia/drive_os_pdk:5.1.3.0-linux -f DRIVE/Dockerfile.aarch64-linux.5.1.3.0 DRIVE
+docker build -t nvidia/drive_os_pdk:5.1.6.0-linux -f docker/DRIVE/Dockerfile.aarch64-linux.5.1.6.0 docker/DRIVE
 ```
 
-#### DRIVE PDK 5.1.3.0 aarch64-qnx 
+#### DRIVE PDK 5.1.6.0 aarch64-qnx
 ``` sh
-docker build -t nvidia/drive_os_pdk:5.1.3.0-qnx -f DRIVE/Dockerfile.aarch64-qnx.5.1.3.0 DRIVE
+docker build -t nvidia/drive_os_pdk:5.1.6.0-qnx -f docker/DRIVE/Dockerfile.aarch64-qnx.5.1.6.0 docker/DRIVE
 ```
 
-#### DRIVE PDK 5.1.3.0 Both (aarch64-linux and aarch64-qnx) 
+#### DRIVE PDK 5.1.6.0 Both (aarch64-linux and aarch64-qnx)
 ``` sh
-docker build -t nvidia/drive_os_pdk:5.1.3.0-both -f DRIVE/Dockerfile.both.5.1.3.0 DRIVE
+docker build -t nvidia/drive_os_pdk:5.1.6.0-both -f docker/DRIVE/Dockerfile.both.5.1.6.0 docker/DRIVE
 ```
 _For the container that supports both, copy both the QNX and Linux pdk files into the same directory_
 
 #### JetPack 4.1 aarch64-linux
 ``` sh
-docker build -t nvidia/jetpack:4.1 -f Jetson/Dockerfile.aarch64-linux.4.1 Jetson
+docker build -t nvidia/jetpack:4.1 -f docker/Jetson/Dockerfile.jetpack.4.1 docker/Jetson
 ```
 
 ## Using the Container to Build DL4AGX Targets
@@ -79,5 +83,5 @@ You may want to change assorted settings in `.dazelrc` to your liking, especiall
 
 > Note: depending in some containers only one toolchain will work. The Dockerfiles have steps to ensure you 
 > will not encounter errors for missing directories when trying to build but for a QNX container only the `D5Q-toolchain` will 
-> actually compile targets, similarly only the `D5L-toolchain` wil only compile targets when using a 
+> actually compile targets, similarly only the `D5L-toolchain` will only compile targets when using a
 > container with the aarch64 Linux PDK
