@@ -1,0 +1,154 @@
+#############################################################################
+# Copyright (c) 2018-2019 NVIDIA Corporation. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# File: DL4AGX/docker/Jetson/Dockerfile.aarch64-linux.4.1
+# Description: Docker image for Jetpack 4.1 
+############################################################################
+FROM nvcr.io/nvidia/tensorrt:19.02-py3
+
+ARG jetpack_version=4.1
+ENV CUDA_VERSION=10.0   
+
+ARG trt_version=5.0
+ARG trt_version_short=5.0.3
+ARG trt_version_long=5.0.3.2
+
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/* 
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libtool \
+        rsync \
+        pkg-config \
+        python \
+        python-dev \
+        python3 \
+        python3-dev \
+        x264 v4l-utils \
+        gcc-aarch64-linux-gnu  \
+        g++-aarch64-linux-gnu \ 
+        libjpeg-dev \
+        curl \
+        ca-certificates \
+        wget \
+        unzip \ 
+        git \
+        nasm \
+        pkg-config \
+        dh-autoreconf \
+        make\
+        g++\
+        libboost-all-dev \
+        unzip && \
+    rm -rf /var/lib/apt/lists/*   
+        
+RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
+    python get-pip.py && \
+    rm get-pip.py
+
+RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
+    python3 get-pip.py && \
+    rm get-pip.py
+
+
+RUN pip install --upgrade --no-cache-dir numpy
+
+RUN pip install --upgrade --no-cache-dir \
+    pillow \
+    pip \
+    protobuf \
+    pycuda \
+    setuptools
+
+
+RUN pip3 install --upgrade --no-cache-dir numpy
+
+RUN pip3 install --upgrade --no-cache-dir \
+    pillow \
+    pip \
+    protobuf \
+    pycuda \
+    setuptools
+
+COPY jetpack_files /pdk_files
+
+###########################################################
+# CUDA 
+###########################################################
+#RUN mv /usr/local/cuda-${CUDA_VERSION} /tmp/cuda-backup
+RUN wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/cuda-npp-dev-10-0_10.0.130-1_amd64.deb -O cuda_npp-dev.deb
+RUN mv /pdk_files/16.04/cuda-repo-ubuntu1604-10-0-local-10.0.117-410.38_1.0-1_amd64.deb cuda-cross.deb
+#RUN wget $pdk_linux_build_server/cuda-repo-cross-aarch64-10-1-local-10.1.107_1.0-1_all.deb -O cuda-repo-cross-aarch64.deb
+
+ENV REPO_DEBS="cuda-cross.deb \
+               cuda_npp-dev.deb"
+    
+RUN dpkg -i $REPO_DEBS
+
+RUN rm *.deb
+
+ENV CUDA_CROSS_PACKAGES="cublas cudart cufft curand cusolver cusparse driver misc-headers npp nvgraph nvml nvrtc"
+
+RUN echo "for i in \$CUDA_CROSS_PACKAGES; do echo \"cuda-\$i-cross-aarch64-\${CUDA_VERSION}\";done" | bash > /tmp/cuda-packages.txt
+
+RUN apt-get update \
+    && apt-get install -y $(cat /tmp/cuda-packages.txt) \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/cuda-packages.txt 
+
+RUN cp -r /usr/local/cuda-${CUDA_VERSION}/bin /usr/local/cuda-${CUDA_VERSION}/targets/x86_64-linux \
+    && mv /usr/local/cuda-${CUDA_VERSION}/extras /usr/local/cuda-${CUDA_VERSION}/targets/x86_64-linux \
+    && ln -s /usr/local/cuda-${CUDA_VERSION}/targets/x86_64-linux/extras /usr/local/cuda-${CUDA_VERSION}/extras
+
+RUN mkdir -p /usr/local/cuda-${CUDA_VERSION}/dl/targets/x86_64-linux \
+    && cd /usr/local/cuda-${CUDA_VERSION}/dl/targets/x86_64-linux \
+    && mkdir include lib lib64\
+    && mv /usr/lib/x86_64-linux-gnu/libnv* lib \
+    && mv /usr/include/x86_64-linux-gnu/Nv* include \
+    && mv /usr/lib/x86_64-linux-gnu/libcudnn* lib \
+    && mv /usr/include/x86_64-linux-gnu/cudnn* include/cudnn.h \
+    && cd lib \
+    && rm /etc/alternatives/libcudnn* \
+    && ln -s /usr/local/cuda-${CUDA_VERSION}/dl/targets/x86_64-linux/include/cudnn.h /etc/alternatives/libcudnn \
+    && ln -s /usr/local/cuda-${CUDA_VERSION}/dl/targets/x86_64-linux/lib/libcudnn.so.7 /etc/alternatives/libcudnn_so \
+    && rm -rf /usr/local/cuda-${CUDA_VERSION}/*sight* /usr/local/cuda-${CUDA_VERSION}/samples
+
+###########################################################
+# ARM Linux Libs
+###########################################################
+RUN dpkg -x /pdk_files/libcudnn7_7.3.1.20-1+cuda10.0_arm64.deb cudnn-aarch64
+RUN dpkg -x /pdk_files/libcudnn7-dev_7.3.1.20-1+cuda10.0_arm64.deb cudnn-aarch64
+
+RUN mkdir -p /usr/local/cuda-${CUDA_VERSION}/dl/targets/aarch64-linux/include /usr/local/cuda-${CUDA_VERSION}/dl/targets/aarch64-linux/lib 
+RUN mv cudnn-aarch64/usr/lib/aarch64-linux-gnu/* /usr/local/cuda-${CUDA_VERSION}/dl/targets/aarch64-linux/lib 
+RUN mv cudnn-aarch64/usr/include/aarch64-linux-gnu/* /usr/local/cuda-${CUDA_VERSION}/dl/targets/aarch64-linux/include
+RUN cd /usr/local/cuda-${CUDA_VERSION}/dl/targets/aarch64-linux/include && ln -s cudnn_v7.h cudnn.h
+RUN cd /usr/local/cuda-${CUDA_VERSION}/dl/targets/aarch64-linux/lib && ln -s libcudnn.so.7 libcudnn.so
+RUN rm -rf cudnn-aarch64
+
+RUN dpkg -x /pdk_files/libnvinfer5_5.0.3-1+cuda10.0_arm64.deb trt-aarch64
+RUN dpkg -x /pdk_files/libnvinfer-dev_5.0.3-1+cuda10.0_arm64.deb trt-aarch64
+
+RUN mv trt-aarch64/usr/lib/aarch64-linux-gnu/* /usr/local/cuda-${CUDA_VERSION}/dl/targets/aarch64-linux/lib 
+RUN mv trt-aarch64/usr/include/aarch64-linux-gnu/* /usr/local/cuda-${CUDA_VERSION}/dl/targets/aarch64-linux/include
+RUN rm -rf trt-aarch64
+
+RUN mkdir -p /usr/local/cuda/targets/aarch64-qnx /usr/local/cuda/dl/targets/aarch64-qnx
+
+RUN rm -rf *.deb *.patch
+RUN rm -rf /pdk_files
+
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/local/cuda/lib64:/usr/local/cuda/dl/targets/x86_64-linux/lib:/usr/local/cuda/dl/targets/x86_64-linux/lib64:/usr/lib:/lib:$LD_LIBRARY_PATH

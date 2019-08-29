@@ -17,13 +17,50 @@ The application is designed for NVIDIA DRIVE AGX Developer Kit running either Li
 - CUDA: 10.1  
 - CUDNN: 7.5  
 - TensorRT: 5.1.1.4  
-- DriveOS PDK: 5.1.3.0 or Ubuntu 16.04 on x86  
+- DriveOS PDK: >=5.1.3.0 or Ubuntu on x86
 - DALI: 0.9dev (aarch64 build) 
 - OpenCV: 3.4.2 (for visualization)
 
 
 ## How to compile
-It is recommended to cross compile this program instead of natively compiling it on the Development Kit. In setting up this project you should have gone through the instructions to create a Docker image (if you have not done this refer to `//docker/README.md`) which will have the cross compiling toolchain and necessary libraries setup. 
+
+It is recommended to cross compile this program instead of natively compiling it on the Development Kit. In setting up this project you should have gone through the instructions to create a NVIDIA PDK Docker base image. If you have not done this refer to [//docker/README.md](DL4AGX/blob/master/docker/README.md) which will have the cross compiling toolchain and necessary libraries setup.
+
+### Building MultiDeviceInferencePipeline environment image
+
+#### MultiDeviceInferencePipeline for DRIVE aarch64-linux
+``` sh
+docker build -t nvidia/multidevice_inference:drive-5.1.6.0-linux -f Dockerfile.aarch64-linux.multideviceinference --build-arg BASE_PDK_IMAGE=nvidia/drive_os_pdk:5.1.6.0-linux .
+```
+
+> Note: Default value for BASE_PDK_IMAGE is nvidia/drive_os_pdk:5.1.6.0-linux and can be configured for DRIVE aarch64-linux
+
+
+#### MultiDeviceInferencePipeline for DRIVE aarch64-qnx
+``` sh
+docker build -t nvidia/multidevice_inference:drive-5.1.6.0-qnx -f Dockerfile.aarch64-qnx.multideviceinference --build-arg BASE_PDK_IMAGE=nvidia/drive_os_pdk:5.1.6.0-qnx .
+```
+
+> Note: Default value for BASE_PDK_IMAGE is nvidia/drive_os_pdk:5.1.6.0-qnx and can be configured for DRIVE aarch64-qnx
+
+
+#### MultiDeviceInferencePipeline for both DRIVE aarch64-linux and aarch64-qnx
+``` sh
+docker build -t nvidia/multidevice_inference:drive-5.1.6.0-both -f Dockerfile.both.multideviceinference --build-arg BASE_PDK_IMAGE=nvidia/drive_os_pdk:5.1.6.0-both .
+```
+
+> Note: Default value for BASE_PDK_IMAGE is nvidia/drive_os_pdk:5.1.6.0-both and can be configured for both DRIVE aarch64-linux and aarch64-qnx
+
+_For the container that supports both, copy both the QNX and Linux pdk files into the same directory_
+
+#### MultiDeviceInferencePipeline for JetPack 4.1 aarch64-linux
+``` sh
+docker build -t nvidia/multidevice_inference:jetpack-4.1 -f Dockerfile.jetpack.multideviceinference --build-arg BASE_PDK_IMAGE=nvidia/jetpack:4.1 .
+```
+
+> Note: Default value for BASE_PDK_IMAGE is nvidia/jetpack:4.1 and can be configured for Jetson aarch64-linux
+
+### Compiling MultiDeviceInferencePipeline
 
 There are two components to compile, the applications (i.e., preprocessing pipeline, engine creator, and inference pipeline) as well as the TensorRT plugin (i.e., Flatten Concatenation) for the object detector. All the applications and plugins can be compiled in one step.
 
