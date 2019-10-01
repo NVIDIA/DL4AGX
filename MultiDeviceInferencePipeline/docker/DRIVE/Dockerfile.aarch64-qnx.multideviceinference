@@ -170,14 +170,9 @@ RUN cd /opencv-${OPENCV_VERSION} && mkdir build && cd build && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
     cd .. && rm -rf build
 
-<<<<<<< HEAD
-RUN wget https://raw.githubusercontent.com/andi4191/DALI/anuragd/aarch64_dl4agx/docker/opencv-qnx.patch
-RUN cd /opencv-${OPENCV_VERSION} && git apply /opencv-qnx.patch \
-=======
 ENV DALI_TAG_VERSION=v0.14.0-rc1
 RUN git clone https://github.com/NVIDIA/DALI.git --recursive && cd DALI && git checkout $DALI_TAG_VERSION && git submodule update --init --recursive && cp docker/opencv-qnx.patch /opencv-qnx.patch
 RUN cd /opencv-${OPENCV_VERSION} && git apply /opencv-qnx.patch\
->>>>>>> refactor(//docker)!: Added hierarchical docker file for sample and pdk
       && mkdir build && cd build && \
       cmake \
         -DCMAKE_BUILD_TYPE=Release \
