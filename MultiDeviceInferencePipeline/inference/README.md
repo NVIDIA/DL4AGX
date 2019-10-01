@@ -57,8 +57,8 @@ In order to run on a target you will need the following files to be present, lib
   - libopencv_imgcodecs.so.3.4
   - libopencv_imgproc.so.3.4 
   - libopencv_core.so.3.4
-  - libavcodec.so.58
-  - libavutil.so.58 
+  - libavcodec.so.57
+  - libavutil.so.55 
 
 
 ## Example Configuration File (TOML) 
