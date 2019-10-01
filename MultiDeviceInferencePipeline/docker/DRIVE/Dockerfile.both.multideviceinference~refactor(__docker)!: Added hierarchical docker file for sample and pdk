@@ -13,16 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# File: DL4AGX/MultiDeviceInferencePipeline/docker/DRIVE/Dockerfile.aarch64-linux.multideviceinference
-# Description: Docker image for MultiDeviceInferencePipeline for DRIVE aarch64-linux
+# File: DL4AGX/MultiDeviceInferencePipeline/docker/DRIVE/Dockerfile.both.multideviceinference
+# Description: Docker image for DRIVE MultiDeviceInferencePipeline for
+#              both aarch64-linux and aarch64-qnx
 ############################################################################
-ARG BASE_PDK_IMAGE=nvidia/drive_os_pdk:5.1.6.0-linux
+ARG BASE_PDK_IMAGE=nvidia/drive_os_pdk:5.1.6.0-both
 FROM $BASE_PDK_IMAGE
 
 WORKDIR /
 # CMake
-RUN CMAKE_VERSION=3.15 && \
-    CMAKE_BUILD=3.15.0 && \
+RUN CMAKE_VERSION=3.5 && \
+    CMAKE_BUILD=3.5.0 && \
     curl -L https://cmake.org/files/v${CMAKE_VERSION}/cmake-${CMAKE_BUILD}.tar.gz | tar -xzf - && \
     cd /cmake-${CMAKE_BUILD} && \
     ./bootstrap --parallel=$(grep ^processor /proc/cpuinfo | wc -l) && \
@@ -43,10 +44,34 @@ RUN cd /protobuf-${PROTOBUF_VERSION} \
     && ./autogen.sh && ./configure \
     CC=aarch64-linux-gnu-gcc \
     CXX=aarch64-linux-gnu-g++ \
-    CXXFLAGS="-fPIC" \
       --host=aarch64-unknown-linux-gnu \
       --with-protoc=/usr/local/bin/protoc \
       --prefix=/usr/aarch64-linux-gnu/ && make -j$(nproc) install && \
+    make clean
+
+RUN cd /protobuf-${PROTOBUF_VERSION} \
+    && ./autogen.sh && ./configure \
+    CC=$QNX_HOST/usr/bin/aarch64-unknown-nto-qnx7.0.0-gcc \
+    CXX=$QNX_HOST/usr/bin/aarch64-unknown-nto-qnx7.0.0-g++ \
+    CXXFLAGS="-D__EXT_POSIX1_198808 -I$QNX_TARGET/usr/include -I$QNX_TARGET/usr/include/aarch64 -I$QNX_TARGET/usr/include/c++/v1 -L$QNX_TARGET/aarch64le/lib -D_POSIX_C_SOURCE=200112L -D_QNX_SOURCE -D_FILE_OFFSET_BITS=64" \
+      --host=aarch64-unknown-nto-qnx7.0.0 \
+      --build=x86_64-linux-gnu \
+      --with-sysroot=$QNX_TARGET \
+      --prefix=/usr/aarch64-unknown-nto-qnx/aarch64le \
+      --with-protoc=/usr/local/bin/protoc && make -j$(nproc) install && \
+    make clean
+
+
+RUN cd /protobuf-${PROTOBUF_VERSION} \
+    && ./autogen.sh && ./configure \
+    CC=$QNX_HOST/usr/bin/aarch64-unknown-nto-qnx7.0.0-gcc \
+    CXX=$QNX_HOST/usr/bin/aarch64-unknown-nto-qnx7.0.0-g++ \
+    CXXFLAGS="-D__EXT_POSIX1_198808 -I$QNX_TARGET/usr/include -I$QNX_TARGET/usr/include/aarch64 -I$QNX_TARGET/usr/include/c++/v1 -L$QNX_TARGET/aarch64le/lib -D_POSIX_C_SOURCE=200112L -D_QNX_SOURCE -D_FILE_OFFSET_BITS=64" \
+      --host=aarch64-unknown-nto-qnx7.0.0 \
+      --build=x86_64-linux-gnu \
+      --with-sysroot=$QNX_TARGET \
+      --prefix=/usr/aarch64-unknown-nto-qnx/aarch64le \
+      --with-protoc=/usr/local/bin/protoc && make -j$(nproc) install && \
     make clean
 
 
@@ -69,6 +94,17 @@ RUN cd /libjpeg-turbo-${JPEG_TURBO_VERSION} && \
       CXX=aarch64-linux-gnu-g++ \
       --host=aarch64-unknown-linux-gnu \
       --prefix=/usr/aarch64-linux-gnu/ && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
+    make clean
+
+RUN cd /libjpeg-turbo-${JPEG_TURBO_VERSION} && \
+    autoreconf -fiv && \
+    ./configure \
+      --enable-shared \
+      CC=aarch64-unknown-nto-qnx7.0.0-gcc \
+      CXX=aarch64-unknown-nto-qnx7.0.0-g++ \
+      --host=aarch64-unknown-nto-qnx7.0.0 \
+      --prefix=/usr/aarch64-unknown-nto-qnx/aarch64le && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
     make clean
 
@@ -119,6 +155,55 @@ RUN cd /tmp/ffmpeg-$FFMPEG_VERSION && \
       --enable-protocol=file \
       --enable-demuxer=mov,matroska \
       --enable-bsf=h264_mp4toannexb,hevc_mp4toannexb \
+      --disable-stripping \
+      --extra-cflags="-D_XOPEN_SOURCE=600 -std=gnu99 -fPIC" && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" && make install && \
+    make clean
+     
+RUN cd /tmp/ffmpeg-$FFMPEG_VERSION && \
+    ./configure \
+      --arch=aarch64 \
+      --target_os=qnx \
+      --prefix=/usr/aarch64-unknown-nto-qnx/aarch64le/ \
+      --disable-static \
+      --disable-all \
+      --disable-autodetect \
+      --disable-iconv \
+      --enable-shared \
+      --enable-avformat \
+      --enable-avcodec \
+      --enable-avfilter \
+      --enable-protocol=file \
+      --enable-cross-compile \
+      --enable-demuxer=mov,matroska \
+      --enable-bsf=h264_mp4toannexb,hevc_mp4toannexb \
+      --cc=aarch64-unknown-nto-qnx7.0.0-gcc \
+      --cxx=aarch64-unknown-nto-qnx7.0.0-g++ \
+      --disable-stripping \
+      --extra-cflags="-D_XOPEN_SOURCE=600 -std=gnu99 -fPIC" && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" && make install && \
+    make clean
+
+
+RUN cd /tmp/ffmpeg-$FFMPEG_VERSION && \
+    ./configure \
+      --arch=aarch64 \
+      --target_os=qnx \
+      --prefix=/usr/aarch64-unknown-nto-qnx/aarch64le/ \
+      --disable-static \
+      --disable-all \
+      --disable-autodetect \
+      --disable-iconv \
+      --enable-shared \
+      --enable-avformat \
+      --enable-avcodec \
+      --enable-avfilter \
+      --enable-protocol=file \
+      --enable-cross-compile \
+      --enable-demuxer=mov,matroska \
+      --enable-bsf=h264_mp4toannexb,hevc_mp4toannexb \
+      --cc=aarch64-unknown-nto-qnx7.0.0-gcc \
+      --cxx=aarch64-unknown-nto-qnx7.0.0-g++ \
       --disable-stripping \
       --extra-cflags="-D_XOPEN_SOURCE=600 -std=gnu99 -fPIC" && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" && make install && \
@@ -203,12 +288,55 @@ RUN cd /opencv-${OPENCV_VERSION} && mkdir build && cd build && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
     cd .. && rm -rf build
 
+RUN cd /opencv-${OPENCV_VERSION} && \
+      && mkdir build && cd build && \
+      cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DVIBRANTE_PDK:STRING=/ \
+        -DCMAKE_TOOLCHAIN_FILE=$PWD/../platforms/qnx/aarch64-qnx.toolchain.cmake \
+        -DCMAKE_INSTALL_PREFIX=/usr/aarch64-unknown-nto-qnx/aarch64le  \
+        -DBUILD_LIST=core,improc,imgcodecs \
+        -DBUILD_PNG=ON \
+        -DBUILD_TIFF=OFF \
+        -DBUILD_TBB=OFF \
+        -DBUILD_WEBP=OFF \
+        -DBUILD_JPEG=ON \
+        -DBUILD_JASPER=OFF \
+        -DBUILD_ZLIB=ON \
+        -DBUILD_EXAMPLES=OFF \
+        -DBUILD_FFMPEG=ON \
+        -DBUILD_opencv_java=OFF \
+        -DBUILD_opencv_python2=OFF \
+        -DBUILD_opencv_python3=OFF \
+        -DENABLE_NEON=OFF \
+        -DWITH_PROTOBUF=OFF \
+        -DWITH_PTHREADS_PF=OFF \
+        -DWITH_OPENCL=OFF \
+        -DWITH_OPENMP=OFF \
+        -DWITH_FFMPEG=OFF \
+        -DWITH_GSTREAMER=OFF \
+        -DWITH_GSTREAMER_0_10=OFF \
+        -DWITH_CUDA=OFF \
+        -DWITH_GTK=OFF \
+        -DWITH_VTK=OFF \
+        -DWITH_TBB=OFF \
+        -DWITH_1394=OFF \
+        -DWITH_OPENEXR=OFF \
+        -DINSTALL_C_EXAMPLES=OFF \
+        -DINSTALL_TESTS=OFF \
+        -DVIBRANTE=TRUE \
+        VERBOSE=1 \
+    ../ && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
+    cd .. && rm -rf build
+
 # Boost
 RUN BOOST_VERSION=1_66_0 \
     && cd /usr/local \
     && curl -L https://dl.bintray.com/boostorg/release/1.66.0/source/boost_${BOOST_VERSION}.tar.gz | tar -xzf - \
     && cp -r  boost_${BOOST_VERSION}/boost  /usr/include/boost \
     && cp -r  boost_${BOOST_VERSION}/boost  /usr/aarch64-linux-gnu/include/boost \
+    && cp -r  boost_${BOOST_VERSION}/boost  /usr/aarch64-unknown-nto-qnx/aarch64le/include/boost \
     && rm -rf boost_${BOOST_VERSION}
 
 RUN rm -rf /opencv-${OPENCV_VERSION}
@@ -218,13 +346,12 @@ RUN cd /tmp && rm -rf ffmpeg-$FFMPEG_VERSION
 ENV PATH=/usr/local/cuda-${CUDA_VERSION}/bin:$PATH
 
 ENV DALI_TAG_VERSION=v0.14.0-rc1
-RUN git clone https://github.com/NVIDIA/DALI --recursive && cd DALI && git checkout $DALI_TAG_VERSION && git submodule update --init --recursive
+RUN git clone https://github.com/NVIDIA/DALI.git --recursive && cd DALI && git checkout $DALI_TAG_VERSION && git submodule update --init --recursive
 
 RUN cd DALI && mkdir -p build && cd build && cmake \
       -DCMAKE_INSTALL_PREFIX=./install \
       -DCMAKE_COLOR_MAKEFILE=ON \
       -DBUILD_NVJPEG=OFF \
-      -DBUILD_NVOF=OFF \
       -DBUILD_TENSORFLOW=OFF \
       -DBUILD_TEST=OFF \
       -DBUILD_JPEG_TURBO=ON \
@@ -238,26 +365,23 @@ RUN cd DALI && mkdir -p build && cd build && cmake \
       -DFFMPEG_ROOT_DIR=/usr/local/ \
       -DProtobuf_LIBRARIES=/usr/local/lib \
       -DFFMPEG_ROOT_DIR=/usr/local/ \
-      ../ && make install -j12 VERBOSE=1 && \
+      ../ && make install -j12 && \
     cp dali/python/nvidia/dali/libdali.so /usr/local/lib/ && \
     rsync -a  dali/python/nvidia/dali/include /usr/local/ && \
     rsync -a install/include /usr/local/ && \
     rm -rf build
-RUN rm -f /usr/aarch64-linux-gnu/bin/protoc
-RUN ln -sf /usr/local/bin/protoc /usr/aarch64-linux-gnu/bin/protoc
-RUN ls -l /usr/aarch64-linux-gnu/bin/protoc
 
 RUN cd DALI && mkdir -p build_aarch64-linux && cd build_aarch64-linux && cmake \
-      -DCMAKE_PREFIX_PATH=/usr/aarch64-linux-gnu \
       -DCMAKE_INSTALL_PREFIX=./install \
       -DARCH=aarch64-linux \
       -DCMAKE_COLOR_MAKEFILE=ON \
-      -DBUILD_NVML=OFF \
       -DBUILD_NVJPEG=OFF \
-      -DBUILD_NVOF=OFF \
+      -DBUILD_NVML=OFF \
       -DBUILD_TENSORFLOW=OFF \
       -DBUILD_TEST=OFF \
       -DBUILD_JPEG_TURBO=ON \
+      -DJPEG_INCLUDE_DIR=/usr/aarch64-linux-gnu/include \
+      -DJPEG_LIBRARY=/usr/aarch64-linux-gnu/lib \
       -DBUILD_PYTHON=OFF \
       -DBUILD_LMDB=OFF \
       -DBUILD_NVTX=OFF \
@@ -266,13 +390,42 @@ RUN cd DALI && mkdir -p build_aarch64-linux && cd build_aarch64-linux && cmake \
       -DCUDA_HOST=/usr/local/cuda-${CUDA_VERSION} \
       -DOPENCV_PATH=/usr/aarch64-linux-gnu/ \
       -DCUDA_TARGET=/usr/local/cuda-${CUDA_VERSION}/targets/aarch64-linux \
+      -DPROTOBUF_TARGET=/usr/aarch64-linux-gnu/ \
+      -DProtobuf_LIBRARIES=/usr/aarch64-linux-gnu/lib \
+      -DFFMPEG_ROOT_DIR=/usr/aarch64-linux-gnu/ \
       -E env LDFLAGS="-ljpeg" \
-      -DCXXFLAGS="-fPIC" \
       -DVERBOSE=1 \
-      ../ && make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
+      ../ && make install -j12 && \
     cp dali/python/nvidia/dali/libdali.so /usr/aarch64-linux-gnu/lib/ && \
     rsync -a  dali/python/nvidia/dali/include /usr/aarch64-linux-gnu/ && \
     rsync -a install/include /usr/aarch64-linux-gnu/ && \
+    rm -rf build
+
+RUN cd DALI && mkdir -p build_aarch64-qnx && cd build_aarch64-qnx && cmake \
+      -DCMAKE_INSTALL_PREFIX=./install \
+      -DARCH=aarch64-qnx \
+      -DBUILD_NVJPEG=OFF \
+      -DBUILD_NVML=OFF \
+      -DBUILD_TENSORFLOW=OFF \
+      -DBUILD_TEST=OFF \
+      -DBUILD_JPEG_TURBO=ON \
+      -DJPEG_INCLUDE_DIR=/usr/aarch64-unknown-nto-qnx/aarch64le/include \
+      -DJPEG_LIBRARY=/usr/aarch64-unknown-nto-qnx/aarch64le/lib \
+      -DBUILD_PYTHON=OFF \
+      -DBUILD_LMDB=OFF \
+      -DBUILD_NVTX=OFF \
+      -DCMAKE_TOOLCHAIN_FILE:STRING="$PWD/../platforms/qnx/aarch64-qnx.toolchain.cmake" \
+      -DBUILD_BENCHMARK=OFF \
+      -DCUDA_HOST=/usr/local/cuda-${CUDA_VERSION} \
+      -DOPENCV_PATH=/usr/aarch64-unknown-nto-qnx/aarch64le/ \
+      -DCUDA_TARGET=/usr/local/cuda-${CUDA_VERSION}/targets/aarch64-qnx \
+      -DPROTOBUF_TARGET=/usr/aarch64-unknown-nto-qnx/aarch64le/ \
+      -DProtobuf_LIBRARIES=/usr/aarch64-unknown-nto-qnx/aarch64le/lib/ \
+      -DFFMPEG_ROOT_DIR=/usr/aarch64-unknown-nto-qnx/aarch64le/ \
+      ../ && make install -j12 && \
+    cp dali/python/nvidia/dali/libdali.so /usr/aarch64-unknown-nto-qnx/aarch64le/lib/ && \
+    rsync -a  dali/python/nvidia/dali/include /usr/aarch64-unknown-nto-qnx/aarch64le && \
+    rsync -a install/include /usr/aarch64-unknown-nto-qnx/aarch64le && \
     rm -rf build
 
 RUN rm -rf DALI

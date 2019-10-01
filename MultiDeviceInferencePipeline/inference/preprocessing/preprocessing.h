@@ -26,7 +26,7 @@
 #include <vector>
 
 // DALI dependencies
-#include "dali/common.h"
+#include "dali/core/common.h"
 #include "dali/pipeline/data/allocator.h"
 #include "dali/pipeline/init.h"
 #include "dali/pipeline/operators/op_spec.h"

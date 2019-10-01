@@ -21,6 +21,7 @@
 #FROM nvidia/drive_os_pdk:latest
 FROM nvidia/drive_os_pdk:5.1.6.0-linux
 #FROM nvidia/drive_os_pdk:5.1.6.0-qnx
+#FROM nvidia/drive_os_pdk:5.1.6.0-qnx
 #FROM nvidia/drive_os_pdk:5.1.6.0-both
 #FROM nvidia/multidevice_inference:drive-5.1.6.0-linux
 #FROM nvidia/multidevice_inference:drive-5.1.6.0-qnx
