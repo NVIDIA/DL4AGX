@@ -45,7 +45,7 @@ toolchain {
     target_cpu: "aarch64"
     target_system_name: "aarch64-unknown-nto-qnx"
     toolchain_identifier: "aarch64-unknown-nto-qnx"
-    cxx_flag: "--std=c++11"
+    cxx_flag: "--std=c++14"
     linker_flag: "-Wall"
     linker_flag: "-lm"
     linker_flag: "-fuse-ld=gold"

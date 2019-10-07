@@ -21,7 +21,7 @@
  ***************************************************************************************************/
 #pragma once
 #include "common/macros.h"
-#include "dali/common.h"
+#include "dali/core/common.h"
 #include "dali/pipeline/data/tensor_list.h"
 #include "dali/util/image.h"
 #include "dali/util/user_stream.h"
@@ -78,7 +78,7 @@ inline void makeJPEGBatch(std::vector<std::string>& jpegNames, dali::TensorList<
     dali::LoadImages(jpegNames, &jpegs);
 
     const auto nImgs = jpegs.nImages();
-    std::vector<dali::Dims> shape(n);
+    std::vector<std::vector<::dali::Index> > shape(n);
     for (int i = 0; i < n; i++)
     {
         shape[i] = {jpegs.sizes_[i % nImgs]};

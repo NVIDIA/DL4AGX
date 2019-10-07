@@ -31,7 +31,7 @@ RUN CMAKE_VERSION=3.5 && \
     rm -rf /cmake-${CMAKE_BUILD}
 
 # protobuf v3.5.1
-ENV PROTOBUF_VERSION=3.5.1 
+ENV PROTOBUF_VERSION=3.5.1
 RUN curl -L https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/protobuf-all-${PROTOBUF_VERSION}.tar.gz | tar -xzf -
 
 RUN cd /protobuf-${PROTOBUF_VERSION} && \
@@ -47,7 +47,20 @@ RUN cd /protobuf-${PROTOBUF_VERSION} \
       --host=aarch64-unknown-linux-gnu \
       --with-protoc=/usr/local/bin/protoc \
       --prefix=/usr/aarch64-linux-gnu/ && make -j$(nproc) install && \
-    make clean 
+    make clean
+
+RUN cd /protobuf-${PROTOBUF_VERSION} \
+    && ./autogen.sh && ./configure \
+    CC=$QNX_HOST/usr/bin/aarch64-unknown-nto-qnx7.0.0-gcc \
+    CXX=$QNX_HOST/usr/bin/aarch64-unknown-nto-qnx7.0.0-g++ \
+    CXXFLAGS="-D__EXT_POSIX1_198808 -I$QNX_TARGET/usr/include -I$QNX_TARGET/usr/include/aarch64 -I$QNX_TARGET/usr/include/c++/v1 -L$QNX_TARGET/aarch64le/lib -D_POSIX_C_SOURCE=200112L -D_QNX_SOURCE -D_FILE_OFFSET_BITS=64" \
+      --host=aarch64-unknown-nto-qnx7.0.0 \
+      --build=x86_64-linux-gnu \
+      --with-sysroot=$QNX_TARGET \
+      --prefix=/usr/aarch64-unknown-nto-qnx/aarch64le \
+      --with-protoc=/usr/local/bin/protoc && make -j$(nproc) install && \
+    make clean
+
 
 RUN cd /protobuf-${PROTOBUF_VERSION} \
     && ./autogen.sh && ./configure \
@@ -82,7 +95,7 @@ RUN cd /libjpeg-turbo-${JPEG_TURBO_VERSION} && \
       --host=aarch64-unknown-linux-gnu \
       --prefix=/usr/aarch64-linux-gnu/ && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
-    make clean 
+    make clean
 
 RUN cd /libjpeg-turbo-${JPEG_TURBO_VERSION} && \
     autoreconf -fiv && \
@@ -94,7 +107,7 @@ RUN cd /libjpeg-turbo-${JPEG_TURBO_VERSION} && \
       --prefix=/usr/aarch64-unknown-nto-qnx/aarch64le && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
     make clean
-    
+
 RUN rm -rf /libjpeg-turbo-${JPEG_TURBO_VERSION}
 
 # FFMpeg
@@ -147,6 +160,31 @@ RUN cd /tmp/ffmpeg-$FFMPEG_VERSION && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" && make install && \
     make clean
      
+RUN cd /tmp/ffmpeg-$FFMPEG_VERSION && \
+    ./configure \
+      --arch=aarch64 \
+      --target_os=qnx \
+      --prefix=/usr/aarch64-unknown-nto-qnx/aarch64le/ \
+      --disable-static \
+      --disable-all \
+      --disable-autodetect \
+      --disable-iconv \
+      --enable-shared \
+      --enable-avformat \
+      --enable-avcodec \
+      --enable-avfilter \
+      --enable-protocol=file \
+      --enable-cross-compile \
+      --enable-demuxer=mov,matroska \
+      --enable-bsf=h264_mp4toannexb,hevc_mp4toannexb \
+      --cc=aarch64-unknown-nto-qnx7.0.0-gcc \
+      --cxx=aarch64-unknown-nto-qnx7.0.0-g++ \
+      --disable-stripping \
+      --extra-cflags="-D_XOPEN_SOURCE=600 -std=gnu99 -fPIC" && \
+    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" && make install && \
+    make clean
+
+
 RUN cd /tmp/ffmpeg-$FFMPEG_VERSION && \
     ./configure \
       --arch=aarch64 \
@@ -250,8 +288,7 @@ RUN cd /opencv-${OPENCV_VERSION} && mkdir build && cd build && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
     cd .. && rm -rf build
 
-RUN wget https://raw.githubusercontent.com/andi4191/DALI/anuragd/aarch64_dl4agx/docker/opencv-qnx.patch
-RUN cd /opencv-${OPENCV_VERSION} && git apply /opencv-qnx.patch \
+RUN cd /opencv-${OPENCV_VERSION} && \
       && mkdir build && cd build && \
       cmake \
         -DCMAKE_BUILD_TYPE=Release \
@@ -302,15 +339,16 @@ RUN BOOST_VERSION=1_66_0 \
     && cp -r  boost_${BOOST_VERSION}/boost  /usr/aarch64-unknown-nto-qnx/aarch64le/include/boost \
     && rm -rf boost_${BOOST_VERSION}
 
-RUN rm -rf /opencv-${OPENCV_VERSION} 
+RUN rm -rf /opencv-${OPENCV_VERSION}
 
 RUN cd /tmp && rm -rf ffmpeg-$FFMPEG_VERSION
 
 ENV PATH=/usr/local/cuda-${CUDA_VERSION}/bin:$PATH
 
-RUN git clone https://github.com/andi4191/DALI --recursive && cd DALI && git checkout anuragd/aarch64_dl4agx
+ENV DALI_TAG_VERSION=v0.14.0-rc1
+RUN git clone https://github.com/NVIDIA/DALI.git --recursive && cd DALI && git checkout $DALI_TAG_VERSION && git submodule update --init --recursive
 
-RUN cd DALI && mkdir -p build && cd build && cmake \ 
+RUN cd DALI && mkdir -p build && cd build && cmake \
       -DCMAKE_INSTALL_PREFIX=./install \
       -DCMAKE_COLOR_MAKEFILE=ON \
       -DBUILD_NVJPEG=OFF \
@@ -333,11 +371,12 @@ RUN cd DALI && mkdir -p build && cd build && cmake \
     rsync -a install/include /usr/local/ && \
     rm -rf build
 
-RUN cd DALI && mkdir -p build_aarch64-linux && cd build_aarch64-linux && cmake \ 
+RUN cd DALI && mkdir -p build_aarch64-linux && cd build_aarch64-linux && cmake \
       -DCMAKE_INSTALL_PREFIX=./install \
       -DARCH=aarch64-linux \
       -DCMAKE_COLOR_MAKEFILE=ON \
       -DBUILD_NVJPEG=OFF \
+      -DBUILD_NVML=OFF \
       -DBUILD_TENSORFLOW=OFF \
       -DBUILD_TEST=OFF \
       -DBUILD_JPEG_TURBO=ON \
@@ -366,6 +405,7 @@ RUN cd DALI && mkdir -p build_aarch64-qnx && cd build_aarch64-qnx && cmake \
       -DCMAKE_INSTALL_PREFIX=./install \
       -DARCH=aarch64-qnx \
       -DBUILD_NVJPEG=OFF \
+      -DBUILD_NVML=OFF \
       -DBUILD_TENSORFLOW=OFF \
       -DBUILD_TEST=OFF \
       -DBUILD_JPEG_TURBO=ON \
@@ -390,7 +430,7 @@ RUN cd DALI && mkdir -p build_aarch64-qnx && cd build_aarch64-qnx && cmake \
 
 RUN rm -rf DALI
 
-# Weird bugs with having this compiled first 
+# Weird bugs with having this compiled first
 RUN cd /protobuf-${PROTOBUF_VERSION} && \
     ./autogen.sh && \
     ./configure CXXFLAGS="-fPIC" --prefix=/usr/local 2>&1 > /dev/null && \

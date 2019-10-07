@@ -50,7 +50,8 @@ DALI_REGISTER_OPERATOR(TensorRTInfer, ::plugin::TensorRTInfer<::dali::GPUBackend
 namespace plugin
 {
 template <>
-void TensorRTInfer<::dali::GPUBackend>::RunImpl(::dali::DeviceWorkspace* ws, const int idx)
+//void TensorRTInfer<::dali::GPUBackend>::RunImpl(::dali::DeviceWorkspace* ws, const int idx)
+void TensorRTInfer<::dali::GPUBackend>::RunImpl(::dali::DeviceWorkspace& ws)
 {
     int num_bindings = engine_->getNbBindings();
     std::string blob_name;
@@ -61,7 +62,7 @@ void TensorRTInfer<::dali::GPUBackend>::RunImpl(::dali::DeviceWorkspace* ws, con
     for (size_t i = 0; i < input_blobs_.size(); i++)
     {
         // Assign the first tensor address as the binding address to run for >1 batch size
-        input_buffers[binding_param_[input_blobs_[i]].binding_index] = ws->Input<::dali::GPUBackend>(i).raw_tensor(0);
+        input_buffers[binding_param_[input_blobs_[i]].binding_index] = ws.Input<::dali::GPUBackend>(i).raw_tensor(0);
     }
     // Copy the input bindings for TensorRT
     std::memcpy(io_buffers.data(), input_buffers.data(), sizeof(void*) * input_blobs_.size());
@@ -69,7 +70,7 @@ void TensorRTInfer<::dali::GPUBackend>::RunImpl(::dali::DeviceWorkspace* ws, con
     {
         blob_name = output_blobs_[i];
         // Output tensorlist freom DALI pipeline
-        auto& output = ws->Output<::dali::GPUBackend>(i);
+        auto& output = ws.Output<::dali::GPUBackend>(i);
         // Allocate memory for output tensorrlist and set datatype
         output.Resize(binding_param_[blob_name].dali_dimensions);
         ::dali::TypeInfo type;
@@ -89,6 +90,6 @@ void TensorRTInfer<::dali::GPUBackend>::RunImpl(::dali::DeviceWorkspace* ws, con
         io_buffers[binding_param_[blob_name].binding_index] = output.raw_mutable_tensor(0);
     }
     // Run inference
-    context_->enqueue(trt_batch_size_, io_buffers.data(), ws->stream(), nullptr);
+    context_->enqueue(trt_batch_size_, io_buffers.data(), ws.stream(), nullptr);
 }
 }

@@ -23,7 +23,7 @@
 #include "MultiDeviceInferencePipeline/inference/conf/PipelineSpec/PipelineSpec.h"
 #include "MultiDeviceInferencePipeline/inference/preprocessing/preprocessing.h"
 
-#include "dali/common.h"
+#include "dali/core/common.h"
 #include "dali/pipeline/init.h"
 #include "dali/pipeline/operators/op_spec.h"
 #include "dali/pipeline/pipeline.h"

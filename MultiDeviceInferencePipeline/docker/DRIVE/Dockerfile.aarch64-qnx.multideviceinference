@@ -21,15 +21,21 @@ FROM $BASE_PDK_IMAGE
 
 WORKDIR /
 # CMake
-RUN CMAKE_VERSION=3.5 && \
-    CMAKE_BUILD=3.5.0 && \
+RUN CMAKE_VERSION=3.15 && \
+    CMAKE_BUILD=3.15.0 && \
     curl -L https://cmake.org/files/v${CMAKE_VERSION}/cmake-${CMAKE_BUILD}.tar.gz | tar -xzf - && \
     cd /cmake-${CMAKE_BUILD} && \
     ./bootstrap --parallel=$(grep ^processor /proc/cpuinfo | wc -l) && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
     rm -rf /cmake-${CMAKE_BUILD}
 
+RUN rm -rf /usr/aarch64-unknown-nto-qnx/aarch64le/lib/libjpeg.so.* && \
+    rm -rf /usr/aarch64-unknown-nto-qnx/usr/include/j* && \
+    rm -rf /usr/aarch64-unknown-nto-qnx/x86 /usr/aarch64-unknown-nto-qnx/x86_64 && \
+    rm -rf /usr/lib/x86_64-linux-gnu/libjpeg.* && \
+    rm -rf /usr/local/lib/libjpeg.*
 
+# protobuf
 ENV PROTOBUF_VERSION=3.5.1
 RUN curl -L https://github.com/google/protobuf/releases/download/v${PROTOBUF_VERSION}/protobuf-all-${PROTOBUF_VERSION}.tar.gz | tar -xzf -
 
@@ -43,7 +49,7 @@ RUN cd /protobuf-${PROTOBUF_VERSION} \
     && ./autogen.sh && ./configure \
     CC=$QNX_HOST/usr/bin/aarch64-unknown-nto-qnx7.0.0-gcc \
     CXX=$QNX_HOST/usr/bin/aarch64-unknown-nto-qnx7.0.0-g++ \
-    CXXFLAGS="-D__EXT_POSIX1_198808 -I$QNX_TARGET/usr/include -I$QNX_TARGET/usr/include/aarch64 -I$QNX_TARGET/usr/include/c++/v1 -L$QNX_TARGET/aarch64le/lib -D_POSIX_C_SOURCE=200112L -D_QNX_SOURCE -D_FILE_OFFSET_BITS=64" \
+    CXXFLAGS="-fPIC -D__EXT_POSIX1_198808 -I$QNX_TARGET/usr/include -I$QNX_TARGET/usr/include/aarch64 -I$QNX_TARGET/usr/include/c++/v1 -L$QNX_TARGET/aarch64le/lib -D_POSIX_C_SOURCE=200112L -D_QNX_SOURCE -D_FILE_OFFSET_BITS=64" \
       --host=aarch64-unknown-nto-qnx7.0.0 \
       --build=x86_64-linux-gnu \
       --with-sysroot=$QNX_TARGET \
@@ -164,8 +170,9 @@ RUN cd /opencv-${OPENCV_VERSION} && mkdir build && cd build && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
     cd .. && rm -rf build
 
-RUN wget https://raw.githubusercontent.com/andi4191/DALI/anuragd/aarch64_dl4agx/docker/opencv-qnx.patch
-RUN cd /opencv-${OPENCV_VERSION} && git apply /opencv-qnx.patch \
+ENV DALI_TAG_VERSION=v0.14.0-rc1
+RUN git clone https://github.com/NVIDIA/DALI.git --recursive && cd DALI && git checkout $DALI_TAG_VERSION && git submodule update --init --recursive && cp docker/opencv-qnx.patch /opencv-qnx.patch
+RUN cd /opencv-${OPENCV_VERSION} && git apply /opencv-qnx.patch\
       && mkdir build && cd build && \
       cmake \
         -DCMAKE_BUILD_TYPE=Release \
@@ -220,12 +227,11 @@ RUN cd /tmp && rm -rf ffmpeg-$FFMPEG_VERSION
 
 ENV PATH=/usr/local/cuda-${CUDA_VERSION}/bin:$PATH
 
-RUN git clone https://github.com/andi4191/DALI --recursive && cd DALI && git checkout anuragd/aarch64_dl4agx
-
 RUN cd DALI && mkdir -p build && cd build && cmake \
       -DCMAKE_INSTALL_PREFIX=./install \
       -DCMAKE_COLOR_MAKEFILE=ON \
       -DBUILD_NVJPEG=OFF \
+      -DBUILD_NVOF=OFF \
       -DBUILD_TENSORFLOW=OFF \
       -DBUILD_TEST=OFF \
       -DBUILD_JPEG_TURBO=ON \
@@ -239,34 +245,38 @@ RUN cd DALI && mkdir -p build && cd build && cmake \
       -DFFMPEG_ROOT_DIR=/usr/local/ \
       -DProtobuf_LIBRARIES=/usr/local/lib \
       -DFFMPEG_ROOT_DIR=/usr/local/ \
-      ../ && make install -j12 && \
+      ../ && make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install && \
     cp dali/python/nvidia/dali/libdali.so /usr/local/lib/ && \
     rsync -a  dali/python/nvidia/dali/include /usr/local/ && \
     rsync -a install/include /usr/local/ && \
     rm -rf build
 
+RUN rm -f /usr/aarch64-unknown-nto-qnx/aarch64le/bin/protoc
+RUN ln -sf /usr/local/bin/protoc /usr/aarch64-unknown-nto-qnx/aarch64le/bin/protoc
+
+RUN find / -name libprotobuf.*
+RUN find / -name libjpeg.*
 
 RUN cd DALI && mkdir -p build_aarch64-qnx && cd build_aarch64-qnx && cmake \
+      -DCMAKE_PREFIX_PATH=/usr/aarch64-unknown-nto-qnx/aarch64le \
       -DCMAKE_INSTALL_PREFIX=./install \
       -DARCH=aarch64-qnx \
       -DBUILD_NVJPEG=OFF \
+      -DBUILD_NVML=OFF \
       -DBUILD_TENSORFLOW=OFF \
       -DBUILD_TEST=OFF \
       -DBUILD_JPEG_TURBO=ON \
-      -DJPEG_INCLUDE_DIR=/usr/aarch64-unknown-nto-qnx/aarch64le/include \
-      -DJPEG_LIBRARY=/usr/aarch64-unknown-nto-qnx/aarch64le/lib \
       -DBUILD_PYTHON=OFF \
       -DBUILD_LMDB=OFF \
+      -DBUILD_NVOF=OFF \
       -DBUILD_NVTX=OFF \
+      -DBUILD_NVML=OFF \
       -DCMAKE_TOOLCHAIN_FILE:STRING="$PWD/../platforms/qnx/aarch64-qnx.toolchain.cmake" \
       -DBUILD_BENCHMARK=OFF \
       -DCUDA_HOST=/usr/local/cuda-${CUDA_VERSION} \
-      -DOPENCV_PATH=/usr/aarch64-unknown-nto-qnx/aarch64le/ \
       -DCUDA_TARGET=/usr/local/cuda-${CUDA_VERSION}/targets/aarch64-qnx \
-      -DPROTOBUF_TARGET=/usr/aarch64-unknown-nto-qnx/aarch64le/ \
-      -DProtobuf_LIBRARIES=/usr/aarch64-unknown-nto-qnx/aarch64le/lib/ \
-      -DFFMPEG_ROOT_DIR=/usr/aarch64-unknown-nto-qnx/aarch64le/ \
-      ../ && make install -j12 && \
+      -DCXXFLAGS="-fPIC" \
+      ../ && make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install VERBOSE=1  && \
     cp dali/python/nvidia/dali/libdali.so /usr/aarch64-unknown-nto-qnx/aarch64le/lib/ && \
     rsync -a  dali/python/nvidia/dali/include /usr/aarch64-unknown-nto-qnx/aarch64le && \
     rsync -a install/include /usr/aarch64-unknown-nto-qnx/aarch64le && \

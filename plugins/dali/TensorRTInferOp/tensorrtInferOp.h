@@ -42,7 +42,7 @@ typedef struct
     // DataType for each bindings
     ::dali::DALIDataType data_type;
     // Shape required for allocating memory to output tensorlist
-    std::vector<::dali::Dims> dali_dimensions;
+    std::vector<std::vector<::dali::Index> > dali_dimensions;
 } BindingParam;
 
 class Logger : public nvinfer1::ILogger
@@ -177,7 +177,14 @@ public:
     }
 
 protected:
-    void RunImpl(::dali::Workspace<Backend>* ws, const int idx) override;
+    void RunImpl(::dali::Workspace<Backend>& ws) override;
+    bool SetupImpl(std::vector<::dali::OutputDesc> &output_desc, const ::dali::workspace_t<Backend> &ws)
+    {
+        return false;
+    }
+    void SetupSharedSampleParams(::dali::SupportWorkspace &ws)
+    {
+    }
 
 private:
     std::vector<std::string> input_blobs_;

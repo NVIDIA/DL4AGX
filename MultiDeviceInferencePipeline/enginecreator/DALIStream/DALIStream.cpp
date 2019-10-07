@@ -93,7 +93,7 @@ void enginecreator::DALIStream::makeJPEGBatch(dali::TensorList<dali::CPUBackend>
     dali::ImgSetDescr jpegs_;
     dali::LoadImages(jpegNames, &jpegs_);
     const auto nImgs = jpegs_.nImages();
-    std::vector<dali::Dims> shape(batchSize);
+    std::vector< std::vector<::dali::Index> > shape(batchSize);
     for (int i = 0; i < batchSize; i++)
     {
         shape[i] = {jpegs_.sizes_[i % nImgs]};
