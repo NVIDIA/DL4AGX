@@ -1,27 +1,24 @@
-/*
- * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+/***************************************************************************************************
+ * Copyright (c) 2018-2019 NVIDIA Corporation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-
-//!
-//! sampleOnnxMNIST.cpp
-//! This file contains the implementation of the ONNX MNIST sample. It creates the network using
-//! the MNIST onnx model.
-//! It can be run with the following command line:
-//! Command: ./sample_onnx_mnist [-h or --help] [-d=/path/to/data/dir or --datadir=/path/to/data/dir]
-//! [--useDLACore=<int>]
-//!
+ *
+ * Project: LeNetWithS3Pooling > Inference 
+ * 
+ * File: DL4AGX/LeNetWithS3Pooling/inference/main.cpp
+ * 
+ * Description: An application to show how to use a plugin inside an ONNX file with TensorRT
+ ***************************************************************************************************/
 
 #include "common/argparser.h"
 #include "common/tensorrt/buffers.h"
@@ -39,7 +36,6 @@
 #include <iostream>
 #include <sstream>
 
-const std::string gSampleName = "TensorRT.sample_onnx_mnist";
 std::string inputModel;
 std::string inputTensorName;
 std::string outputTensorName;
@@ -70,10 +66,6 @@ struct InferDeleter
     }
 };
 
-//! \brief  The SampleOnnxMNIST class implements the ONNX MNIST sample
-//!
-//! \details It creates the network using an ONNX model
-//!
 class LeNetWithS3Pooling
 {
     template <typename T>

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# File: DL4AGX/LeNetWithS3Pooling/training/BUILD
+# File: DL4AGX/LeNetWithS3Pooling/utils/BUILD
 ##############################################################################################
 package(default_visibility = ["//visibility:public"])
 load("@lenet_s3pool_utils_deps//:requirements.bzl", "requirement")
