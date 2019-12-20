@@ -12,19 +12,19 @@ For applications that use a shared object, not linked but loaded in during the a
 - For x86_64-linux
 
 ``` sh
-dazel build //plugins/FlattenConcat:libflattenconcatplugin.so 
+dazel build //plugins/tensorrt/FlattenConcat:libflattenconcatplugin.so 
 ```
 
 - For aarch64-linux
 
 ``` sh
-dazel build //plugins/FlattenConcat:libflattenconcatplugin.so --config=D5L-toolchain
+dazel build //plugins/tensorrt/FlattenConcat:libflattenconcatplugin.so --config=D5L-toolchain
 ```
 
 - For aarch64-qnx
 
 ``` sh
-dazel build //plugins/FlattenConcat:libflattenconcatplugin.so --config=D5Q-toolchain
+dazel build //plugins/tensorrt/FlattenConcat:libflattenconcatplugin.so --config=D5Q-toolchain
 ```
 
 Outputs will be found in: 
@@ -32,13 +32,13 @@ Outputs will be found in:
 - For x86_64
 
 ``` sh
-//bazel-out/k8-fastbuild/bin/plugins/FlattenConcat:libflattenconcatplugin.so
+//bazel-out/k8-fastbuild/bin/plugins/tensorrt/FlattenConcat:libflattenconcatplugin.so
 ```
 
 - For aarch64
 
 ``` sh
-//bazel-out/aarch64-fastbuild/bin/plugins/FlattenConcat:libflattenconcatplugin.so
+//bazel-out/aarch64-fastbuild/bin/plugins/tensorrt/FlattenConcat:libflattenconcatplugin.so
 ```
 
 ### Included In Source

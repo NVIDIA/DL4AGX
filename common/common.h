@@ -25,6 +25,8 @@
 #include "common/tensorrt/Logger.h"
 #include "common/tensorrt/Profiler.h"
 #include "common/tensorrt/utils.h"
+#include "common/tensorrt/buffers.h"
+#include "common/tensorrt/int8.h"
 #include "common/timers.h"
 
 #include <algorithm>
@@ -34,6 +36,8 @@
 #include <cuda_runtime_api.h>
 #include <fstream>
 #include <iomanip>
+#include <unistd.h>
+#include <limits.h>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -49,7 +53,6 @@ namespace common
 {
 inline void loadEngine(std::string filename, std::string& data)
 {
-
     std::ifstream file(filename.c_str(), std::ios::binary);
     if (file.good())
     {
@@ -69,14 +72,23 @@ inline void loadEngine(std::string filename, std::string& data)
 // Function will also walk back MAX_DEPTH dirs from CWD to check for such a file path
 inline std::string locateFile(const std::string& filepathSuffix, const std::vector<std::string>& directories)
 {
+
+    char cwd[PATH_MAX+1];
+    getcwd(cwd, sizeof(cwd));
+    std::string curr_dir = cwd;
+
     const int MAX_DEPTH{10};
     bool found{false};
     std::string filepath;
 
     for (auto& dir : directories)
     {
-        filepath = dir + filepathSuffix;
-
+        if (filepathSuffix.at(0) != '/')
+        {
+            filepath = curr_dir + "/";
+        }
+        filepath += dir +  filepathSuffix;
+        
         for (int i = 0; i < MAX_DEPTH && !found; i++)
         {
             std::ifstream checkFile(filepath);

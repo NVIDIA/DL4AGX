@@ -18,19 +18,23 @@
  *************************************************************************/
 #pragma once
 #include "NvInfer.h"
+#include "NvInferVersion.h"
 #include <cstring>
+#include <iostream>
 #include <numeric>
 
 namespace common
 {
 namespace tensorrt
 {
+#if NV_TENSORRT_MAJOR < 6
 inline void enableDLA(nvinfer1::IBuilder* b, int dlaID)
 {
     b->allowGPUFallback(true);
     b->setFp16Mode(true);
     b->setDefaultDeviceType(static_cast<nvinfer1::DeviceType>(dlaID));
 }
+#endif
 
 inline int parseDLA(int argc, char** argv)
 {
@@ -43,6 +47,35 @@ inline int parseDLA(int argc, char** argv)
     return -1;
 }
 
+#if NV_TENSORRT_MAJOR >= 6
+    inline void enableDLA(nvinfer1::IBuilder* builder, nvinfer1::IBuilderConfig* config, int useDLACore, bool allowGPUFallback = true)
+{
+    if (useDLACore >= 0)
+    {
+        if (builder->getNbDLACores() == 0)
+        {
+            std::cerr << "Trying to use DLA core " << useDLACore << " on a platform that doesn't have any DLA cores"
+                      << std::endl;
+        }
+        if (allowGPUFallback)
+        {
+            config->setFlag(nvinfer1::BuilderFlag::kGPU_FALLBACK);
+        }
+        if (!builder->getInt8Mode() && !config->getFlag(nvinfer1::BuilderFlag::kINT8))
+        {
+            // User has not requested INT8 Mode.
+            // By default run in FP16 mode. FP32 mode is not permitted.
+            builder->setFp16Mode(true);
+            config->setFlag(nvinfer1::BuilderFlag::kFP16);
+        }
+        config->setDefaultDeviceType(nvinfer1::DeviceType::kDLA);
+        config->setDLACore(useDLACore);
+        config->setFlag(nvinfer1::BuilderFlag::kSTRICT_TYPES);
+    }
+}
+#endif
+
+    
 inline int64_t volume(const nvinfer1::Dims& d)
 {
     return std::accumulate(d.d, d.d + d.nbDims, 1, std::multiplies<int64_t>());
@@ -72,5 +105,12 @@ struct InferDeleter
         }
     }
 };
+
+template <typename A, typename B>
+inline A divUp(A m, B n)
+{
+    return (m + n - 1) / n;
+}
+
 } // namespace tensorrt
 } // namespace common
