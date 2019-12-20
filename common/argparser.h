@@ -22,11 +22,24 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <getopt.h>
 
 namespace common
 {
 namespace argparser
 {
+
+struct StandardArgs
+{
+    bool runInInt8{false};
+    bool runInFp16{false};
+    bool help{false};
+    int useDLACore{-1};
+    int batch{1};
+    std::vector<std::string> dataDirs;
+    bool useILoop{false};
+};
+    
 inline bool parseBool(const char* arg, const char* longName, bool& value, char shortName = 0)
 {
     bool match = false;
@@ -102,6 +115,64 @@ inline std::vector<std::string> split(const std::string& s, char delim)
         res.push_back(item);
     }
     return res;
+}
+
+    
+//!
+//! \brief Populates the Args struct with the provided command-line parameters.
+//!
+//! \throw invalid_argument if any of the arguments are not valid
+//!
+//! \return boolean If return value is true, execution can continue, otherwise program should exit
+//!
+inline bool parseArgs(StandardArgs& args, int argc, char* argv[])
+{
+    while (1)
+    {
+        int arg;
+        static struct option long_options[] = {{"help", no_argument, 0, 'h'}, {"datadir", required_argument, 0, 'd'},
+            {"int8", no_argument, 0, 'i'}, {"fp16", no_argument, 0, 'f'}, {"useILoop", no_argument, 0, 'l'},
+            {"useDLACore", required_argument, 0, 'u'}, {"batch", required_argument, 0, 'b'}, {nullptr, 0, nullptr, 0}};
+        int option_index = 0;
+        arg = getopt_long(argc, argv, "hd:iu", long_options, &option_index);
+        if (arg == -1)
+        {
+            break;
+        }
+
+        switch (arg)
+        {
+        case 'h': args.help = true; return true;
+        case 'd':
+            if (optarg)
+            {
+                args.dataDirs.push_back(optarg);
+            }
+            else
+            {
+                std::cerr << "ERROR: --datadir requires option argument" << std::endl;
+                return false;
+            }
+            break;
+        case 'i': args.runInInt8 = true; break;
+        case 'f': args.runInFp16 = true; break;
+        case 'l': args.useILoop = true; break;
+        case 'u':
+            if (optarg)
+            {
+                args.useDLACore = std::stoi(optarg);
+            }
+            break;
+        case 'b':
+            if (optarg)
+            {
+                args.batch = std::stoi(optarg);
+            }
+            break;
+        default: return false;
+        }
+    }
+    return true;
 }
 } // namespace argparser
 } // namespace common

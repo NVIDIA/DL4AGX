@@ -13,8 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# File: DL4AGX/common/tensorrt/BUILD
+# File: DL4AGX/LeNetWithS3Pooling/inference/BUILD
 ############################################################################
+package(default_visibility = ["//visibility:public"])
+
 config_setting(
     name = "aarch64_linux",
     values = {"crosstool_top": "//toolchains/D5L:aarch64-unknown-linux-gnu"},
@@ -25,22 +27,16 @@ config_setting(
     values = {"crosstool_top": "//toolchains/D5Q:aarch64-unknown-nto-qnx"},
 )
 
-cc_library(
-    name = "tensorrt",
-    hdrs = [
-        "Logger.h",
-        "Profiler.h",
-        "utils.h",
-        "buffers.h",
-        "int8.h"
-    ],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//third_party/half:half",
-        "//common:macros"
+cc_binary(
+    name="lenet_s3pooling_trt",
+    srcs=["LeNetWithS3Pooling.cpp"],
+    deps=[
+        "//common:common"
     ] + select({
-        ":aarch64_linux": ["@tensorrt_aarch64_linux//:nvinfer"],
-        ":aarch64_qnx": ["@tensorrt_aarch64_qnx//:nvinfer"],
-        "//conditions:default": ["@tensorrt_x86_64_linux//:nvinfer"],
-    }),
+        "//conditions:default":[
+            "@tensorrt_x86_64_linux//:nvinfer",
+            "@tensorrt_x86_64_linux//:nvonnxparser",
+            "@tensorrt_x86_64_linux//:nvonnxparser_runtime",
+            "@cuda_x86_64_linux//:cudart"
+        ]}),
 )

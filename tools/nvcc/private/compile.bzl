@@ -24,10 +24,10 @@ def cu_compile(ctx, name, srcs_outs, includes, defines, hdrs, copts):
     '''
     for s,o in srcs_outs:
         cmd = "nvcc -x cu --compiler-options -fPIC {copts} -I. {includes} {defines} -rdc=true -c -dc {src} -o {out}".format(copts=" ".join([c for c in copts]), 
-		                                                                                                includes=" ".join(["-I" + i + " " for i in includes]),
-                   		                                                                                defines=" ".join(["-D" + d +  " " for d in defines]),
-                                      		                                                            src=s.path,
-                                                         		                                        out=o.path)
+		                                                                                                            includes=" ".join(["-I" + i + " " for i in includes]),
+                   		                                                                                            defines=" ".join(["-D" + d +  " " for d in defines]),
+                                      		                                                                            src=s.path,
+                                                                                                                            out=o.path)
         ctx.actions.run_shell(
             command=cmd,
             inputs=[s] + hdrs, 

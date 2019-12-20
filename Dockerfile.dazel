@@ -34,7 +34,7 @@ RUN mkdir -p /usr/share/man/man1
 RUN rm /etc/apt/sources.list.d/* || true
 RUN apt-get update && apt-get install -y --no-install-recommends openjdk-8-jdk ca-certificates curl gnupg gdb clang-format
 
-ENV BAZEL_VERSION=0.28.1
+ENV BAZEL_VERSION=2.0.0
 
 RUN apt-get install -y --no-install-recommends \
     bash-completion \
@@ -46,4 +46,3 @@ RUN apt-get install -y --no-install-recommends \
     && dpkg -i bazel_*.deb \
     && rm -rf /etc/apt/sources.list.d/bazel.list \
     && rm -rf /var/lib/apt/lists/*
-

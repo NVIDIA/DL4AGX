@@ -13,34 +13,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# File: DL4AGX/common/tensorrt/BUILD
+# File: DL4AGX/CUDAMemoryTypesMatMul/helpers/BUILD
 ############################################################################
+package(default_visibility = ["//visibility:public"])
+load("//tools/nvcc:cuda.bzl", "cu_library")
+
 config_setting(
     name = "aarch64_linux",
-    values = {"crosstool_top": "//toolchains/D5L:aarch64-unknown-linux-gnu"},
+    values = { "crosstool_top": "//toolchains/D5L:aarch64-unknown-linux-gnu" }
 )
 
 config_setting(
     name = "aarch64_qnx",
-    values = {"crosstool_top": "//toolchains/D5Q:aarch64-unknown-nto-qnx"},
+    values = { "crosstool_top": "//toolchains/D5Q:aarch64-unknown-nto-qnx" }
 )
 
 cc_library(
-    name = "tensorrt",
+    name = "helpers",
     hdrs = [
-        "Logger.h",
-        "Profiler.h",
-        "utils.h",
-        "buffers.h",
-        "int8.h"
+        "cuda.h",
+        "string.h",
     ],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//third_party/half:half",
-        "//common:macros"
-    ] + select({
-        ":aarch64_linux": ["@tensorrt_aarch64_linux//:nvinfer"],
-        ":aarch64_qnx": ["@tensorrt_aarch64_qnx//:nvinfer"],
-        "//conditions:default": ["@tensorrt_x86_64_linux//:nvinfer"],
+    deps = select({
+        ":aarch64_linux": [
+            "@cuda_aarch64_linux//:cudart",
+        ],
+        ":aarch64_qnx": [
+            "@cuda_aarch64_qnx//:cudart",
+        ],
+        "//conditions:default": [
+            "@cuda_x86_64_linux//:cudart",
+        ],
     }),
 )

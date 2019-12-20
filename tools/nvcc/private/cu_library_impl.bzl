@@ -122,6 +122,7 @@ def cu_library_impl (ctx):
 
     # Collect the feature configuration to populate the CcInfo provider
     feature_configuration = cc_common.configure_features(
+        ctx = ctx,
         cc_toolchain = cc_toolchain,
         requested_features = ctx.features,
         unsupported_features = ctx.disabled_features,
