@@ -30,9 +30,10 @@ config_setting(
 cc_library(
     name = "nvinfer_headers",
     hdrs = [
-        "include/NvInfer.h",
         "include/NvUtils.h"
-    ],
+    ] + glob([
+        "include/NvInfer*.h",
+    ], exclude=["include/NvInferPlugin.h", "include/NvInferPluginUtils.h"] ),
     includes = ["include/"],
     visibility = ["//visibility:private"],
 )
@@ -201,7 +202,7 @@ cc_import(
 
 cc_library(
     name = "nvinferplugin_headers",
-    hdrs = ["include/NvInferPlugin.h"],
+    hdrs = glob(["include/NvInferPlugin*.h"]),
     includes = ["include/"],
     visibility = ["//visibility:private"],
 )
