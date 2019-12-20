@@ -47,6 +47,7 @@ def get_toolchain_info(ctx):
     '''
     cc_toolchain = find_cpp_toolchain(ctx)
     feature_configuration = cc_common.configure_features(
+        ctx = ctx,
         cc_toolchain = cc_toolchain,
         requested_features = ctx.features,
         unsupported_features = ctx.disabled_features,
@@ -89,12 +90,12 @@ def get_depset_info(ctx, flag_prefix):
         # This implementation prefer CuInfo providers but fall back on CcInfo ones if there is no CuInfo providers
         if CuInfo in d: 
             # Add object files and linkopts 
-            objects += list(d[CuInfo].cu_linking_context.objects)
+            objects += d[CuInfo].cu_linking_context.objects.to_list()
             # TODO: Should these be filtered by ctx.attr.nolinkopts
             linkopts += list(d[CuInfo].cu_linking_context.link_flags)
         # TODO: Potentially move to full CcInfo
         elif CcInfo in d:
-            for lib in d[CcInfo].linking_context.libraries_to_link:
+            for lib in d[CcInfo].linking_context.libraries_to_link.to_list():
                 # TODO: Verify this ordering of preference 
                 # Prefers pic static libraries, static libraries then dynamically libraries
                 # Appends the appropriate linker options to the list of linkopts and the file 
