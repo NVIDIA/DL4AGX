@@ -34,6 +34,22 @@ pip_import(
 load("@pylinter_deps//:requirements.bzl", "pip_install")
 pip_install()
 
+pip_import(
+   name = "lenet_s3pool_utils_deps",
+   requirements = "//LeNetWithS3Pooling/utils:requirements.txt",
+)
+
+load("@lenet_s3pool_utils_deps//:requirements.bzl", "pip_install")
+pip_install()
+
+pip_import(
+   name = "lenet_s3pool_training_deps",
+   requirements = "//LeNetWithS3Pooling/training:requirements.txt",
+)
+
+load("@lenet_s3pool_training_deps//:requirements.bzl", "pip_install")
+pip_install()
+
 skylib_version = "0.8.0"
 http_archive(
     name = "bazel_skylib",
