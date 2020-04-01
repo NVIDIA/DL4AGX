@@ -59,6 +59,8 @@ Then build the container in this directory based on the container you just built
 
 4. Replace the first line of `//Dockerfile.dazel` with the new container you built. For example `FROM nvidia/s3pool`
    
+> Note: ONNX parser code changes for S3Pool plugin can be referenced [here](https://github.com/onnx/onnx-tensorrt/tree/webinar/s3pool)
+
 ### Compile and build S3Pool plugin
 
 Run the following command to build TensorRT plugin and inference application. You can find the binaries here: `<PATH_TO_DL4AGX>/bazel-out/k8-fastbuild/bin/`
