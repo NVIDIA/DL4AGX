@@ -18,7 +18,7 @@ The application is designed for NVIDIA DRIVE AGX Developer Kit running either Li
 - CUDNN: 7.5  
 - TensorRT: 5.1.1.4  
 - DriveOS PDK: >=5.1.3.0 or Ubuntu on x86
-- DALI: 0.9dev (aarch64 build) 
+- DALI: 0.14rc (aarch64 build) 
 - OpenCV: 3.4.2 (for visualization)
 
 
