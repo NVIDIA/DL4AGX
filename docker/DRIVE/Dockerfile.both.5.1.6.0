@@ -135,7 +135,7 @@ ENV REPO_DEBS="cuda.deb \
     
 RUN dpkg -i $REPO_DEBS
  
-ENV CUDA_PACKAGES="nvrtc nvgraph cusolver cufft curand cusparse npp nvjpeg cudart cupti compiler misc-headers command-line-tools nvrtc-dev nvml-dev nvgraph-dev cusolver-dev cufft-dev curand-dev cusparse-dev npp-dev nvjpeg-dev cudart-dev driver-dev nvcc toolkit libraries-dev tools visual-tools"
+ENV CUDA_PACKAGES="nvrtc nvgraph cusolver cufft curand cusparse npp nvjpeg cudart cupti cupti-dev compiler misc-headers command-line-tools nvrtc-dev nvml-dev nvgraph-dev cusolver-dev cufft-dev curand-dev cusparse-dev npp-dev nvjpeg-dev cudart-dev driver-dev nvcc toolkit libraries-dev tools visual-tools"
 RUN echo "for i in \$CUDA_PACKAGES; do echo \"cuda-\$i-\${cuda_version_dash}=\${cuda_version_long}-1\";done" | bash > /tmp/cuda-packages.txt
 
 #Install CUDA 10
@@ -187,7 +187,7 @@ RUN cd /pdk_files \
     && dpkg -i ${tensorrt_x86_64_repo} \
     && rm -rf ${tensorrt_x86_64_repo} \
     && apt-get update \
-    && apt-get download libcudnn7=${cudnn_version_long}-1+cuda${CUDA_VERSION} libcudnn7-dev=${cudnn_version_long}-1+cuda${CUDA_VERSION} libnvinfer5=${trt_version_short}-1+cuda${CUDA_VERSION} libnvinfer-dev=${trt_version_short}-1+cuda${CUDA_VERSION} uff-converter-tf graphsurgeon-tf python3-libnvinfer python-libnvinfer \
+    && apt-get download libcudnn7=${cudnn_version_long}-1+cuda${CUDA_VERSION} libcudnn7-dev=${cudnn_version_long}-1+cuda${CUDA_VERSION} libnvinfer5=${trt_version_short}-1+cuda${CUDA_VERSION} libnvinfer-dev=${trt_version_short}-1+cuda${CUDA_VERSION} uff-converter-tf graphsurgeon-tf python3-libnvinfer=${trt_version_short}-1+cuda${CUDA_VERSION} python-libnvinfer=${trt_version_short}-1+cuda${CUDA_VERSION} \
     && dpkg -i ${CUDNN_x86_64_DEBS} \
     && rm -rf ${CUDNN_x86_64_DEBS} \
     && dpkg -i ${TENSORRT_x86_64_DEBS} \
