@@ -23,6 +23,7 @@ dazel run //plugins/dali/TensorRTInferOp:libtensorrtinferop.so --config=[D5L/L4T
 ```sh
 dazel run //plugins/dali/TensorRTInferOp:libtensorrtinferop.so --config=D5Q-toolchain
 ```
+> Note: TensorRTInferOp is a custom plugin op for DALI. Please ensure that your base docker environment includes DALI packages before executing dazel instructions. Please refer to [MultiDeviceInferencePipeline environment image setup](../../../MultiDeviceInferencePipeline/README.md).
 
 ## Usage 
 
