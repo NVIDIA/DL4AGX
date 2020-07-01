@@ -84,7 +84,7 @@ def determine_component_deps(bazel_bin, name, component_name):
 
     content = [x.strip() for x in content]
     for dep_str in content:
-        if dep_str[0] is not '@':  #Do not want external dependencies
+        if dep_str[0] != '@':  #Do not want external dependencies
             dep = dep_str.strip().split(":")[0]
             if dep not in BLACKLISTED_BAZEL_TARGETS:
                 component_deps.add(dep)
