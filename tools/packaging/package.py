@@ -57,7 +57,7 @@ def copy(src, dest):
         copy_tree(src, dest)
     except DistutilsFileError:
         shutil.copy(src, dest)
-    except:
+    except Exception as e:
         print('Directory not copied. Error: %s' % e)
 
 
