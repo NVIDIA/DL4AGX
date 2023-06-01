@@ -174,7 +174,7 @@ if __name__ == '__main__':
     parser.add_argument("--test_data_size", type=int, default=None,
                         help="Dataset to be used for the final model evaluation (to obtain accuracy)."
                              " If None, take the entire val data. Otherwise, take subset.")
-    parser.add_argument("--calib_data_size", type=int, default=512,
+    parser.add_argument("--calib_data_size", type=int, default=68,
                         help="Dataset to be used for model calibration."
                              " If None, take the entire val data. Otherwise, take subset.")
     parser.add_argument("--val_data_size", type=int, default=None,
