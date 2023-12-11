@@ -7,3 +7,4 @@ tests/test.png filter=lfs diff=lfs merge=lfs -text
 engines/mtmi_depth_i8_dla.bin filter=lfs diff=lfs merge=lfs -text
 engines/mtmi_encoder_fp16_gpu.plan filter=lfs diff=lfs merge=lfs -text
 engines/mtmi_seg_i8_dla.bin filter=lfs diff=lfs merge=lfs -text
+engines/mtmi_full.plan filter=lfs diff=lfs merge=lfs -text
