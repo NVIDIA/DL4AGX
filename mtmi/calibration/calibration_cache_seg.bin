@@ -1,0 +1,24 @@
+TRT-8612-EntropyCalibration2
+input.72: 3cb9c64a
+input.148: 3ceabfec
+input.224: 3d111505
+input.292: 3ded7bfd
+input.368: 3d0413b6
+input.376: 3cead174
+input.384: 3d07330f
+input.392: 3d3aa235
+onnx::Resize_1922: 3d03ba8f
+onnx::Resize_1930: 3cd3796e
+onnx::Resize_1938: 3ce5e59c
+onnx::Resize_1946: 3d307721
+onnx::Add_1927: 3d03ba8f
+onnx::Add_1935: 3cd3796e
+onnx::Add_1943: 3ce5e59c
+onnx::Add_1951: 3d307721
+onnx::Add_1952: 3d089ab7
+onnx::Add_1953: 3d200e43
+input.396: 3d5dd85d
+input.404: 3d07b216
+onnx::Conv_1957: 3cc37202
+input.408: 3e99a6d6
+onnx::ArgMax_1963: 3e98d50a

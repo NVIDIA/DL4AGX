@@ -1,2 +1,6 @@
 # all tmp files in calibration
-calibration/
+calibration/left
+calibration/right
+
+# build files
+inference_app/build
