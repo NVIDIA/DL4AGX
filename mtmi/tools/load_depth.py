@@ -158,4 +158,4 @@ img = mmcv.imread('tests/test.png')
 
 show_result_pyplot(
             img, data,
-            out_file="depth.png")
+            out_file="results/depth.png")

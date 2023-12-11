@@ -149,4 +149,4 @@ show_result_pyplot(
             block=False,
             title='ONNXRuntime',
             opacity=0.5,
-            out_file="seg.png")
+            out_file="results/seg.png")

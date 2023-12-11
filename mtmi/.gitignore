@@ -4,3 +4,6 @@ calibration/right
 
 # build files
 inference_app/build
+
+#
+*.txt
