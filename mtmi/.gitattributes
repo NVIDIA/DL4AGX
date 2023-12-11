@@ -1,0 +1,5 @@
+onnx_files/mtmi_seg_head.onnx filter=lfs diff=lfs merge=lfs -text
+onnx_files/mtmi_slim.onnx filter=lfs diff=lfs merge=lfs -text
+onnx_files/mtmi_depth_head.onnx filter=lfs diff=lfs merge=lfs -text
+onnx_files/mtmi_encoder.onnx filter=lfs diff=lfs merge=lfs -text
+onnx_files/mtmi.onnx filter=lfs diff=lfs merge=lfs -text
