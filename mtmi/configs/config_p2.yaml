@@ -1,4 +1,4 @@
-iterations: 1
+iterations: 10
 
 inputs:
         
@@ -10,7 +10,7 @@ inputs:
 
 instances:
         - name: mtmi-backbone
-          engine: mtmi_full.plan
+          engine: engines/mtmi_full.plan
           core: -1
           inputs:
                   - name: input
