@@ -45,16 +45,16 @@ In order to get better accuracy, we need to do calibrations and then build the D
 $ python tools/batch_preprocessing_onnx.py --onnx=PATH_TO_ONNX --image_path=PATH_TO_IMAGE_FILES --output_path=PATH_TO_SAVE_OUTPUTS
 ```
 
-Note that for now you need to manually modify the last two lines in the cache file for segmentation due to an unknown bug in tensorrt, ask Le for more information and trackign for the nvbugs:
-```
-input.408: 3e99a6d6
-onnx::ArgMax_1963: 3e98d50a
-```
-
 ### Do calibration
 Please refer to the argparse in the python file to enter correct paths, by default you will get the calibration file under `calibration/` and tmp engine(will not be used) under `engines/`
 ```bash
 $ python tools/build_dla.py
+```
+
+Note that for now you need to manually modify the last two lines in the cache file for segmentation due to an unknown bug in tensorrt, ask Le for more information and trackign for the nvbugs:
+```
+input.408: 3e99a6d6
+onnx::ArgMax_1963: 3e98d50a
 ```
 
 ### Build DLA loadables using the calibration caches
@@ -80,6 +80,25 @@ $ make
 ```bash
 $ ./inference_app/infer configs/config_p1.yaml
 ```
+
+Sample logs:
+```yaml
+Average file read time: 34.8031 milliseconds
+Average input copy time: 1.7319 milliseconds
+Average launch time: 0 milliseconds
+Average wall clock time without file read: 39.8018 milliseconds
+Average wall clock time: 74.6054 milliseconds
+Average prepare DLA clock time: 7.8857 milliseconds
+```
+Where the 39.8ms stats the compute time in the gpu+dla pipeline
+
+### Visualize results
+```
+python tools/load_depth.py
+python tools/load_seg.py
+```
+
+Then you will get image results at `results/`
 
 ## Authors and acknowledgment
 to be added
