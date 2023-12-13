@@ -6,4 +6,4 @@ calibration/right
 inference_app/build
 
 #
-*.txt
+/*.txt
