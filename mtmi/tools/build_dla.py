@@ -1,12 +1,25 @@
-import tensorrt as trt
-import numpy as np
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
+import argparse
+import numpy as np
 
 import pycuda.driver as cuda
 import pycuda.autoinit
-
-import argparse
-
+import tensorrt as trt
 
 TRT_LOGGER = trt.Logger(trt.Logger.VERBOSE)
 
@@ -44,8 +57,6 @@ class PythonEntropyCalibrator(trt.IInt8EntropyCalibrator2):
         self.current_index += self.batch_size
         return [int(d_input) for d_input in self.device_inputs]
 
-
-
     def read_calibration_cache(self):
         # If cache exists, use it to skip calibration. Otherwise, perform calibration
         if os.path.exists(self.cache_file):
@@ -81,10 +92,7 @@ def build_engine_from_onnx(onnx_file_path, cache_file, calibration_data=None, dl
     config = builder.create_builder_config()
     config.set_flag(trt.BuilderFlag.FP16)  # Use FP16 precision if desired
     config.set_flag(trt.BuilderFlag.DIRECT_IO)
-    # config.set_flag(trt.BuilderFlag.STRICT_TYPES) 
-
-
-
+    # config.set_flag(trt.BuilderFlag.STRICT_TYPES)
     config.default_device_type = trt.DeviceType.DLA
     config.DLA_core = dla_core
     config.engine_capability = trt.EngineCapability.DLA_STANDALONE
@@ -101,10 +109,10 @@ def build_engine_from_onnx(onnx_file_path, cache_file, calibration_data=None, dl
         for input in inputs:
             input.allowed_formats = formats
             input.dtype = trt.DataType.INT8
+
         for output in outputs:
             # output.allowed_formats = 1 << int(trt.TensorFormat.DLA_LINEAR)
             # output.dtype = trt.DataType.HALF
-
             output.allowed_formats = formats
             output.dtype = trt.DataType.INT8
     
@@ -116,10 +124,7 @@ def main():
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
     parser.add_argument('--onnx', type=str, default="onnx_files/mtmi_seg_head.onnx",
                         help='Path to load onnx file')
-    parser.add_argument('--image-path', type=str, default="/home/nvidia/workspace/boyin/112013/cityscapes/leftImg8bit/train/hamburg/",
-                        help='Path to load images from')
-    parser.add_argument('--feat-path', type=str, default="calibration/",
-                        help='Path to load features')
+    parser.add_argument('--image-path', type=str, help='Path to load images from')
     parser.add_argument('--output-path', type=str, default="engines/seg.bin",
                         help='Path to save engine to')
     parser.add_argument('--cache-path', type=str, default="calibration/calibration_cache_seg.bin",

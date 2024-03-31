@@ -5,5 +5,11 @@ calibration/right
 # build files
 inference_app/build
 
+# data files
+data/
+
 #
 /*.txt
+*.pkl
+*.bin
+*.ignore

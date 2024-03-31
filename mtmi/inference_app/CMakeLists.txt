@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,106 +13,59 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 2.8.7)
-project(mtmi_inference)
-find_package(CUDA REQUIRED)
+cmake_minimum_required(VERSION 3.14)
+project(mtmiapp LANGUAGES CXX CUDA)
 
-# Set the C++ standard to C++17
+option(TARGET "x86_64")
+
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_C_FLAGS "-fPIC -g -O2")
+set(CMAKE_CXX_FLAGS "-fPIC -g -O2")
 
-# Find the yaml-cpp package
-find_package(yaml-cpp REQUIRED)
+if(${TARGET} MATCHES "orin")
+    set(CMAKE_C_COMPILER   aarch64-linux-gnu-gcc)
+    set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
+    set(CMAKE_FIND_ROOT_PATH "/usr/aarch64-linux-gnu")
+    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
-if(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL  "aarch64")
-  set(CMAKE_C_COMPILER /usr/bin/aarch64-linux-gnu-gcc)
-  set(CMAKE_CXX_COMPILER /usr/bin/aarch64-linux-gnu-g++)
-  set(CUDA_INSTALL_TARGET_DIR targets/aarch64-linux)
-elseif(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "x86_64")
-  set(CMAKE_C_COMPILER /usr/bin/gcc)
-  set(CMAKE_CXX_COMPILER /usr/bin/g++)
-  set(CUDA_INSTALL_TARGET_DIR targets/x86_64-linux)
+    set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda-11.4/)
+    set(CUDA_TOOLKIT_INCLUDE /usr/local/cuda-11.4/targets/aarch64-linux/include)
+    set(CUDA_CUDART_LIBRARY /usr/local/cuda-11.4/targets/aarch64-linux/lib/libcudart.so)
+    set(CUDA_HOST_COMPILER "/usr/bin/aarch64-linux-gnu-g++" CACHE STRING "host compiler" FORCE)
+
+    set(TENSORRT_INCLUDE_DIRS /usr/include/aarch64-linux-gnu)
+    set(TENSORRT_LIBRARY_DIRS /usr/lib/aarch64-linux-gnu)
+    include_directories(
+        ${CUDA_INCLUDE_DIRS} 
+        ${CUDA_TOOLKIT_INCLUDE}
+        ${TENSORRT_INCLUDE_DIRS})
+    link_directories(
+        /usr/local/cuda-11.4/targets/aarch64-linux/lib/
+        /usr/local/cuda-11.4/targets/aarch64-linux/lib/stubs/
+        ${TENSORRT_LIBRARY_DIRS})
+    set(DEPS ${DEPS} nvcudla cudla cuda cudart)
+    add_definitions(-DUSE_ORIN)
+    find_package(CUDA REQUIRED)
+else()    
+    set(TENSORRT_INCLUDE_DIRS ${TRTROOT}/include/)
+    set(TENSORRT_LIBRARY_DIRS ${TRTROOT}/lib/)
+    
+    set(DEPS ${DEPS} cuda)
+    include_directories(
+        ${CUDA_INCLUDE_DIRS} 
+        ${TENSORRT_INCLUDE_DIRS})
+    link_directories(
+        ${TENSORRT_LIBRARY_DIRS})
+    find_package(CUDA REQUIRED)
 endif()
 
-set(TENSORRT_INCLUDE_DIRS /home/nvidia/workspace/boyin/TensorRT-8.6.12.3/include/)
-set(TENSORRT_LIBRARY_DIRS /home/nvidia/workspace/boyin/TensorRT-8.6.12.3/lib/)
-set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
-set(CUDA_INCLUDE_DIRS ${CUDA_TOOLKIT_ROOT_DIR}/include)
-set(CUDA_LIBRARY_DIRS ${CUDA_TOOLKIT_ROOT_DIR}/lib64)
-set(CMAKE_BUILD_TYPE "Release")
-
-set(CMAKE_CXX_FLAGS_RELEASE "-Wno-deprecated-declarations -O3")
-set(CMAKE_CXX_FLAGS_DEBUG "-Wno-deprecated-declarations -O0 -g")
-add_compile_options(-W)
-add_compile_options(-std=c++11)
-
-set(SMS 75 80 86 87)
-foreach(sm ${SMS})
-	set(GENCODE ${GENCODE} -gencode arch=compute_${sm},code=sm_${sm})
-endforeach()
-set(HIGHEST_SM 87)
-set(GENCODE ${GENCODE} -gencode arch=compute_${HIGHEST_SM},code=compute_${HIGHEST_SM})
-
-if(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL  "aarch64")
-  set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}
-      -ccbin ${CMAKE_CXX_COMPILER}
-      -Xcompiler -DWIN_INTERFACE_CUSTOM
-      -Xlinker -lsocket
-  )
-elseif(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "x86_64")
-  set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}
-      -ccbin ${CMAKE_CXX_COMPILER}
-      -Xcompiler -DWIN_INTERFACE_CUSTOM
-      -Xcompiler -I/usr/include/
-      -Xlinker -lsocket
-      -Xlinker -rpath=/usr/lib/x86_64-linux-gnu/
-      -Xlinker -rpath=/usr/lib/
-      -Xlinker -L/usr/lib/x86_64-linux-gnu/
-      -Xlinker -L/usr/lib/
-  )
-endif()
-
-if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-  message("Using Debug Mode")
-  set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -g -G --ptxas-options=-v)
-endif()
-set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -gencode arch=compute_87,code=compute_87)
-if(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL  "aarch64")
-  include_directories(
-      ${CUDA_INCLUDE_DIRS}
-      ${TENSORRT_INCLUDE_DIRS}
-      include
-  )
-  link_directories(
-    ${TENSORRT_LIBRARY_DIRS}
-    ${CUDA_LIBRARY_DIRS}
-  )
-elseif(${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "x86_64")
-  include_directories(
-      ${CUDA_INCLUDE_DIRS}
-      ${TENSORRT_INCLUDE_DIRS}
-      include
-  )
-  link_directories(
-    ${TENSORRT_LIBRARY_DIRS}
-    ${CUDA_LIBRARY_DIRS}
-  )
-endif()
-
-file(GLOB_RECURSE BUILD_FILES
-    src/*.cpp
-    kernels/*.cu
-)
-
-cuda_add_executable(infer infer.cpp ${BUILD_FILES})
-
-target_link_libraries(infer
-    nvinfer
-    nvparsers
-    nvonnxparser
-    yaml-cpp
-    cudla
-    cudart
-    pthread
-)
+include_directories(${CMAKE_SOURCE_DIR}/include)
+cuda_add_library(mtmicu
+                 ${CMAKE_SOURCE_DIR}/kernels/kernels.cu)
+add_executable(mtmiapp main.cpp 
+               ${CMAKE_SOURCE_DIR}/src/lodepng.cpp
+               ${CMAKE_SOURCE_DIR}/src/cudla_context.cpp)
+target_link_libraries(mtmiapp mtmicu nvinfer ${CUDA_LIBRARIES} ${DEPS})
