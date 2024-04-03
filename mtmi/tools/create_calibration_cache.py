@@ -133,8 +133,7 @@ def main():
 
     img_pth = args.image_path
     onnx_file_path = args.onnx
-    output_path = args.output_path
-    calibration_path = args.feat_path
+    feat_path = args.feat_path
     cache_path = args.cache_path
     
     # load calibration data
@@ -146,18 +145,12 @@ def main():
         for j in range(2):
             dir_name = dir_names[j]
             for i in range(4):
-                feature = np.load(os.path.join(calibration_path, dir_name, str(i), npy_name))
+                feature = np.load(os.path.join(feat_path, dir_name, str(i), npy_name))
                 calibration_data[i].append(feature)
         count+=1
 
     print("before building engine")
-    engine = build_engine_from_onnx(onnx_file_path, cache_path, calibration_data=calibration_data, dla_core=0)
-
-    # Save the engine to a file (optional)
-    with open(output_path, 'wb') as f:
-        f.write(engine.serialize())
-
-    print("Engine built and saved!")
+    _ = build_engine_from_onnx(onnx_file_path, cache_path, calibration_data=calibration_data, dla_core=0)
 
 if __name__ == '__main__':
     main()
