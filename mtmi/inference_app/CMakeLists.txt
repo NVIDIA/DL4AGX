@@ -43,7 +43,7 @@ if(${TARGET} MATCHES "orin")
         ${CUDA_TOOLKIT_INCLUDE}
         ${TENSORRT_INCLUDE_DIRS})
     link_directories(
-        /ws_orin/sdk/dos_installers/drive-linux/lib-target
+        /drive/drive-linux/lib-target
         /usr/local/cuda-11.4/targets/aarch64-linux/lib/
         /usr/local/cuda-11.4/targets/aarch64-linux/lib/stubs/
         ${TENSORRT_LIBRARY_DIRS})
