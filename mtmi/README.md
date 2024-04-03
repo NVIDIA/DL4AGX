@@ -1,4 +1,6 @@
 # MTMI-Inference
+## Introduction
+This application is to demostrate the deployment of a multi-task network on orin platform. 
 
 ## Environment
 
@@ -28,17 +30,20 @@ Step2: Split the onnx model into encoder, depth decoder and semantic segmentatio
 $ python tools/onnx_split.py
 ```
 
-## PTQ
+## Post-training quantization
 
-In order to get better accuracy, we need to generate calibrations first and then build the DLA int8 engines.
+To better utilize DLA, we should use Int8. In order to obtain scale information, we utilize tensorrt calibration apis.
 
 ### Prepare intermediate features for calibration
+We first use onnx-runtime to produce intermediate features shared by the two decoders.
 ```bash
 $ python tools/batch_preprocessing_onnx.py --onnx=PATH_TO_ONNX --image_path=PATH_TO_IMAGE_FILES --output_path=PATH_TO_SAVE_INTERMEDIATE_FEATURES
 ```
 
-### Do calibration
-Please refer to the argparse in the python file to enter correct paths, by default you will get the calibration file under `calibration/` and tmp engine(will not be used) under `engines/`
+### Perform Post-training quantization
+Then we can load from the cached feature map as input, and feed them into calibators.
+With default arguments, you will get the calibration file under `calibration/` and tmp engine(will not be used) under `engines/`
+
 ```bash
 $ python tools/create_calibration_cache.py --onnx=PATH_TO_HEAD_ONNX --image-path=PATH_TO_IMAGE_FILES --output-path=PATH_TO_SAVE_ENGINES --cache-path=PATH_TO_SAVE_CALIBRATION_FILES
 ```
@@ -62,9 +67,16 @@ Build DLA loadable with "inputIOFormats=int8:chw32" and "outputIOFormats=int8:dl
 $ trtexec --onnx=onnx_files/mtmi_depth_head.onnx --int8 --saveEngine=engines/mtmi_depth_i8_dla.bin --useDLACore=0 --inputIOFormats=int8:chw32 --outputIOFormats=int8:dla_linear --buildOnly --verbose --buildDLAStandalone --calib=calibration/calibration_cache_depth.bin
 $ trtexec --onnx=onnx_files/mtmi_seg_head.onnx --int8 --saveEngine=engines/mtmi_seg_i8_dla.bin --useDLACore=1 --inputIOFormats=int8:chw32 --outputIOFormats=int8:dla_linear --buildOnly --verbose --buildDLAStandalone --calib=calibration/calibration_cache_seg_mod.bin
 ```
-## Build inference app
+
+## Build and run inference app
+The inference app is organized as initialization then iterate and inference on images in the tests folder.
+For the inference, we will 
 
 ### Build the app
+In this section, we will cross compile the application on x86 for orin platform.
+Docker: 
+Launch docker with 
+
 ```bash
 $ cd inference_app
 $ sh build.sh orin

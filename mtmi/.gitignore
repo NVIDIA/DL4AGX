@@ -7,9 +7,11 @@ inference_app/build
 
 # data files
 data/
+engines/
+onnx_files/
 
 #
-/*.txt
 *.pkl
 *.bin
 *.ignore
+*.calib

@@ -355,8 +355,8 @@ struct App {
     }
 
     void forward_sync() {
-        // debug purpose, run everything in a synchronize manner
-        for( int r=0; r<5; r++ ) {
+        // debug purpose, run every input image in a synchronize manner
+        for( int r=0; r<app.image_names.size(); r++ ) {
             this->step_prepare(r);
             this->step_backbone();
             cudaEventRecord(event_backbone_ready_stage[0], stream_backbone);
