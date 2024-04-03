@@ -1,5 +1,5 @@
 BUILD_PATH="build"
-TARGET="x86_64"
+TARGET="orin"
 
 mkdir -p ${BUILD_PATH}
 mkdir -p ${BUILD_PATH}/${TARGET}
