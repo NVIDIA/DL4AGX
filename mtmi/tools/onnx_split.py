@@ -17,6 +17,9 @@ import onnx_graphsurgeon as gs
 import onnx
 import numpy as np
 
+# The following names are the 4 feature maps from the encoder
+# and shared by segmentation and depth estimation head
+# You can find them with onnx visualization tools like netron.app
 tensor_name1 = "input.72"
 tensor_shape1 = (1,32,256,256)
 
