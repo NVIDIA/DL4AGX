@@ -75,6 +75,8 @@ struct Feat {
         cudaMalloc(&ifeat, feat_size);
     }
 
+    // quantize from float/half value into int8 with formula:
+    //   quant_value = cast_to_int8(round(clip(float_value / scale, -128, 127)))
     void quantize(cudaStream_t stream) {
         optimize::convert_half_to_int8(
             ffeat, 
@@ -206,14 +208,26 @@ struct App {
     std::shared_ptr<Engine> backbone;
     cudaEvent_t event_backbone_ready;
     cudaEvent_t event_backbone_ready_stage[2];
-    cudaEvent_t bb_s, bb_e;
+    cudaEvent_t bb_s, bb_e; // backbone start and end events
     cudaStream_t stream_head;
-    
+
+    const int INPUT_HxW = 1024 * 1024;
+    const int DEPTH_HxW = 1024 * 1024;
+    const int SEG_N_CLASS = 19;
+    const int SEG_HxW = 1024 * 1024;
+    const float DEP_SCALE = 0.00764765; // convert from onnx::Mul_1912: 3bfa9921
+
     unsigned char* hraw;
     unsigned char* draw;
     float* dimg;
 
-    float scales[4] = {0.0219308696687f, 0.0277800317854f, 0.036009144038f, 0.120857991278f};
+    // These hex binaries are extracted from calibration cache
+    // e.g. input.72: 3cb9c64a, and this is hex format of 0.0226776f
+    // for more detail for the conversion, please refer to https://en.wikipedia.org/wiki/IEEE_754
+    
+    uint32_t scales_bin[4] = {0x3cb9c64a, 0x3ceabfec, 0x3d111505, 0x3ded7bfd};
+    //                        0.0226776f,  0.028656f, 0.0354204f, 0.115959f
+    float* scales = reinterpret_cast<float*>(scales_bin);
     size_t feat_sizes[4] = {32*256*256, 64*128*128, 160*64*64, 256*32*32 };
     std::string mappings[4] = {"input.72", "input.148", "input.224", "input.292"};
 
@@ -235,7 +249,7 @@ struct App {
 
         cudaStreamCreate(&stream_head);
         std::unordered_map<std::string, void*> backbone_mappings;
-        backbone = std::make_shared<Engine>("data/engines/mtmi_encoder_fp16.engine", runtime, backbone_mappings);
+        backbone = std::make_shared<Engine>("engines/mtmi_encoder_fp16.engine", runtime, backbone_mappings);
         dimg = reinterpret_cast<float*>(backbone->bindings["input"]->ptr);
         cudaMalloc((void**)&draw, image_size * sizeof(unsigned char) * 4);
 
@@ -248,7 +262,7 @@ struct App {
 
         init_head(runtime);
 
-        const std::filesystem::path img_dir{"data/img"};
+        const std::filesystem::path img_dir{"tests"};
     
         // directory_iterator can be iterated using a range-for loop
         for (auto const& dir_entry : std::filesystem::directory_iterator{img_dir}) {
@@ -274,7 +288,7 @@ struct App {
     ~App() {        
     }
     
-    void fn_prepare(int i) {
+    void step_prepare(int i) {
         int real_i = i % images.size();
         cudaMemcpyAsync(
             draw, images[real_i],
@@ -282,7 +296,7 @@ struct App {
             cudaMemcpyHostToDevice, stream_backbone);
     }
 
-    void fn_backbone() {
+    void step_backbone() {
         cudaEventRecord(bb_s, stream_backbone);
 
         // rgba to float, mean and std process
@@ -309,10 +323,6 @@ struct App {
     cudaStream_t stream_seg, stream_dep;
     int stage = 0;
 
-    // this is only a demo buffer for profiling purpose
-    void* d0;
-    void* d1;
-
     void init_head(IRuntime* runtime) {
         cudaEventCreateWithFlags(&event_backbone_ready_stage[0], cudaEventBlockingSync);
         cudaEventCreateWithFlags(&event_backbone_ready_stage[1], cudaEventBlockingSync);
@@ -320,9 +330,8 @@ struct App {
         cudaEventCreateWithFlags(&bb_e, cudaEventBlockingSync);
 
         cudaStreamCreateWithFlags(&stream_dep, cudaStreamNonBlocking);
-        dep = std::make_shared<CudlaContext>("data/engines/mtmi_depth_i8_dla.loadable", 0);
-        cudaMalloc(&dep_output, 1024 * 1024);
-        cudaMalloc(&d0, 1024); cudaMalloc(&d1, 1024);
+        dep = std::make_shared<CudlaContext>("loadables/mtmi_depth_i8_dla.loadable", 0);
+        cudaMalloc(&dep_output, DEPTH_HxW);
 
         // the order is related to built dla engine
         // please always cross-check with meta-info
@@ -332,15 +341,15 @@ struct App {
             stream_dep);
 
         cudaStreamCreateWithFlags(&stream_seg, cudaStreamNonBlocking);
-        seg = std::make_shared<CudlaContext>("data/engines/mtmi_seg_i8_dla.loadable", 1);
-        cudaMalloc(&seg_output, 19 * 1024 * 1024);        
+        seg = std::make_shared<CudlaContext>("loadables/mtmi_seg_i8_dla.loadable", 1);
+        cudaMalloc(&seg_output, SEG_HxW * SEG_N_CLASS);        
         seg->bufferPrep(
             {feats[0].ifeat, feats[1].ifeat, feats[2].ifeat, feats[3].ifeat},
             {seg_output},
             stream_seg);
     }
 
-    void fn_head_dla() {        
+    void step_head_dla() {        
         seg->submitDLATask(stream_seg);
         dep->submitDLATask(stream_dep);
     }
@@ -348,13 +357,13 @@ struct App {
     void forward_sync() {
         // debug purpose, run everything in a synchronize manner
         for( int r=0; r<5; r++ ) {
-            this->fn_prepare(r);
-            this->fn_backbone();
+            this->step_prepare(r);
+            this->step_backbone();
             cudaEventRecord(event_backbone_ready_stage[0], stream_backbone);
             cudaStreamWaitEvent(stream_seg, event_backbone_ready_stage[0]);
             cudaStreamWaitEvent(stream_dep, event_backbone_ready_stage[0]);
-            this->fn_head_dla();
-            this->vis(r, "data/results/");
+            this->step_head_dla();
+            this->vis(r, "results/");
         }
     }
 
@@ -363,8 +372,8 @@ struct App {
         this->backbone->EnableCudaGraph(stream_backbone);
 
         // trigger first encoder inference
-        this->fn_prepare(0);
-        this->fn_backbone();
+        this->step_prepare(0);
+        this->step_backbone();
         cudaEventRecord(event_backbone_ready_stage[0], stream_backbone);
         
         int image_index = 1;
@@ -381,17 +390,17 @@ struct App {
             int head_event_index = loop % 2;
             cudaStreamWaitEvent(stream_seg, event_backbone_ready_stage[head_event_index]);
             cudaStreamWaitEvent(stream_dep, event_backbone_ready_stage[head_event_index]);
-            this->fn_head_dla();
+            this->step_head_dla();
 
             cudaStreamSynchronize(stream_backbone);
             float elapsed = -1.0f;
             cudaEventElapsedTime(&elapsed, bb_s, bb_e);
-            printf("bb_elapsed: %f ", elapsed);
+            printf("backbone elapsed: %f ", elapsed);
 
             // now we should be able to issue next encoder inference
-            this->fn_prepare(image_index);
+            this->step_prepare(image_index);
             
-            this->fn_backbone();
+            this->step_backbone();
             cudaEventRecord(bb_e, stream_backbone);
 
             int backbone_event_index = (loop + 1) % 2;
@@ -405,13 +414,13 @@ struct App {
 
             auto end_time = ::std::chrono::steady_clock::now();
             auto elapsed_serial_ms = ::std::chrono::duration_cast<::std::chrono::microseconds>(end_time - begin_time).count() / 1000.;
-            printf("chrono_elapsed: %f\n", elapsed_serial_ms);
+            printf("chrono elapsed: %f\n", elapsed_serial_ms);
         }
         // last round
         int head_event_index = loop % 2;
         cudaStreamWaitEvent(stream_seg, event_backbone_ready_stage[head_event_index]);
         cudaStreamWaitEvent(stream_dep, event_backbone_ready_stage[head_event_index]);
-        this->fn_head_dla();
+        this->step_head_dla();
 
         cudaStreamSynchronize(stream_backbone);
         cudaStreamSynchronize(stream_seg);
@@ -419,45 +428,45 @@ struct App {
 
         // verification round
         for( int r=0; r<images.size(); r++) {
-            this->fn_prepare(r);
-            this->fn_backbone();
+            this->step_prepare(r);
+            this->step_backbone();
             cudaEventRecord(event_backbone_ready_stage[0], stream_backbone);
 
             cudaStreamWaitEvent(stream_seg, event_backbone_ready_stage[0]);
             cudaStreamWaitEvent(stream_dep, event_backbone_ready_stage[0]);
-            this->fn_head_dla();
-            this->vis(r, "data/results/");            
+            this->step_head_dla();
+            this->vis(r, "results/");            
         }
     }
 
-    // export results from dla
+    // export results from dla buffer
     void vis(int r, std::string result_dir) {
         std::string prefix = result_dir + image_names[r];
         cudaDeviceSynchronize();
         cudaStreamSynchronize(stream_head);
 
         // depth output        
-        float* ddep; cudaMalloc(&ddep, 1024 * 1024 * sizeof(float));
+        float* ddep; cudaMalloc(&ddep, DEPTH_HxW * sizeof(float));
 
         // convert int8 to float val
         optimize::convert_int8_to_float(
             reinterpret_cast<int8_t*>(dep_output),
             ddep,             
-            1024 * 1024, 0.00735941017047f);
+            DEPTH_HxW, DEP_SCALE);
 
-        float* hdep = new float[1024 * 1024];
-        cudaMemcpy(hdep, ddep, 1024 * 1024 * sizeof(float), cudaMemcpyDeviceToHost);
+        float* hdep = new float[DEPTH_HxW];
+        cudaMemcpy(hdep, ddep, DEPTH_HxW * sizeof(float), cudaMemcpyDeviceToHost);
         std::ofstream dep_stream((prefix + "_depth.bin").c_str(), 
                                  std::fstream::out | std::fstream::binary);
-        dep_stream.write(reinterpret_cast<char*>(hdep), 1024 * 1024 * sizeof(float));
+        dep_stream.write(reinterpret_cast<char*>(hdep), DEPTH_HxW * sizeof(float));
         dep_stream.close();
 
         // segmentation output
-        char* hseg = new char[19 * 1024 * 1024];
-        cudaMemcpy(hseg, seg_output, 19 * 1024 * 1024, cudaMemcpyDeviceToHost);
+        char* hseg = new char[SEG_HxW * SEG_N_CLASS];
+        cudaMemcpy(hseg, seg_output, SEG_HxW * SEG_N_CLASS, cudaMemcpyDeviceToHost);
         std::ofstream seg_stream((prefix + "_seg.bin").c_str(), 
                                  std::fstream::out | std::fstream::binary);
-        seg_stream.write(reinterpret_cast<char*>(hseg), 1024 * 1024 * 19);
+        seg_stream.write(reinterpret_cast<char*>(hseg), SEG_HxW * SEG_N_CLASS);
         seg_stream.close();
 
         cudaFree(ddep);
@@ -475,11 +484,11 @@ struct App {
         head_mappings["input.148"] = feats[1].ifeat;
         head_mappings["input.224"] = feats[2].ifeat;
         head_mappings["input.292"] = feats[3].ifeat;
-        seg = std::make_shared<Engine>("data/engines/mtmi_seg_i8.engine", runtime, head_mappings);
-        dep = std::make_shared<Engine>("data/engines/mtmi_depth_i8.engine", runtime, head_mappings);
+        seg = std::make_shared<Engine>("engines/mtmi_seg_i8.engine", runtime, head_mappings);
+        dep = std::make_shared<Engine>("engines/mtmi_depth_i8.engine", runtime, head_mappings);
     }
 
-    void fn_head() {
+    void step_head() {
         // wait until backbone finish inference
         cudaStreamWaitEvent(stream_head, event_backbone_ready);
         seg->Forward(stream_head);
@@ -492,28 +501,28 @@ struct App {
         cudaDeviceSynchronize();
 
         // depth output        
-        float* ddep; cudaMalloc(&ddep, 1024 * 1024 * sizeof(float));
+        float* ddep; cudaMalloc(&ddep, DEPTH_HxW * sizeof(float));
 
         // convert int8 to float val
         optimize::convert_int8_to_float(
             reinterpret_cast<int8_t*>(dep->bindings["onnx::Mul_1912"]->ptr),
             ddep,             
-            1024 * 1024, 0.00735941017047f);
+            DEPTH_HxW, DEP_SCALE);
 
-        float* hdep = new float[1024 * 1024];
-        cudaMemcpy(hdep, ddep, 1024 * 1024 * sizeof(float), cudaMemcpyDeviceToHost);
+        float* hdep = new float[DEPTH_HxW];
+        cudaMemcpy(hdep, ddep, DEPTH_HxW * sizeof(float), cudaMemcpyDeviceToHost);
         std::ofstream dep_stream((prefix + "_depth.bin").c_str(), 
                                  std::fstream::out | std::fstream::binary);
-        dep_stream.write(reinterpret_cast<char*>(hdep), 1024 * 1024 * sizeof(float));
+        dep_stream.write(reinterpret_cast<char*>(hdep), DEPTH_HxW * sizeof(float));
         dep_stream.close();
 
         // segmentation output
         void* seg_ptr = seg->bindings["onnx::ArgMax_1963"]->ptr;
-        char* hseg = new char[19 * 1024 * 1024];
-        cudaMemcpy(hseg, seg_ptr, 19 * 1024 * 1024, cudaMemcpyDeviceToHost);
+        char* hseg = new char[SEG_HxW * SEG_N_CLASS];
+        cudaMemcpy(hseg, seg_ptr, SEG_HxW * SEG_N_CLASS, cudaMemcpyDeviceToHost);
         std::ofstream seg_stream((prefix + "_seg.bin").c_str(), 
                                  std::fstream::out | std::fstream::binary);
-        seg_stream.write(reinterpret_cast<char*>(hseg), 1024 * 1024 * 19);
+        seg_stream.write(reinterpret_cast<char*>(hseg), SEG_HxW * SEG_N_CLASS);
         seg_stream.close();
 
         cudaFree(ddep);
@@ -526,20 +535,22 @@ struct App {
 int main() {
     cudaSetDevice(0);
     auto runtime_deleter = [](IRuntime *runtime) {};
-	std::unique_ptr<IRuntime, decltype(runtime_deleter)> runtime{createInferRuntime(gLogger), runtime_deleter};
+	std::unique_ptr<IRuntime, decltype(runtime_deleter)> runtime{
+        createInferRuntime(gLogger), runtime_deleter};
+
     auto app = App(runtime.get());
 
 #ifdef USE_ORIN
-    // app.forward_sync(); 
-    app.forward_async();
+    // app.forward_sync();  // use this api if you want to execute in non-pipelined manner
+    app.forward_async();    // use this api for pipelined multi-task inference
 #else
     for( int r=0; r<app.image_names.size(); r++ ) {
-        app.fn_prepare(r);
-        app.fn_backbone();
+        app.step_prepare(r);
+        app.step_backbone();
         cudaEventRecord(app.event_backbone_ready, app.stream_backbone);
 
-        app.fn_head();
-        app.vis(r, "data/results/");
+        app.step_head();
+        app.vis(r, "results/");
     }
 #endif
     return 0;
