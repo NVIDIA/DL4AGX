@@ -9,7 +9,7 @@ For more details, you may refer to our webinar at [link](https://info.nvidia.com
 The original onnx model has been exported by running `python tools/pytorch2onnx_seg.py configs/mtformer/mtformer_export.py --checkpoint latest.pth`.
 
 ### Prerequisite
-You may install dependencies with `pip install onnx onnxruntime onnx-graphsurgeon onnx-simplifier`
+You may install dependencies with `pip install onnx onnxruntime onnx-graphsurgeon onnxsim`
 
 Step1: Simplify the onnx file. This is to manipulate the onnx graph, remove redundant nodes, do constant folding etc. For more detail, you may refer to [link](https://github.com/daquexian/onnx-simplifier)
 ```bash
