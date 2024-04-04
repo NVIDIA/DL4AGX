@@ -42,8 +42,8 @@ def colorize(value, cmap='jet', vmin=None, vmax=None):
     mapped_colors = colors[value_int]
     return mapped_colors
 
-img_dir = "data/img/"
-result_dir = "data/results/"
+img_dir = "tests/"
+result_dir = "results/"
 
 images = Path(img_dir).glob("*.png")
 
