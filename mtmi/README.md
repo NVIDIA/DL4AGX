@@ -1,19 +1,21 @@
 # MTMI-Inference
 ## Introduction
-This application is to demostrate the deployment of a multi-task network on orin platform. 
-To improve latency and throughput, we leveraging different compute devices on the SoC with CUDA, TensorRT and cuDLA.
+This application is to demostrate the deployment of a multi-task network on NVIDIA Drive Orin platform. 
+To improve latency and throughput, we leveraging different compute devices(GPU and DLA) on the SoC with CUDA, TensorRT and cuDLA.
+![assignment](./docs/mtmi-assignment.png)
+The schedule of the tasks are pipelined to pursue higher throughput with low overhead.
+![pipeline](./docs/mtmi-pipeline.png)
 For more details, you may refer to our webinar at [link](https://info.nvidia.com/autonomous-vehicle-multi-task-model-Inference.html)
 
 ## Onnx scripts
-
-The original onnx model has been exported by running `python tools/pytorch2onnx_seg.py configs/mtformer/mtformer_export.py --checkpoint latest.pth`.
+The original onnx model has been exported from a trained model. It's a multi-task network with Mix Transformer encoders(MiT) B0 as backbone. This backbone was originally used in [SegFormer](https://github.com/NVlabs/SegFormer). And for the segmentation head, it's a slim version of SegFormer-B0. For depth head, it was a progressive decoder orignally from [DEST](https://www.nvidia.com/en-us/on-demand/session/gtcspring22-s41429/). 
 
 ### Prerequisite
 You may install dependencies with `pip install onnx onnxruntime onnx-graphsurgeon onnxsim`
 
 Step1: Simplify the onnx file. This is to manipulate the onnx graph, remove redundant nodes, do constant folding etc. For more detail, you may refer to [link](https://github.com/daquexian/onnx-simplifier)
 ```bash
-python tools/onnx_slim.py
+python tools/onnx_simplify.py
 ```
 
 Step2: Split the onnx model into encoder, depth decoder and semantic segmentation decoder. Since encoder, depth and segmentation heads are assigned to different device, we also split the whole onnx graph into 3 sub-graphs and handle them separately.
@@ -40,14 +42,10 @@ With default arguments, you will get the calibration file under `calibration/`.
 python tools/create_calibration_cache.py --onnx=PATH_TO_HEAD_ONNX --image-path=PATH_TO_IMAGE_FILES --output-path=PATH_TO_SAVE_ENGINES --cache-path=PATH_TO_SAVE_CALIBRATION_FILES
 ```
 
-Note that for now you need to manually modify the last two lines in the cache file for segmentation due to an unknown bug which will leads to slower inference with DLA. Assume the modified calibration file is at `calibration/calibration_cache_seg_mod.bin`
-```
-input.408: 3e99a6d6
-onnx::ArgMax_1963: 3e98d50a
-```
+In order to achieve best INT8 resize perf on DLA, we carefully change the I/O scale manually for segmentation head while keeping the accuracy. TensorRT will choose a better DLA kernel with modified scales.
 
 ## Build TensorRT engine and DLA loadables using the calibration caches
-On orin platform:
+On NVIDIA Drive Orin platform:
 
 Build engine with "outputIOFormats=fp16:chw32" for MIT-b0 encoder:
 ```bash
@@ -70,6 +68,7 @@ trtexec --onnx=onnx_files/mtmi_depth_head.onnx \
         --verbose \
         --buildDLAStandalone \
         --calib=calibration/calibration_cache_depth.bin
+
 trtexec --onnx=onnx_files/mtmi_seg_head.onnx \
         --int8 \
         --saveEngine=loadables/mtmi_seg_i8_dla.loadable \
@@ -95,7 +94,7 @@ The inference app is designed as the following steps:
 3. cleanup and exit
 
 ### Build the app
-In this section, we will cross compile the application on x86 for orin platform.
+In this section, we will cross compile the application on x86 for NVIDIA Drive Orin platform.
 
 Docker: nvcr.io/drive-priority/driveos-pdk/drive-agx-orin-linux-aarch64-pdk-build-x86:6.0.8.1-0006.
 Launch docker with 
@@ -110,7 +109,7 @@ sh build.sh
 And you will get the executable file at `/DL4AGX/mtmi/inference_app/build/orin/mtmiapp`
 
 ### Run the app
-Please make sure you have the following files on Orin.
+Please make sure you have the following files on NVIDIA Drive Orin platform.
 ```yaml
 engines/
   mtmi_depth_i8_dla.loadable
@@ -141,3 +140,4 @@ Run the following python scripts to obtain visualization results from dumped bin
 python tools/visualize.py
 ```
 Then you will get image results in `results/`
+![result](./results/5.png)

@@ -2,4 +2,3 @@ onnx
 onnxruntime
 onnx-graphsurgeon
 onnxsim
-
