@@ -1,11 +1,13 @@
 # MTMI-Inference
 ## Introduction
 This application is to demostrate the deployment of a multi-task network on NVIDIA Drive Orin platform. 
-To improve latency and throughput, we leveraging different compute devices(GPU and DLA) on the SoC with CUDA, TensorRT and cuDLA.
-![assignment](./docs/mtmi-assignment.png)
-The schedule of the tasks are pipelined to pursue higher throughput with low overhead.
-![pipeline](./docs/mtmi-pipeline.png)
-For more details, you may refer to our webinar at [link](https://info.nvidia.com/autonomous-vehicle-multi-task-model-Inference.html)
+To improve latency and throughput, we leveraging different compute devices(GPU and DLA) on the SoC with CUDA, TensorRT and cuDLA. To better utilize all the compute resources, we decided to run encoder in FP16 on GPU, depth decoder in INT8 on DLA0 and segmentation decoder in INT8 on DLA1.
+<img src="./assets/mtmi-assignment.png" width="800">
+
+The schedule of the tasks are pipelined to pursue higher throughput with low overhead. When DLA0 and DLA1 are working on previous frame, we can launch the encoder for the current frame on GPU at the same time. So the executation is overlapped.
+<img src="./assets/mtmi-pipeline.png" width="800">
+
+For more details, you may refer to our webinar at the **[link](https://info.nvidia.com/autonomous-vehicle-multi-task-model-Inference.html)**
 
 ## Onnx scripts
 The original onnx model has been exported from a trained model. It's a multi-task network with Mix Transformer encoders(MiT) B0 as backbone. This backbone was originally used in [SegFormer](https://github.com/NVlabs/SegFormer). And for the segmentation head, it's a slim version of SegFormer-B0. For depth head, it was a progressive decoder orignally from [DEST](https://www.nvidia.com/en-us/on-demand/session/gtcspring22-s41429/). 
