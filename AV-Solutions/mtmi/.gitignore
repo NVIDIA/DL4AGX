@@ -1,0 +1,17 @@
+# all tmp files in calibration
+calibration/left
+calibration/right
+
+# build files
+inference_app/build
+
+# data files
+data/
+engines/
+onnx_files/
+
+#
+*.pkl
+*.bin
+*.ignore
+*.calib
