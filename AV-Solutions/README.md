@@ -5,4 +5,4 @@ This folder contains samples for autonomous vehicle on NVIDIA DRIVE platform, in
 [MTMI-Inference](./mtmi/) is to demostrate the deployment of a multi-task network on NVIDIA Drive Orin platform. 
 
 ## StreamPETR-TensorRT
-StreamPETR-TensorRT (coming soon) is a sample application to demostrate the deployment of [StreamPETR](https://github.com/exiawsh/StreamPETR/tree/main) on NVIDIA Drive Orin platform. 
+StreamPETR-TensorRT (coming soon) is a sample application to demostrate the deployment of [StreamPETR](https://github.com/exiawsh/StreamPETR/tree/main) on NVIDIA Drive Orin platform using TensorRT. 
