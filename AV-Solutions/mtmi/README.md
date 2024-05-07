@@ -143,3 +143,7 @@ python tools/visualize.py
 ```
 Then you will get image results in `results/`
 ![result](./results/5.png)
+
+### Notes
+1. `include/cudla_context.h` and `src/cudla_context.cpp` are derived from https://github.com/NVIDIA-AI-IOT/cuDLA-samples/
+2. `include/lodepng.h` and `src/lodepng.cpp` are from https://github.com/lvandeve/lodepng
