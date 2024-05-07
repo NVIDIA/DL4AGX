@@ -15,12 +15,12 @@ The original onnx model has been exported from a trained model. It's a multi-tas
 ### Prerequisite
 You may install dependencies with `pip install onnx onnxruntime onnx-graphsurgeon onnxsim`
 
-Step1: Simplify the onnx file. This is to manipulate the onnx graph, remove redundant nodes, do constant folding etc. For more detail, you may refer to [link](https://github.com/daquexian/onnx-simplifier)
+Step1 (optional): This step is to simplify the onnx file (i.e. remove redundant nodes, do constant folding). This is to manipulate the onnx graph, remove redundant nodes, do constant folding etc. For more detail, you may refer to [link](https://github.com/daquexian/onnx-simplifier)
 ```bash
 python tools/onnx_simplify.py
 ```
 
-Step2: Split the onnx model into encoder, depth decoder and semantic segmentation decoder. Since encoder, depth and segmentation heads are assigned to different device, we also split the whole onnx graph into 3 sub-graphs and handle them separately.
+Step2: This step is to split the whole onnx model into 3 subgraphs: encoder, depth decoder and semantic segmentation decoder. Since encoder, depth and segmentation heads are assigned to different device, we have to split the whole graph and handle each subgraph separately.
 ```bash
 python tools/onnx_split.py
 ```
