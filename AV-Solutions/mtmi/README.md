@@ -141,7 +141,7 @@ Run the following python scripts to obtain visualization results from dumped bin
 ```
 python tools/visualize.py
 ```
-Then you will get image results in `results/`
+Then the inference results will be visualized and saved in `results/`
 ![result](./results/5.png)
 
 ### Notes
