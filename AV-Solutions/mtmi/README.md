@@ -18,7 +18,8 @@ You may install dependencies with
 pip install onnx onnxruntime onnx-graphsurgeon onnxsim
 ```
 
-We also provided some onnx files containing random weights to help you go through the following process. You can download these files into `onnx_files/`
+We also provided some onnx files containing random weights to help you go through the following process. You can download these files into `onnx_files/`. For real use case, we encourage users to train their own models with backbone and heads of their choice in order to generate meaningful inference results in the end.
+
 | onnx | download links |
 |------| -------------- |
 | whole network | [mtmi.onnx](https://github.com/jin-yc10/storage/releases/download/mtmi/mtmi.onnx) |
