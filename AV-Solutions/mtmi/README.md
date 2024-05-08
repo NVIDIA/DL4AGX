@@ -1,13 +1,13 @@
 # MTMI-Inference
 ## Introduction
 This application is to demostrate the deployment of a multi-task network on NVIDIA Drive Orin platform. 
-To improve latency and throughput, we leveraging different compute devices(GPU and DLA) on the SoC with CUDA, TensorRT and cuDLA. To better utilize all the compute resources, we decided to run encoder in FP16 on GPU, depth decoder in INT8 on DLA0 and segmentation decoder in INT8 on DLA1.
+To improve latency and throughput, we leveraging different compute devices(GPU and DLA) on the SoC with CUDA, TensorRT and cuDLA. To better utilize all the compute resources, we decided to run encoder in FP16 on GPU, depth decoder in INT8 on DLA0 and segmentation decoder in INT8 on DLA1.\
 <img src="./assets/mtmi-assignment.png" width="800">
 
-The schedule of the tasks are pipelined to pursue higher throughput with low overhead. When DLA0 and DLA1 are working on previous frame, we can launch the encoder for the current frame on GPU at the same time. So the executation is overlapped.
+The schedule of the tasks are pipelined to pursue higher throughput with low overhead. When DLA0 and DLA1 are working on previous frame, we can launch the encoder for the current frame on GPU at the same time. So the executation is overlapped.\
 <img src="./assets/mtmi-pipeline.png" width="800">
 
-For more details, you may refer to our webinar at the **[link](https://info.nvidia.com/autonomous-vehicle-multi-task-model-Inference.html)**
+For more details, you may refer to our webinar [Optimizing Multi-task Model Inference for Autonomous Vehicles](https://www.nvidia.com/en-us/on-demand/session/other2024-inferenceauto/)
 
 ## Onnx scripts
 The original onnx model has been exported from a trained model. It's a multi-task network with Mix Transformer encoders(MiT) B0 as backbone. This backbone was originally used in [SegFormer](https://github.com/NVlabs/SegFormer). And for the segmentation head, it's a slim version of SegFormer-B0. For depth head, it was a progressive decoder orignally from [DEST](https://www.nvidia.com/en-us/on-demand/session/gtcspring22-s41429/). 
@@ -18,7 +18,7 @@ You may install dependencies with
 pip install onnx onnxruntime onnx-graphsurgeon onnxsim
 ```
 
-We also provided some onnx files containing random weights to help you go through the following process. You can download these files into `AV-Solutions/mtmi/onnx_files/`
+We also provided some onnx files containing random weights to help you go through the following process. You can download these files into `onnx_files/`
 | onnx | download links |
 |------| -------------- |
 | whole network | [mtmi.onnx](https://github.com/jin-yc10/storage/releases/download/mtmi/mtmi.onnx) |
@@ -27,7 +27,7 @@ We also provided some onnx files containing random weights to help you go throug
 | depth head | [mtmi_depth_head.onnx](https://github.com/jin-yc10/storage/releases/download/mtmi/mtmi_depth_head.onnx) |
 | segmentation head | [mtmi_seg_head.onnx](https://github.com/jin-yc10/storage/releases/download/mtmi/mtmi_seg_head.onnx) |
 
-Step1: Simplify the onnx file. This is to manipulate the onnx graph, remove redundant nodes, do constant folding etc. For more detail about the simplification, you may refer to [link](https://github.com/daquexian/onnx-simplifier)
+Step1: Simplify the onnx file. This is to manipulate the onnx graph, remove redundant nodes, do constant folding etc. For more detail about the simplification, you may refer to [daquexian/onnx-simplifier](https://github.com/daquexian/onnx-simplifier)
 ```bash
 python tools/onnx_simplify.py
 ```
