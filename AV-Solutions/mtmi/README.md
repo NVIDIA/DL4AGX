@@ -1,4 +1,4 @@
-# MTMI-Inference
+# Multi-task model inference on multiple devices
 ## Introduction
 This application is to demostrate the deployment of a multi-task network on NVIDIA Drive Orin platform. 
 To improve latency and throughput, we leveraging different compute devices(GPU and DLA) on the SoC with CUDA, TensorRT and cuDLA. To better utilize all the compute resources, we decided to run encoder in FP16 on GPU, depth decoder in INT8 on DLA0 and segmentation decoder in INT8 on DLA1.\
@@ -9,7 +9,7 @@ The schedule of the tasks are pipelined to pursue higher throughput with low ove
 
 For more details, you may refer to our webinar [Optimizing Multi-task Model Inference for Autonomous Vehicles](https://www.nvidia.com/en-us/on-demand/session/other2024-inferenceauto/)
 
-## Onnx scripts
+## Prepare onnx models
 The original onnx model has been exported from a trained model. It's a multi-task network with Mix Transformer encoders(MiT) B0 as backbone. This backbone was originally used in [SegFormer](https://github.com/NVlabs/SegFormer). And for the segmentation head, it's a slim version of SegFormer-B0. For depth head, it was a progressive decoder orignally from [DEST](https://www.nvidia.com/en-us/on-demand/session/gtcspring22-s41429/). 
 
 ### Prerequisite
@@ -157,6 +157,6 @@ python tools/visualize.py
 Then you will get image results in `results/`
 ![result](./results/5.png)
 
-### Notes
-1. `include/cudla_context.h` and `src/cudla_context.cpp` are derived from https://github.com/NVIDIA-AI-IOT/cuDLA-samples/
-2. `include/lodepng.h` and `src/lodepng.cpp` are from https://github.com/lvandeve/lodepng
+### References
+1. https://github.com/NVIDIA-AI-IOT/cuDLA-samples/
+2. https://github.com/lvandeve/lodepng
