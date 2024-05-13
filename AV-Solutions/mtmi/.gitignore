@@ -8,7 +8,7 @@ inference_app/build
 # data files
 data/
 engines/
-onnx_files/
+scratch/
 
 #
 *.pkl

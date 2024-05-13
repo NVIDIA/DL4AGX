@@ -1,1 +1,2 @@
 tests/test.png filter=lfs diff=lfs merge=lfs -text
+onnx_files/*.onnx filter=lfs diff=lfs merge=lfs -text
