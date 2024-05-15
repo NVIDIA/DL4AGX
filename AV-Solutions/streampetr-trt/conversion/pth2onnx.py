@@ -252,7 +252,7 @@ def main():
             torch.from_numpy(np.random.uniform(-0.5, 0.5, size=(1, 4, 4))).float(),  
             torch.from_numpy(np.random.uniform(-0.5, 0.5, size=(1, dmem_init, 256))).float(),
             torch.from_numpy(np.random.uniform(-0.5, 0.5, size=(1, dmem_init, 3))).float(),
-            torch.from_numpy(np.random.uniform(-0.5, 0.5, size=(1, 512, 1))).double(),
+            torch.from_numpy(np.random.uniform(-0.5, 0.5, size=(1, 512, 1))).float(),
             torch.from_numpy(np.random.uniform(-0.5, 0.5, size=(1, dmem_init, 4, 4))).float(),
             torch.from_numpy(np.random.uniform(-0.5, 0.5, size=(1, dmem_init, 2))).float(),
         ]
