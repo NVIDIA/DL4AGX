@@ -18,15 +18,15 @@ You may install dependencies with
 pip install onnx onnxruntime onnx-graphsurgeon onnxsim
 ```
 
-We also provided some onnx files containing random weights to help you go through the following process. You can download these files into `onnx_files/`. For real use case, we encourage users to train their own models with backbone and heads of their choice in order to generate meaningful inference results in the end.
+We also provided some onnx files containing random weights to help you go through the following process. You can find these files in `AV-Solutions/mtmi/onnx_files/`. These files are handled by git-lfs. To setup git-lfs, you may refer to this tutorial from github [installing-git-large-file-storage](https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage?platform=linux). For real use case, we encourage users to choose and train your own models with backbone and heads in order to generate decent inference results in the end.
 
-| onnx | download links |
+| onnx | links |
 |------| -------------- |
-| whole network | [mtmi.onnx](https://github.com/jin-yc10/storage/releases/download/mtmi/mtmi.onnx) |
-| simplified whole network | [mtmi_slim.onnx](https://github.com/jin-yc10/storage/releases/download/mtmi/mtmi_slim.onnx) |
-| image encoder | [mtmi_encoder.onnx](https://github.com/jin-yc10/storage/releases/download/mtmi/mtmi_encoder.onnx) |
-| depth head | [mtmi_depth_head.onnx](https://github.com/jin-yc10/storage/releases/download/mtmi/mtmi_depth_head.onnx) |
-| segmentation head | [mtmi_seg_head.onnx](https://github.com/jin-yc10/storage/releases/download/mtmi/mtmi_seg_head.onnx) |
+| whole network | [mtmi.onnx](./onnx_files/mtmi.onnx) |
+| simplified whole network | [mtmi_slim.onnx](./onnx_files/mtmi_slim.onnx) |
+| image encoder | [mtmi_encoder.onnx](./onnx_files/mtmi_encoder.onnx) |
+| depth head | [mtmi_depth_head.onnx](./onnx_files/mtmi_depth_head.onnx) |
+| segmentation head | [mtmi_seg_head.onnx](./onnx_files/mtmi_seg_head.onnx) |
 
 Step1: Simplify the onnx file. This is to manipulate the onnx graph, remove redundant nodes, do constant folding etc. For more detail about the simplification, you may refer to [daquexian/onnx-simplifier](https://github.com/daquexian/onnx-simplifier)
 ```bash
