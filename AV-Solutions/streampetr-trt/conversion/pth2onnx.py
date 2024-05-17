@@ -236,7 +236,7 @@ def main():
     section = args.section
     if args.section == "extract_img_feat":        
         tm = TrtEncoderContainer(model.module)
-        arrs = [torch.from_numpy(np.random.uniform(-0.5, 0.5, size=(6, 3, 256, 704))).float(),]
+        arrs = [torch.from_numpy(np.random.uniform(-0.5, 0.5, size=(1, 6, 3, 256, 704))).float(),]
         input_names=["img"]
         output_names=["img_feats"]
 
