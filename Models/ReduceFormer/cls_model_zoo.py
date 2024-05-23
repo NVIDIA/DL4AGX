@@ -39,6 +39,5 @@ def create_cls_model(name: str, pretrained=True, weight_url: str or None = None,
         raise ValueError(f"Do not find {name} in the model zoo. List of models: {list(model_dict.keys())}")
     else:
         model = model_dict[model_id](**kwargs)
-    if model_id in ["l1", "l2", "l3"]:
-        set_norm_eps(model, 1e-7)
+        
     return model
