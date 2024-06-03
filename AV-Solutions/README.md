@@ -6,3 +6,6 @@ This folder contains samples for autonomous vehicle on NVIDIA DRIVE platform, in
 
 ## StreamPETR-TensorRT
 [StreamPETR-TensorRT](./streampetr-trt/) is a sample application to demostrate the deployment of [StreamPETR](https://github.com/exiawsh/StreamPETR/tree/main) on NVIDIA Drive Orin platform using TensorRT. 
+
+## UniAD-TensorRT
+[UniAD](https://arxiv.org/abs/2212.10156) is a Unified Autonomous Driving algorithm framework which follows an end-to-end manner, taking multi view vision input and could output planning results directly. Unid achieves SOTA performance in many autonomous driving tasks especially on planning task. [UniAD-TensorRT](./uniad_tensorrt/) is a sample application to demostrate the deployment of [UniAD](https://github.com/OpenDriveLab/UniAD) on NVIDIA Drive Orin platform using TensorRT. 
