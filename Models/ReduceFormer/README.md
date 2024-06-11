@@ -5,9 +5,9 @@
   <img src="./resources/reduceformer_attn.png" height="360">
 </div>
 
-**[Paper](https://arxiv.org/abs/2204.13791) | [Poster](./resources/ReduceFormer_CVPRW_2024_Poster.pdf)**<br/>
+### [Paper](https://arxiv.org/abs/2204.13791) | [Poster](./resources/ReduceFormer_CVPRW_2024_Poster.pdf)
 Arxiv link should be UPDATED!! 
-John Yang, Le An, Su Inn Park  
+<!-- John Yang, Le An, Su Inn Park   -->
 
 ReduceFormer overcomes the computational demands of transformers in vision tasks, 
 offering efficient alternatives to matrix multiplication and Softmax while retaining the benefits of attention mechanisms.
