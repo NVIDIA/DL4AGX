@@ -2,11 +2,11 @@
 
 <!-- ![image](resources/image.png) -->
 <div align="center">
-  <img src="./resources/reduceformer_attn.png" height="300">
+  <img src="./resources/reduceformer_attn.png" height="360">
 </div>
 
-***[ReduceFormer: Attention with Tensor Reduction by Summation ](https://arxiv.org/abs/2204.13791)***<br />
-([paper](https://arxiv.org/abs/2205.14756)) Arxiv link should be UPDATED!!
+**[Paper](https://arxiv.org/abs/2204.13791) | [Poster](./resources/ReduceFormer_CVPRW_2024_Poster.pdf)**<br/>
+Arxiv link should be UPDATED!! 
 John Yang, Le An, Su Inn Park  
 
 ReduceFormer overcomes the computational demands of transformers in vision tasks, 
