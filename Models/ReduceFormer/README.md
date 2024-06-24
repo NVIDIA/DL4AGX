@@ -5,8 +5,7 @@
   <img src="./resources/reduceformer_attn.png" height="360">
 </div>
 
-### [Paper](https://arxiv.org/abs/2204.13791) | [Poster](./resources/ReduceFormer_CVPRW_2024_Poster.pdf)
-Arxiv link should be UPDATED!! 
+### [Paper](https://arxiv.org/abs/2406.07488) | [Poster](./resources/ReduceFormer_CVPRW_2024_Poster.pdf)
 <!-- John Yang, Le An, Su Inn Park   -->
 
 ReduceFormer overcomes the computational demands of transformers in vision tasks, 
