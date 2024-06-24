@@ -12,5 +12,5 @@ Please refer to our [blogpost](https://developer.nvidia.com/blog/emulating-the-a
 
 ## ReduceFormer
 [ReduceFormer](./ReduceFormer/) simplifies transformer architectures for vision tasks by using reduction and element-wise multiplication, enhancing inference performance and making it ideal for edge devices and high-throughput cloud computing.
-For more details about ReduceFormer, please refer to the [paper](https://arxiv.org/abs/2204.13791).
+For more details about ReduceFormer, please refer to our spotlighted [paper](https://arxiv.org/abs/2406.07488) published at [2024 CVPR Workshop on Transformers for Vision](https://sites.google.com/view/t4v-cvpr24).
 
