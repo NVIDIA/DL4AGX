@@ -29,7 +29,8 @@ cd efficientvit
 mkdir docker
 cp path/to/reduceformer/docker/Dockerfile docker/
 cp path/to/reduceformer/configs/*.yaml configs/cls/imagenet/
-cp path/to/reduceformer/reduceformer/*.py efficientvit/models/efficientvit/
+mkdir efficientvit/models/reduceformer/
+cp path/to/reduceformer/reduceformer/*.py efficientvit/models/reduceformer/
 cp path/to/reduceformer/cls_model_zoo.py efficientvit/
 ```
 
@@ -46,12 +47,15 @@ efficientvit
  ├ efficientvit
  | ├ cls_model_zoo.py 
  │ ├ models
- │ │ └ efficientvit
+ │ │ ├ efficientvit
+ │ │ └ reduceformer
  │ │   ├ __init__.py
  │ │   ├ backbone.py
  │ │   └ cls.py
 ...
 ```
+`cls_model_zoo.py` will be overwritten over EfficientViT's as copied into its repository. 
+
 
 ## Training
 

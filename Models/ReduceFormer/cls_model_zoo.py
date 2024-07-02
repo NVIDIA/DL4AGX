@@ -13,10 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from efficientvit.models.efficientvit import (
+from efficientvit.models.reduceformer import (
     ReduceFormerCls,
     ######################
-    reduceformer_cls_b0,
     reduceformer_cls_b1,
     reduceformer_cls_b2,
     reduceformer_cls_b3,
@@ -28,10 +27,9 @@ __all__ = ["create_cls_model"]
 
 def create_cls_model(name: str, pretrained=True, weight_url: str or None = None, **kwargs) -> ReduceFormerCls:
     model_dict = {
-        "b0": reduceformer_cls_b0,
-        "b1": reduceformer_cls_b1,
-        "b2": reduceformer_cls_b2,
-        "b3": reduceformer_cls_b3,
+        "b1_rf": reduceformer_cls_b1,
+        "b2_rf": reduceformer_cls_b2,
+        "b3_rf": reduceformer_cls_b3,
     }
 
     model_id = name.split("-")[0]

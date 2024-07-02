@@ -1,5 +1,5 @@
 net_config:
-  name: b1
+  name: b1_rf
   dropout: 0
 
 data_provider:
