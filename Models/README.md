@@ -1,5 +1,5 @@
 # Models
-This folder contains implementations of efficient model architecture designs, offer improved accuracy and efficiency. 
+This folder contains implementations of efficient model architecture designs, which offer improved accuracy and efficiency. 
 These methods are optimized for autonomous vehicle use cases, offering benefits such as faster inference speed, better resource utilization, and increased robustness of predictions.
 
 ## DEST: Depth Estimation with Simplified Transformer
