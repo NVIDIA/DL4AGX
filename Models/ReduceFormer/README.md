@@ -115,7 +115,7 @@ Here are the results we achieved with [the training configurations](configs).
 | ReduceFormer-B3 | 288x288 | 84.2 | 48.1M  | 6.40G  | 3.03ms |
 
 Latency is measured on NVIDIA DRIVE Orin with TensorRT-8.6 in FP16 precision.
-For additional findings on DRIVE Orin and related platforms, we direct readers to consult our comprehensive paper.
+For additional findings on DRIVE Orin and related platforms, we direct readers to our paper.
 
 ## License
 The provided code can be used for research or other non-commercial purposes. For details please check the [LICENSE](LICENSE) file.
