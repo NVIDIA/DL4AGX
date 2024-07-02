@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,6 @@ from efficientvit.models.utils import build_kwargs_from_config
 __all__ = [
     "ReduceFormerCls",
     ######################
-    "reduceformer_cls_b0",
     "reduceformer_cls_b1",
     "reduceformer_cls_b2",
     "reduceformer_cls_b3",
@@ -66,20 +65,6 @@ class ReduceFormerCls(nn.Module):
         feed_dict = self.backbone(x)
         output = self.head(feed_dict)
         return output
-
-
-def reduceformer_cls_b0(**kwargs) -> ReduceFormerCls:
-    from reduceformer.models.reduceformer.backbone import reduceformer_backbone_b0
-
-    backbone = reduceformer_backbone_b0(**kwargs)
-
-    head = ClsHead(
-        in_channels=128,
-        width_list=[1024, 1280],
-        **build_kwargs_from_config(kwargs, ClsHead),
-    )
-    model = ReduceFormerCls(backbone, head)
-    return model
 
 
 def reduceformer_cls_b1(**kwargs) -> ReduceFormerCls:

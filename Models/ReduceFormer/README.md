@@ -42,8 +42,7 @@ efficientvit
  │   └ imagenet 
  │     ├ b1_rf.yaml
  │     ├ b2_rf.yaml
- │     ├ b3_rf.yaml
- │     └ default.yaml
+ │     └ b3_rf.yaml
  ├ efficientvit
  | ├ cls_model_zoo.py 
  │ ├ models
@@ -101,18 +100,18 @@ Here are the results we achieved with [the training configurations](configs).
 |----------------------|:----------:|:----------:|:---------:|:----------:|:------------:|
 | ReduceFormer-B1 | 224x224 | 79.3 | 9.0M | 0.52G | 0.68ms |
 | ReduceFormer-B1 | 256x256 | 80.1 | 9.0M | 0.67G | 0.73ms |
-| ReduceFormer-B1 | 288x288 | 80.6 | 9.0M | 0.85G | 0.86ms |
+| ReduceFormer-B1 | 288x288 | 80.6 | 9.0M | 0.85G | 0.87ms |
 | |
-| ReduceFormer-B2 | 224x224 | 81.9 | 24.5M  | 1.68G  | 1.38ms |
-| ReduceFormer-B2 | 256x256 | 82.6 | 24.5M  | 2.19G  | 1.51ms |
-| ReduceFormer-B2 | 288x288 | 83.0 | 24.5M  | 2.77G  | 1.80ms |
+| ReduceFormer-B2 | 224x224 | 81.9 | 24.5M  | 1.68G  | 1.29ms |
+| ReduceFormer-B2 | 256x256 | 82.6 | 24.5M  | 2.19G  | 1.41ms |
+| ReduceFormer-B2 | 288x288 | 83.0 | 24.5M  | 2.77G  | 1.68ms |
 | |
-| ReduceFormer-B3 | 224x224 | 83.4 | 48.1M  | 3.87G  | 2.21ms |
+| ReduceFormer-B3 | 224x224 | 83.4 | 48.1M  | 3.87G  | 2.22ms |
 | ReduceFormer-B3 | 256x256 | 83.6 | 48.1M  | 5.06G  | 2.43ms |
-| ReduceFormer-B3 | 288x288 | 84.2 | 48.1M  | 6.40G  | 2.99ms |
+| ReduceFormer-B3 | 288x288 | 84.2 | 48.1M  | 6.40G  | 3.03ms |
 
 Latency is measured on NVIDIA DRIVE Orin with TensorRT-8.6 in FP16 precision.
-
+For additional findings on DRIVE Orin and related platforms, we direct readers to consult our comprehensive paper.
 
 ## License
 The provided code can be used for research or other non-commercial purposes. For details please check the [LICENSE](LICENSE) file.

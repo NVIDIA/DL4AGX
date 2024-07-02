@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +31,6 @@ from efficientvit.models.nn import (
 
 __all__ = [
     "ReduceFormerBackbone",
-    "reduceformer_backbone_b0",
     "reduceformer_backbone_b1",
     "reduceformer_backbone_b2",
     "reduceformer_backbone_b3",
@@ -308,17 +307,6 @@ class ReduceFormerBackbone(nn.Module):
             output_dict["stage%d" % stage_id] = x = stage(x)
         output_dict["stage_final"] = x
         return output_dict
-
-
-def reduceformer_backbone_b0(**kwargs) -> ReduceFormerBackbone:
-    backbone = ReduceFormerBackbone(
-        width_list=[8, 16, 32, 64, 128],
-        depth_list=[1, 2, 2, 2, 2],
-        dim=16,
-        act_func="relu",
-        **build_kwargs_from_config(kwargs, ReduceFormerBackbone),
-    )
-    return backbone
 
 def reduceformer_backbone_b1(**kwargs) -> ReduceFormerBackbone:
     backbone = ReduceFormerBackbone(
