@@ -16,7 +16,7 @@
 import torch
 import torch.nn as nn
 
-from efficientvit.models.efficientvit.backbone import ReduceFormerBackbone
+from efficientvit.models.reduceformer.backbone import ReduceFormerBackbone
 from efficientvit.models.nn import ConvLayer, LinearLayer, OpSequential
 from efficientvit.models.utils import build_kwargs_from_config
 
@@ -68,7 +68,7 @@ class ReduceFormerCls(nn.Module):
 
 
 def reduceformer_cls_b1(**kwargs) -> ReduceFormerCls:
-    from reduceformer.models.reduceformer.backbone import reduceformer_backbone_b1
+    from efficientvit.models.reduceformer.backbone import reduceformer_backbone_b1
 
     backbone = reduceformer_backbone_b1(**kwargs)
 
@@ -82,7 +82,7 @@ def reduceformer_cls_b1(**kwargs) -> ReduceFormerCls:
 
 
 def reduceformer_cls_b2(**kwargs) -> ReduceFormerCls:
-    from reduceformer.models.reduceformer.backbone import reduceformer_backbone_b2
+    from efficientvit.models.reduceformer.backbone import reduceformer_backbone_b2
 
     backbone = reduceformer_backbone_b2(**kwargs)
 
@@ -96,7 +96,7 @@ def reduceformer_cls_b2(**kwargs) -> ReduceFormerCls:
 
 
 def reduceformer_cls_b3(**kwargs) -> ReduceFormerCls:
-    from reduceformer.models.reduceformer.backbone import reduceformer_backbone_b3
+    from efficientvit.models.reduceformer.backbone import reduceformer_backbone_b3
 
     backbone = reduceformer_backbone_b3(**kwargs)
 

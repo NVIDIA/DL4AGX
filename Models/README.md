@@ -1,6 +1,5 @@
 # Models
-This folder contains implementations of efficient model architecture designs, which offer improved accuracy and efficiency. 
-These methods are optimized for autonomous vehicle use cases, offering benefits such as faster inference speed, better resource utilization, and increased robustness of predictions.
+This folder contains implementations of efficient model architecture designs with improved accuracy, faster inference speed, and better resource utilization, which make them especially suitable on edge devices such as in autonomous vehicle applications.
 
 ## DEST: Depth Estimation with Simplified Transformer
 [DEST](./DEST/) employs a GPU-friendly, simplified attention block design, reducing model size and computation by over 80% while increasing accuracy and speed, validated on depth estimation and semantic segmentation tasks. 
@@ -8,7 +7,7 @@ For more details about the method, check out our spotlighted [paper](https://arx
 
 ## Covolutional Self-Attention 
 [Convolutional Self-Attention](./ConvSelfAttention/) uniquely identifies one-to-many feature relationships using only convolutions and simple tensor manipulations, enabling seamless operation in TensorRT’s restricted mode and making it ideal for safety-critical autonomous vehicle applications. 
-Please refer to our [blogpost](https://developer.nvidia.com/blog/emulating-the-attention-mechanism-in-transformer-models-with-a-fully-convolutional-network/) for more references. 
+Please refer to our [blogpost](https://developer.nvidia.com/blog/emulating-the-attention-mechanism-in-transformer-models-with-a-fully-convolutional-network/) for more details. 
 
 ## ReduceFormer
 [ReduceFormer](./ReduceFormer/) simplifies transformer architectures for vision tasks by using reduction and element-wise multiplication, enhancing inference performance and making it ideal for edge devices and high-throughput cloud computing.

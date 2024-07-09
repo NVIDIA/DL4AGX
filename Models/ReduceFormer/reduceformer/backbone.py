@@ -104,8 +104,10 @@ class RF_Attn(nn.Module):
         if qkv.dtype == torch.float16:
             qkv = qkv.float()
         
-        B, _, H, W = list(qkv.size())
-        qkv = torch.reshape(qkv, (B, 3, -1, H, W))
+        if len(qkv.shape) == 4: 
+            B, _, H, W = list(qkv.size())     
+            qkv = torch.reshape(qkv, (B, 3, -1, H, W))
+            
         q, k, v = (
             qkv[:, 0, :, :, :], 
             qkv[:, 1, :, :, :],
