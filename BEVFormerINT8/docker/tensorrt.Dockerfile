@@ -121,6 +121,10 @@ RUN perl -pi -e 's/&\(/(int*)&\(/g' ${DERRYHUB_PROJECT_DIR}/mmdeploy/csrc/mmdepl
 RUN cd ${DERRYHUB_PROJECT_DIR}/third_party/bev_mmdet3d && \
     MAX_JOBS=4 python setup.py build develop --user
 
+# Update torch to ONNX script in BEVFormer_tensorrt to enable some constant folding
+RUN perl -pi -e 's/keep_initializers_as_inputs=True/keep_initializers_as_inputs=False/g' ${DERRYHUB_PROJECT_DIR}/det2trt/convert/pytorch2onnx.py && \
+    perl -pi -e 's/do_constant_folding=False/do_constant_folding=True/g' ${DERRYHUB_PROJECT_DIR}/det2trt/convert/pytorch2onnx.py
+
 RUN sudo apt-get install -y libgl1-mesa-glx
 
 # Set environment and working directory
