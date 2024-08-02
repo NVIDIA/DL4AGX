@@ -1,0 +1,43 @@
+model:
+    name: 'SelfSupModel_dest' 
+    optimizer:
+        name: 'Adam'
+        depth:
+            lr: 0.000007
+        pose:
+            lr: 0.00001 
+    scheduler:
+        name: 'StepLR'
+        step_size: 10   
+        gamma: 0.5
+    depth_net:
+        name: 'DESTNet'
+        version: '1A'
+    pose_net:
+        name: 'PoseNet'  
+    params:
+        crop: 'garg'
+        min_depth: 0.0
+        max_depth: 80.0
+datasets:
+    augmentation:
+        image_shape: (192, 640)
+    train:
+        batch_size: 10
+        num_workers: 12
+        dataset: ['KITTI']
+        path: ['data/datasets/KITTI_raw']
+        split: ['data_splits/eigen_zhou_files.txt']
+        depth_type: ['velodyne']
+        repeat: [5]
+    validation:
+        dataset: ['KITTI']
+        path: ['data/datasets/KITTI_raw']
+        split: ['data_splits/eigen_val_files.txt',
+                'data_splits/eigen_test_files.txt']
+        depth_type: ['velodyne']
+    test:
+        dataset: ['KITTI']
+        path: ['data/datasets/KITTI_raw']
+        split: ['data_splits/eigen_test_files.txt']
+        depth_type: ['velodyne']
