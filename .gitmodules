@@ -1,0 +1,6 @@
+[submodule "AV-Solutions/uniad-trt/dependencies/stb"]
+	path = AV-Solutions/uniad-trt/dependencies/stb
+	url = https://github.com/nothings/stb.git
+[submodule "AV-Solutions/uniad-trt/dependencies/BEVFormer_tensorrt"]
+	path = AV-Solutions/uniad-trt/dependencies/BEVFormer_tensorrt
+	url = https://github.com/DerryHub/BEVFormer_tensorrt.git
