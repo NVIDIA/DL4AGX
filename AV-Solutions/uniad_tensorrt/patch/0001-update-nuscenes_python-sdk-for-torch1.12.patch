@@ -1,0 +1,2765 @@
+From 7681ed7f573dbb6322eb37e22d517739cb9f9b75 Mon Sep 17 00:00:00 2001
+From: Bianjiang Yang <bianjiangy@bianjiangy-mlt.client.nvidia.com>
+Date: Tue, 13 Aug 2024 22:51:30 -0700
+Subject: [PATCH] update nuscenes_python-sdk for torch1.12
+
+---
+ python-sdk/nuscenes/can_bus/README.md         | 144 -------
+ python-sdk/nuscenes/eval/common/loaders.py    | 163 +-------
+ python-sdk/nuscenes/eval/detection/README.md  | 319 ---------------
+ .../nuscenes/eval/detection/evaluate.py       |  53 +--
+ python-sdk/nuscenes/eval/detection/render.py  |   7 -
+ .../eval/detection/tests/test_evaluate.py     |  41 +-
+ python-sdk/nuscenes/eval/lidarseg/README.md   | 257 ------------
+ python-sdk/nuscenes/eval/panoptic/README.md   | 311 --------------
+ .../nuscenes/eval/panoptic/baselines.py       |   2 +-
+ python-sdk/nuscenes/eval/panoptic/evaluate.py |  16 +-
+ .../get_panoptic_from_seg_det_or_track.py     |   2 +-
+ .../eval/panoptic/panoptic_seg_evaluator.py   |   2 +-
+ .../eval/panoptic/panoptic_track_evaluator.py |   4 +-
+ python-sdk/nuscenes/eval/panoptic/utils.py    |   4 +-
+ python-sdk/nuscenes/eval/prediction/README.md | 117 ------
+ .../prediction/baseline_model_inference.py    |   2 +-
+ .../prediction/docker_container/README.md     |  74 ----
+ .../docker_container/docker/Dockerfile        |  40 --
+ .../docker/docker-compose.yml                 |  17 -
+ .../nuscenes/eval/prediction/metrics.py       |   4 +-
+ .../prediction/submission/extra_packages.txt  |   0
+ python-sdk/nuscenes/eval/tracking/README.md   | 378 ------------------
+ python-sdk/nuscenes/eval/tracking/algo.py     |  20 +-
+ python-sdk/nuscenes/eval/tracking/evaluate.py |  25 +-
+ python-sdk/nuscenes/eval/tracking/loaders.py  |  12 +-
+ python-sdk/nuscenes/eval/tracking/mot.py      |   2 +-
+ .../eval/tracking/tests/test_evaluate.py      |  37 +-
+ .../map_expansion/arcline_path_utils.py       |   2 +-
+ .../panoptic/generate_panoptic_labels.py      |   6 +-
+ .../nuscenes/panoptic/panoptic_utils.py       |   2 +-
+ .../nuscenes/prediction/models/covernet.py    |   3 +-
+ python-sdk/nuscenes/prediction/models/mtp.py  |   3 +-
+ python-sdk/nuscenes/scripts/README.md         |   1 -
+ python-sdk/nuscenes/utils/splits.py           |  53 ---
+ 34 files changed, 87 insertions(+), 2036 deletions(-)
+ delete mode 100644 python-sdk/nuscenes/can_bus/README.md
+ delete mode 100644 python-sdk/nuscenes/eval/detection/README.md
+ delete mode 100644 python-sdk/nuscenes/eval/lidarseg/README.md
+ delete mode 100644 python-sdk/nuscenes/eval/panoptic/README.md
+ delete mode 100644 python-sdk/nuscenes/eval/prediction/README.md
+ delete mode 100644 python-sdk/nuscenes/eval/prediction/docker_container/README.md
+ delete mode 100644 python-sdk/nuscenes/eval/prediction/docker_container/docker/Dockerfile
+ delete mode 100644 python-sdk/nuscenes/eval/prediction/docker_container/docker/docker-compose.yml
+ delete mode 100644 python-sdk/nuscenes/eval/prediction/submission/extra_packages.txt
+ delete mode 100644 python-sdk/nuscenes/eval/tracking/README.md
+ delete mode 100644 python-sdk/nuscenes/scripts/README.md
+
+diff --git a/python-sdk/nuscenes/can_bus/README.md b/python-sdk/nuscenes/can_bus/README.md
+deleted file mode 100644
+index a493b97..0000000
+--- a/python-sdk/nuscenes/can_bus/README.md
++++ /dev/null
+@@ -1,144 +0,0 @@
+-# nuScenes CAN bus expansion
+-This page describes the Controller Area Network (CAN) bus expansion for the nuScenes dataset.
+-This is additional information that was published in January 2020 after the initial nuScenes release in March 2019.
+-The data can be used for tasks such as trajectory estimation, object detection and tracking.
+-
+-# Overview
+-- [Introduction](#introduction)
+-  - [Notation](#notation)
+-- [Derived messages](#derived-messages)
+-  - [Meta](#meta)
+-  - [Route](#route)
+-- [CAN bus messages](#can-bus-messages)
+-  - [IMU](#imu)
+-  - [Pose](#pose)
+-  - [Steer Angle Feedback](#steer-angle-feedback)
+-  - [Vehicle Monitor](#vehicle-monitor)
+-  - [Zoe Sensors](#zoe-sensors)
+-  - [Zoe Vehicle Info](#zoe-vehicle-info)
+-
+-## Introduction
+-The nuScenes dataset provides sensor data and annotations for 1000 scenes.
+-The CAN bus expansion includes additional information for these scenes.
+-The [CAN bus](https://copperhilltech.com/a-brief-introduction-to-controller-area-network/) is used for communication in automobiles and includes low-level messages regarding position, velocity, acceleration, steering, lights, battery and many more.
+-In addition to this raw data we also provide some meta data, such as statistics of the different message types.
+-Note that the CAN bus data is highly experimental.
+-Some data may be redundant across different messages.
+-Finally we extract a snippet of the route that the vehicle is currently travelling on.
+-
+-### Notation
+-All messages of a particular type are captured in a file of the format `scene_0001_message.json`, where `0001` indicates the scene id and `message` the message name.
+-The messages (except *route*) contain different keys and values.
+-Below we notate the dimensionality as \[d\] to indicate that a value has d dimensions.
+-  
+-## Derived messages
+-Here we store additional information that is derived from various [CAN bus messages](#can-bus-messages) below.
+-These messages are timeless and therefore do not provide the `utime` timestamp common to the CAN bus messages.
+-
+-### Meta
+-Format: `scene_0001_meta.json`
+-
+-This meta file summarizes all CAN bus messages (except *route*) and provides some statistics that may be helpful to understand the data.
+-- message_count: \[1\] How many messages of this type were logged.
+-- message_freq: \[1\] The message frequency computed from timestamp and message_count.
+-- timespan: \[1\] How many seconds passed from first to last message in a scene. Usually around 20s.
+-- var_stats: (dict) Contains the maximum, mean, minimum and standard deviation for both the raw values and the differences of two consecutive values.
+-
+-### Route
+-Format: `scene_0001_route.json`
+-
+-Our vehicles follow predefined routes through the city.
+-The baseline route is the recommended navigation path for the vehicle to follow.
+-This is an ideal route that does not take into account any blocking objects or road closures.
+-The route contains the relevant section of the current scene and around 50m before and after it.
+-The route is stored as a list of 2-tuples (x, y) in meters on the current nuScenes map.
+-The data is recorded at approximately 50Hz.
+-For 3% of the scenes this data is not available as the drivers were not following any route.
+-
+-## CAN bus messages
+-Here we list the raw CAN bus messages.
+-We store each type of message in a separate file for each scene (e.g. `scene-0001_ms_imu.json`).
+-Messages are stored in chronological order in the above file. 
+-Each message has the following field:
+-- utime: \[1\] The integer timestamp in microseconds that the actual measurement took place (e.g. 1531883549954657).
+-For the *Zoe Sensors* and *Zoe Vehicle Info* messages this info is not directly available and is therefore replaced by the timestamp when the CAN bus message was received.
+-
+-### IMU 
+-Frequency: 100Hz
+-
+-Format: `scene_0001_imu.json`
+-
+-- linear_accel: \[3\] Acceleration vector (x, y, z) in the IMU frame in m/s/s.
+-- q: \[4\] Quaternion that transforms from IMU coordinates to a fixed reference frame. The yaw of this reference frame is arbitrary, determined by the IMU. However, the x-y plane of the reference frame is perpendicular to gravity, and z points up. 
+-- rotation_rate: \[3\] Angular velocity in rad/s around the x, y, and z axes, respectively, in the IMU coordinate frame.
+-
+-### Pose
+-Frequency: 50Hz
+-
+-Format: `scene_0001_pose.json`
+-
+-The current pose of the ego vehicle, sampled at 50Hz.
+-- accel: \[3\] Acceleration vector in the ego vehicle frame in m/s/s.
+-- orientation: \[4\]  The rotation vector in the ego vehicle frame.
+-- pos: \[3\] The position (x, y, z) in meters in the global frame. This is identical to the [nuScenes ego pose](https://github.com/nutonomy/nuscenes-devkit/blob/master/docs/schema_nuscenes.md#ego_pose), but sampled at a higher frequency.
+-- rotation_rate: \[3\] The angular velocity vector of the vehicle in rad/s. This is expressed in the ego vehicle frame.
+-- vel: \[3\] The velocity in m/s, expressed in the ego vehicle frame.
+- 
+-### Steer Angle Feedback
+-Frequency: 100Hz
+-
+-Format: `scene_0001_steeranglefeedback.json`
+-
+-- value: \[1\] Steering angle feedback in radians in range \[-7.7, 6.3\]. 0 indicates no steering, positive values indicate left turns, negative values right turns.
+-
+-### Vehicle Monitor
+-Frequency: 2Hz
+-
+-Format: `scene_0001_vehicle_monitor.json`
+-
+-- available_distance: \[1\] Available vehicle range given the current battery level in kilometers.
+-- battery_level: \[1\] Current battery level in range \[0, 100\].
+-- brake: \[1\] Braking pressure in bar. An integer in range \[0, 126\]. 
+-- brake_switch: \[1\] Brake switch as an integer, 1 (pedal not pressed), 2 (pedal pressed) or 3 (pedal confirmed pressed).
+-- gear_position: \[1\] The gear position as an integer, typically 0 (parked) or 7 (driving).
+-- left_signal: \[1\] Left turning signal as an integer, 0 (inactive) or 1 (active).
+-- rear_left_rpm: \[1\] Rear left brake speed in revolutions per minute.
+-- rear_right_rpm: \[1\] Rear right brake speed in revolutions per minute.
+-- right_signal: \[1\] Right turning signal as an integer, 0 (inactive) or 1 (active).
+-- steering: \[1\] Steering angle in degrees at a resolution of 0.1 in range \[-780, 779.9\].
+-- steering_speed: \[1\] Steering speed in degrees per second in range \[-465, 393\].
+-- throttle: \[1\] Throttle pedal position as an integer in range \[0, 1000\].
+-- vehicle_speed: \[1\] Vehicle speed in km/h at a resolution of 0.01. 
+-- yaw_rate: \[1\] Yaw turning rate in degrees per second at a resolution of 0.1.
+-
+-### Zoe Sensors
+-Frequency: 794-973Hz
+-
+-Format: `scene_0001_zoesensors.json`
+-
+-- brake_sensor: \[1\] Vehicle brake sensor in range \[0.166, 0.631\]. High values indicate braking.
+-- steering_sensor: \[1\] Vehicle steering sensor in range \[0.176, 0.252\].
+-- throttle_sensor: \[1\] Vehicle throttle sensor in range \[0.105, 0.411]\.
+-
+-### Zoe Vehicle Info
+-Frequency: 100Hz
+-
+-Format: `scene_0001_zoe_veh_info.json`
+-
+-- FL_wheel_speed: \[1\] Front left wheel speed. The unit is rounds per minute with a resolution of 0.0417rpm.
+-- FR_wheel_speed: \[1\] Front right wheel speed. The unit is rounds per minute with a resolution of 0.0417rpm.
+-- RL_wheel_speed: \[1\] Rear left wheel speed. The unit is rounds per minute with a resolution of 0.0417rpm.
+-- RR_wheel_speed: \[1\] Rear right wheel speed. The unit is rounds per minute with a resolution of 0.0417rpm.
+-- left_solar: \[1\] Zoe vehicle left solar sensor value as an integer.
+-- longitudinal_accel: \[1\] Longitudinal acceleration in meters per second squared at a resolution of 0.05.
+-- meanEffTorque: \[1\] Actual torque delivered by the engine in Newton meters at a resolution of 0.5. Values in range \[-400, 1647\], offset by -400.
+-- odom: \[1\] Odometry distance travelled modulo vehicle circumference. Values are in centimeters in range \[0, 124\]. Note that due to the low sampling frequency these values are only useful at low speeds.
+-- odom_speed: \[1\] Vehicle speed in km/h. Values in range \[0, 60\]. For a higher sampling rate refer to the pose.vel message.
+-- pedal_cc: \[1\] Throttle value. Values in range \[0, 1000\].
+-- regen: \[1\] Coasting throttle. Values in range \[0, 100\].
+-- requestedTorqueAfterProc: \[1\] Input torque requested in Newton meters at a resolution of 0.5. Values in range \[-400, 1647\], offset by -400.
+-- right_solar: \[1\] Zoe vehicle right solar sensor value as an integer.
+-- steer_corrected: \[1\] Steering angle (steer_raw) corrected by an offset (steer_offset_can).
+-- steer_offset_can: \[1\] Steering angle offset in degrees, typically -12.6.
+-- steer_raw: \[1\] Raw steering angle in degrees.
+-- transversal_accel: \[1\] Transversal acceleration in g at a resolution of 0.004.
+\ No newline at end of file
+diff --git a/python-sdk/nuscenes/eval/common/loaders.py b/python-sdk/nuscenes/eval/common/loaders.py
+index cce1dc7..4cb73a5 100644
+--- a/python-sdk/nuscenes/eval/common/loaders.py
++++ b/python-sdk/nuscenes/eval/common/loaders.py
+@@ -2,10 +2,12 @@
+ # Code written by Oscar Beijbom, 2019.
+ 
+ import json
+-from typing import Dict, List, Tuple
++from typing import Dict, Tuple
+ 
+ import numpy as np
+ import tqdm
++from pyquaternion import Quaternion
++
+ from nuscenes import NuScenes
+ from nuscenes.eval.common.data_classes import EvalBoxes
+ from nuscenes.eval.detection.data_classes import DetectionBox
+@@ -13,8 +15,7 @@ from nuscenes.eval.detection.utils import category_to_detection_name
+ from nuscenes.eval.tracking.data_classes import TrackingBox
+ from nuscenes.utils.data_classes import Box
+ from nuscenes.utils.geometry_utils import points_in_box
+-from nuscenes.utils.splits import create_splits_scenes, get_scenes_of_custom_split
+-from pyquaternion import Quaternion
++from nuscenes.utils.splits import create_splits_scenes
+ 
+ 
+ def load_prediction(result_path: str, max_boxes_per_sample: int, box_cls, verbose: bool = False) \
+@@ -282,159 +283,3 @@ def _get_box_class_field(eval_boxes: EvalBoxes) -> str:
+         raise Exception('Error: Invalid box type: %s' % box)
+ 
+     return class_field
+-
+-def load_prediction_of_sample_tokens(result_path: str, max_boxes_per_sample: int, box_cls,
+-                                     sample_tokens: List[str], verbose: bool = False) \
+-        -> Tuple[EvalBoxes, Dict]:
+-    """
+-    Loads object predictions from file.
+-    :param result_path: Path to the .json result file provided by the user.
+-    :param max_boxes_per_sample: Maximim number of boxes allowed per sample.
+-    :param box_cls: Type of box to load, e.g. DetectionBox or TrackingBox.
+-    :param verbose: Whether to print messages to stdout.
+-    :param limit_to_split: Optional split name to filter the predictions by.
+-    :param nusc: Optional NuScenes instance needed for filtering by split.
+-    :return: The deserialized results and meta data.
+-    """
+-
+-    # Load from file and check that the format is correct.
+-    with open(result_path) as f:
+-        data = json.load(f)
+-    assert 'results' in data, 'Error: No field `results` in result file. Please note that the result format changed.' \
+-                              'See https://www.nuscenes.org/object-detection for more information.'
+-    assert isinstance(data['results'], dict), 'Error: results must be a dict.'
+-
+-     # Filter by sample tokens.
+-    results_of_split : dict = {sample_token: data['results'][sample_token] for sample_token in sample_tokens}
+-
+-    # Deserialize results and get meta data.
+-    boxes_of_split : EvalBoxes = EvalBoxes.deserialize(results_of_split, box_cls)
+-    meta = data['meta']
+-    if verbose:
+-        print("Loaded results from {}. Found detections for {} samples."
+-              .format(result_path, len(boxes_of_split.sample_tokens)))
+-
+-    # Check that each sample has no more than x predicted boxes.
+-    for sample_token in boxes_of_split.sample_tokens:
+-        assert len(boxes_of_split.boxes[sample_token]) <= max_boxes_per_sample, \
+-            "Error: Only <= %d boxes per sample allowed!" % max_boxes_per_sample
+-
+-    return boxes_of_split, meta
+-
+-
+-def load_gt_of_sample_tokens(nusc: NuScenes, sample_tokens: List[str], box_cls,
+-                              verbose: bool = False) -> EvalBoxes:
+-    """
+-    Loads ground truth boxes from DB.
+-    :param nusc: A NuScenes instance.
+-    :param eval_split: The evaluation split for which we load GT boxes.
+-    :param box_cls: Type of box to load, e.g. DetectionBox or TrackingBox.
+-    :param verbose: Whether to print messages to stdout.
+-    :return: The GT boxes.
+-    """
+-    # Init.
+-    if box_cls == DetectionBox:
+-        attribute_map = {a['token']: a['name'] for a in nusc.attribute}
+-
+-    all_annotations = EvalBoxes()
+-
+-    # Load annotations and filter predictions and annotations.
+-    tracking_id_set = set()
+-    for sample_token in tqdm.tqdm(sample_tokens, leave=verbose):
+-
+-        sample = nusc.get('sample', sample_token)
+-        sample_annotation_tokens = sample['anns']
+-
+-        sample_boxes = []
+-        for sample_annotation_token in sample_annotation_tokens:
+-
+-            sample_annotation = nusc.get('sample_annotation', sample_annotation_token)
+-            if box_cls == DetectionBox:
+-                # Get label name in detection task and filter unused labels.
+-                detection_name = category_to_detection_name(sample_annotation['category_name'])
+-                if detection_name is None:
+-                    continue
+-
+-                # Get attribute_name.
+-                attr_tokens = sample_annotation['attribute_tokens']
+-                attr_count = len(attr_tokens)
+-                if attr_count == 0:
+-                    attribute_name = ''
+-                elif attr_count == 1:
+-                    attribute_name = attribute_map[attr_tokens[0]]
+-                else:
+-                    raise Exception('Error: GT annotations must not have more than one attribute!')
+-
+-                sample_boxes.append(
+-                    box_cls(
+-                        sample_token=sample_token,
+-                        translation=sample_annotation['translation'],
+-                        size=sample_annotation['size'],
+-                        rotation=sample_annotation['rotation'],
+-                        velocity=nusc.box_velocity(sample_annotation['token'])[:2],
+-                        num_pts=sample_annotation['num_lidar_pts'] + sample_annotation['num_radar_pts'],
+-                        detection_name=detection_name,
+-                        detection_score=-1.0,  # GT samples do not have a score.
+-                        attribute_name=attribute_name
+-                    )
+-                )
+-            elif box_cls == TrackingBox:
+-                # Use nuScenes token as tracking id.
+-                tracking_id = sample_annotation['instance_token']
+-                tracking_id_set.add(tracking_id)
+-
+-                # Get label name in detection task and filter unused labels.
+-                # Import locally to avoid errors when motmetrics package is not installed.
+-                from nuscenes.eval.tracking.utils import category_to_tracking_name
+-                tracking_name = category_to_tracking_name(sample_annotation['category_name'])
+-                if tracking_name is None:
+-                    continue
+-
+-                sample_boxes.append(
+-                    box_cls(
+-                        sample_token=sample_token,
+-                        translation=sample_annotation['translation'],
+-                        size=sample_annotation['size'],
+-                        rotation=sample_annotation['rotation'],
+-                        velocity=nusc.box_velocity(sample_annotation['token'])[:2],
+-                        num_pts=sample_annotation['num_lidar_pts'] + sample_annotation['num_radar_pts'],
+-                        tracking_id=tracking_id,
+-                        tracking_name=tracking_name,
+-                        tracking_score=-1.0  # GT samples do not have a score.
+-                    )
+-                )
+-            else:
+-                raise NotImplementedError('Error: Invalid box_cls %s!' % box_cls)
+-
+-        all_annotations.add_boxes(sample_token, sample_boxes)
+-
+-    if verbose:
+-        print("Loaded ground truth annotations for {} samples.".format(len(all_annotations.sample_tokens)))
+-
+-    return all_annotations
+-
+-def get_samples_of_custom_split(split_name: str, nusc : NuScenes) -> List[str]:
+-    """
+-    Returns the sample tokens of a custom/user-defined split.
+-    :param split_name: The name of the custom split.
+-    :param nusc: The NuScenes instance.
+-    :return: The sample tokens of the custom split.
+-    """
+-
+-    scenes_of_split : List[str] = get_scenes_of_custom_split(split_name=split_name, nusc=nusc)
+-    sample_tokens_of_split : List[str] = get_samples_of_scenes(scene_names=scenes_of_split, nusc=nusc)
+-    return sample_tokens_of_split
+-
+-def get_samples_of_scenes(scene_names: List[str], nusc: NuScenes) -> List[str]:
+-    """Given a list of scene names, returns the sample tokens of these scenes."""
+-
+-    all_sample_tokens = [s['token'] for s in nusc.sample]
+-    assert len(all_sample_tokens) > 0, "Error: Database has no samples!"
+-
+-    filtered_sample_tokens : List[str] = []
+-    for sample_token in all_sample_tokens:
+-        scene_token = nusc.get('sample', sample_token)['scene_token']
+-        scene_record = nusc.get('scene', scene_token)
+-        if scene_record['name'] in scene_names:
+-            filtered_sample_tokens.append(sample_token)
+-    return filtered_sample_tokens
+diff --git a/python-sdk/nuscenes/eval/detection/README.md b/python-sdk/nuscenes/eval/detection/README.md
+deleted file mode 100644
+index 7698ede..0000000
+--- a/python-sdk/nuscenes/eval/detection/README.md
++++ /dev/null
+@@ -1,319 +0,0 @@
+-# nuScenes detection task
+-![nuScenes Detection logo](https://www.nuscenes.org/public/images/tasks.png)
+-
+-## Overview
+-- [Introduction](#introduction)
+-- [Participation](#participation)
+-- [Challenges](#challenges)
+-- [Submission rules](#submission-rules)
+-- [Results format](#results-format)
+-- [Classes and attributes](#classes-attributes-and-detection-ranges)
+-- [Evaluation metrics](#evaluation-metrics)
+-- [Leaderboard](#leaderboard)
+-
+-## Introduction
+-Here we define the 3D object detection task on nuScenes.
+-The goal of this task is to place a 3D bounding box around 10 different object categories,
+-as well as estimating a set of attributes and the current velocity vector.
+-
+-## Participation
+-The nuScenes detection [evaluation server](https://eval.ai/web/challenges/challenge-page/356/overview) is open all year round for submission.
+-To participate in the challenge, please create an account at [EvalAI](https://eval.ai/web/challenges/challenge-page/356/overview).
+-Then upload your zipped result file including all of the required [meta data](#results-format).
+-After each challenge, the results will be exported to the nuScenes [leaderboard](https://www.nuscenes.org/object-detection) shown above.
+-This is the only way to benchmark your method against the test dataset. 
+-We require that all participants send the following information to nuScenes@motional.com after submitting their results on EvalAI: 
+-- Team name
+-- Method name
+-- Authors
+-- Affiliations
+-- Method description (5+ sentences)
+-- Project URL
+-- Paper URL
+-- FPS in Hz (and the hardware used to measure it)
+-
+-## Challenges
+-To allow users to benchmark the performance of their method against the community, we host a single [leaderboard](https://www.nuscenes.org/object-detection) all-year round.
+-Additionally we organize a number of challenges at leading Computer Vision conference workshops.
+-Users that submit their results during the challenge period are eligible for awards.
+-Any user that cannot attend the workshop (direct or via a representative) will be excluded from the challenge, but will still be listed on the leaderboard.
+-
+-Click [here](https://eval.ai/web/challenges/challenge-page/356/overview) for the **EvalAI detection evaluation server**.
+-
+-### 6th AI Driving Olympics, ICRA 2021
+-The fourth nuScenes detection challenge will be held at [ICRA 2021](http://www.icra2021.org/) as part of [The AI Driving Olympics: Evaluating Progress in Robotics through Standardized and Reproducible Benchmarks](https://driving-olympics.ai/).
+-Submissions will be accepted from April 1 to May 26, 2021.
+-The prizes will be awarded to submissions that outperform the previous state-of-the-art in their respective tracks.
+-Results and winners will be announced at [The AI Driving Olympics: Evaluating Progress in Robotics through Standardized and Reproducible Benchmarks](https://driving-olympics.ai/).
+-Note that this challenge uses the same [evaluation server](https://eval.ai/web/challenges/challenge-page/356/overview) as previous detection challenges.
+-
+-A summary of the results can be seen below. 
+-For details, please refer to the [detection leaderboard](https://www.nuscenes.org/object-detection).
+-
+-| Rank | Team name                             | NDS   | Award           |
+-|---   |---                                    |---    |---              |
+-|  1   | CenterPoint-Fusion and FusionPainting | 74.9% | Best submission |
+-|  2   | PointAugmenting V2                    | 70.9% | -               |
+-|  3   | Multimodal Virtual Point              | 70.5% | Most innovative |
+-
+-### 5th AI Driving Olympics, NeurIPS 2020 
+-The third nuScenes detection challenge will be held at [NeurIPS 2020](https://nips.cc/Conferences/2020/).
+-Submissions will be accepted from November 1 to December 8, 2020.
+-Results and winners will be announced at the [5th AI Driving Olympics](https://driving-olympics.ai/) at NeurIPS 2020.
+-Note that this challenge uses the same [evaluation server](https://eval.ai/web/challenges/challenge-page/356/overview) as previous detection challenges.
+-
+-A summary of the results can be seen below. 
+-For details, please refer to the [detection leaderboard](https://www.nuscenes.org/object-detection).
+-
+-| Rank | Team name          | NDS   | Award           |
+-|---   |---                 |---    |---              |
+-|  1   | CenterPoint        | 71.4% | Best submission |
+-|  2   | PointAugmenting    | 71.1% | Second best     |
+-|  3   | MoCa               | 70.9% | Best PKL        |
+-|  4   | PVC ensemble       | 70.4% | Best lidar-only submission |
+-
+-### Workshop on Benchmarking Progress in Autonomous Driving, ICRA 2020
+-The second nuScenes detection challenge will be held at [ICRA 2020](https://www.icra2020.org/).
+-The submission period will open April 1 and continue until May 28th, 2020.
+-Results and winners will be announced at the [Workshop on Benchmarking Progress in Autonomous Driving](http://montrealrobotics.ca/driving-benchmarks/).
+-Note that the previous [evaluation server](https://eval.ai/web/challenges/challenge-page/356/overview) can still be used to benchmark your results after the challenge period.
+-
+-A summary of the results can be seen below. 
+-For details, please refer to the [detection leaderboard](https://www.nuscenes.org/object-detection).
+-
+-| Rank | Team name          | NDS   | Award           |
+-|---   |---                 |---    |---              |
+-|  1   | Noah CV Lab fusion | 69.0% | Best submission |
+-|  2   | CenterPoint        | 67.5% | Best student submission |
+-|  3   | CVCNet ensemble    | 66.6% | Honorable mention |
+-|  4   | PanoNet3D          | 63.1% | -               |
+-|  5   | CRIPAC             | 63.2% | -               |
+-|  6   | SSN                | 61.6% | -               |
+-
+-### Workshop on Autonomous Driving, CVPR 2019
+-The first nuScenes detection challenge was held at CVPR 2019.
+-Submission opened May 6 and closed June 12, 2019.
+-Results and winners were announced at the Workshop on Autonomous Driving ([WAD](https://sites.google.com/view/wad2019)) at [CVPR 2019](http://cvpr2019.thecvf.com/).
+-For more information see the [leaderboard](https://www.nuscenes.org/object-detection).
+-Note that the [evaluation server](https://eval.ai/web/challenges/challenge-page/356/overview) can still be used to benchmark your results.
+-
+-A summary of the results can be seen below. 
+-For details, please refer to the [detection leaderboard](https://www.nuscenes.org/object-detection).
+-
+-| Rank | Team name    | NDS   | Award           |
+-|---   |---           |---    |---              |
+-|  1   | MEGVII G3D3  | 63.3% | Best submission |
+-|  2   | Tolist       | 54.5% | Best student submission |
+-|  3   | SARPNET AT3D | 48.4% | -               |
+-|  4   | MAIR         | 38.4% | Best vision-only submission |
+-|  5   | VIPL         | 35.3% | -               |
+-
+-## Submission rules
+-### Detection-specific rules
+-* The maximum time window of past sensor data and ego poses that may be used at inference time is approximately 0.5s (at most 6 *past* camera images, 6 *past* radar sweeps and 10 *past* lidar sweeps). At training time there are no restrictions.
+-
+-### General rules
+-* We release annotations for the train and val set, but not for the test set.
+-* We release sensor data for train, val and test set.
+-* Users make predictions on the test set and submit the results to our evaluation server, which returns the metrics listed below.
+-* We do not use strata. Instead, we filter annotations and predictions beyond class specific distances.
+-* Users must limit the number of submitted boxes per sample to 500.
+-* Every submission provides method information. We encourage publishing code, but do not make it a requirement.
+-* Top leaderboard entries and their papers will be manually reviewed.
+-* Each user or team can have at most one account *per year* on the evaluation server. Users that create multiple accounts to circumvent the rules will be excluded from the competition.
+-* Each user or team can submit at most three results *per year*. These results must come from different models, rather than submitting results from the same model at different training epochs or with slightly different parameters.
+-* Faulty submissions that return an error on Eval AI do not count towards the submission limit.
+-* Any attempt to circumvent these rules will result in a permanent ban of the team or company from all nuScenes challenges. 
+-
+-## Results format
+-We define a standardized detection result format that serves as an input to the evaluation code.
+-Results are evaluated for each 2Hz keyframe, also known as `sample`.
+-The detection results for a particular evaluation set (train/val/test) are stored in a single JSON file. 
+-For the train and val sets the evaluation can be performed by the user on their local machine.
+-For the test set the user needs to zip the single JSON result file and submit it to the official evaluation server.
+-The JSON file includes meta data `meta` on the type of inputs used for this method.
+-Furthermore it includes a dictionary `results` that maps each sample_token to a list of `sample_result` entries.
+-Each `sample_token` from the current evaluation set must be included in `results`, although the list of predictions may be empty if no object is detected.
+-```
+-submission {
+-    "meta": {
+-        "use_camera":   <bool>          -- Whether this submission uses camera data as an input.
+-        "use_lidar":    <bool>          -- Whether this submission uses lidar data as an input.
+-        "use_radar":    <bool>          -- Whether this submission uses radar data as an input.
+-        "use_map":      <bool>          -- Whether this submission uses map data as an input.
+-        "use_external": <bool>          -- Whether this submission uses external data as an input.
+-    },
+-    "results": {
+-        sample_token <str>: List[sample_result] -- Maps each sample_token to a list of sample_results.
+-    }
+-}
+-```
+-For the predictions we create a new database table called `sample_result`.
+-The `sample_result` table is designed to mirror the `sample_annotation` table.
+-This allows for processing of results and annotations using the same tools.
+-A `sample_result` is a dictionary defined as follows:
+-```
+-sample_result {
+-    "sample_token":       <str>         -- Foreign key. Identifies the sample/keyframe for which objects are detected.
+-    "translation":        <float> [3]   -- Estimated bounding box location in m in the global frame: center_x, center_y, center_z.
+-    "size":               <float> [3]   -- Estimated bounding box size in m: width, length, height.
+-    "rotation":           <float> [4]   -- Estimated bounding box orientation as quaternion in the global frame: w, x, y, z.
+-    "velocity":           <float> [2]   -- Estimated bounding box velocity in m/s in the global frame: vx, vy.
+-    "detection_name":     <str>         -- The predicted class for this sample_result, e.g. car, pedestrian.
+-    "detection_score":    <float>       -- Object prediction score between 0 and 1 for the class identified by detection_name.
+-    "attribute_name":     <str>         -- Name of the predicted attribute or empty string for classes without attributes.
+-                                           See table below for valid attributes for each class, e.g. cycle.with_rider.
+-                                           Attributes are ignored for classes without attributes.
+-                                           There are a few cases (0.4%) where attributes are missing also for classes
+-                                           that should have them. We ignore the predicted attributes for these cases.
+-}
+-```
+-Note that the detection classes may differ from the general nuScenes classes, as detailed below.
+-
+-## Classes, attributes, and detection ranges
+-The nuScenes dataset comes with annotations for 23 classes ([details](https://www.nuscenes.org/data-annotation)).
+-Some of these only have a handful of samples.
+-Hence we merge similar classes and remove rare classes.
+-This results in 10 classes for the detection challenge.
+-Below we show the table of detection classes and their counterparts in the nuScenes dataset.
+-For more information on the classes and their frequencies, see [this page](https://www.nuscenes.org/nuscenes#data-annotation).
+-
+-|   nuScenes detection class|   nuScenes general class                  |
+-|   ---                     |   ---                                     |
+-|   void / ignore           |   animal                                  |
+-|   void / ignore           |   human.pedestrian.personal_mobility      |
+-|   void / ignore           |   human.pedestrian.stroller               |
+-|   void / ignore           |   human.pedestrian.wheelchair             |
+-|   void / ignore           |   movable_object.debris                   |
+-|   void / ignore           |   movable_object.pushable_pullable        |
+-|   void / ignore           |   static_object.bicycle_rack              |
+-|   void / ignore           |   vehicle.emergency.ambulance             |
+-|   void / ignore           |   vehicle.emergency.police                |
+-|   barrier                 |   movable_object.barrier                  |
+-|   bicycle                 |   vehicle.bicycle                         |
+-|   bus                     |   vehicle.bus.bendy                       |
+-|   bus                     |   vehicle.bus.rigid                       |
+-|   car                     |   vehicle.car                             |
+-|   construction_vehicle    |   vehicle.construction                    |
+-|   motorcycle              |   vehicle.motorcycle                      |
+-|   pedestrian              |   human.pedestrian.adult                  |
+-|   pedestrian              |   human.pedestrian.child                  |
+-|   pedestrian              |   human.pedestrian.construction_worker    |
+-|   pedestrian              |   human.pedestrian.police_officer         |
+-|   traffic_cone            |   movable_object.trafficcone              |
+-|   trailer                 |   vehicle.trailer                         |
+-|   truck                   |   vehicle.truck                           |
+-
+-Below we list which nuScenes classes can have which attributes.
+-Note that some annotations are missing attributes (0.4% of all sample_annotations).
+-
+-For each nuScenes detection class, the number of annotations decreases with increasing range from the ego vehicle, 
+-but the number of annotations per range varies by class. Therefore, each class has its own upper bound on evaluated
+-detection range, as shown below:
+-
+-|   nuScenes detection class    |   Attributes                                          | Detection range (meters)  |
+-|   ---                         |   ---                                                 |   ---                     |
+-|   barrier                     |   void                                                |   30                      |
+-|   traffic_cone                |   void                                                |   30                      |
+-|   bicycle                     |   cycle.{with_rider, without_rider}                   |   40                      |
+-|   motorcycle                  |   cycle.{with_rider, without_rider}                   |   40                      |
+-|   pedestrian                  |   pedestrian.{moving, standing, sitting_lying_down}   |   40                      |
+-|   car                         |   vehicle.{moving, parked, stopped}                   |   50                      |
+-|   bus                         |   vehicle.{moving, parked, stopped}                   |   50                      |
+-|   construction_vehicle        |   vehicle.{moving, parked, stopped}                   |   50                      |
+-|   trailer                     |   vehicle.{moving, parked, stopped}                   |   50                      |
+-|   truck                       |   vehicle.{moving, parked, stopped}                   |   50                      |
+-
+-## Evaluation metrics
+-Below we define the metrics for the nuScenes detection task.
+-Our final score is a weighted sum of mean Average Precision (mAP) and several True Positive (TP) metrics.
+-
+-### Preprocessing
+-Before running the evaluation code the following pre-processing is done on the data
+-* All boxes (GT and prediction) are removed if they exceed the class-specific detection range. 
+-* All bikes and motorcycle boxes (GT and prediction) that fall inside a bike-rack are removed. The reason is that we do not annotate bikes inside bike-racks.  
+-* All boxes (GT) without lidar or radar points in them are removed. The reason is that we can not guarantee that they are actually visible in the frame. We do not filter the predicted boxes based on number of points.
+-
+-### Average Precision metric
+-* **mean Average Precision (mAP)**:
+-We use the well-known Average Precision metric,
+-but define a match by considering the 2D center distance on the ground plane rather than intersection over union based affinities. 
+-Specifically, we match predictions with the ground truth objects that have the smallest center-distance up to a certain threshold.
+-For a given match threshold we calculate average precision (AP) by integrating the recall vs precision curve for recalls and precisions > 0.1.
+-We finally average over match thresholds of {0.5, 1, 2, 4} meters and compute the mean across classes.
+-
+-### True Positive metrics
+-Here we define metrics for a set of true positives (TP) that measure translation / scale / orientation / velocity and attribute errors. 
+-All TP metrics are calculated using a threshold of 2m center distance during matching, and they are all designed to be positive scalars.
+-
+-Matching and scoring happen independently per class and each metric is the average of the cumulative mean at each achieved recall level above 10%.
+-If 10% recall is not achieved for a particular class, all TP errors for that class are set to 1.
+-We define the following TP errors:
+-* **Average Translation Error (ATE)**: Euclidean center distance in 2D in meters.
+-* **Average Scale Error (ASE)**: Calculated as *1 - IOU* after aligning centers and orientation.
+-* **Average Orientation Error (AOE)**: Smallest yaw angle difference between prediction and ground-truth in radians. Orientation error is evaluated at 360 degree for all classes except barriers where it is only evaluated at 180 degrees. Orientation errors for cones are ignored.
+-* **Average Velocity Error (AVE)**: Absolute velocity error in m/s. Velocity error for barriers and cones are ignored.
+-* **Average Attribute Error (AAE)**: Calculated as *1 - acc*, where acc is the attribute classification accuracy. Attribute error for barriers and cones are ignored.
+-
+-All errors are >= 0, but note that for translation and velocity errors the errors are unbounded, and can be any positive value.
+-
+-The TP metrics are defined per class, and we then take a mean over classes to calculate mATE, mASE, mAOE, mAVE and mAAE.
+-
+-### nuScenes detection score
+-* **nuScenes detection score (NDS)**:
+-We consolidate the above metrics by computing a weighted sum: mAP, mATE, mASE, mAOE, mAVE and mAAE.
+-As a first step we convert the TP errors to TP scores as *TP_score = max(1 - TP_error, 0.0)*.
+-We then assign a weight of *5* to mAP and *1* to each of the 5 TP scores and calculate the normalized sum.
+-
+-### Configuration
+-The default evaluation metrics configurations can be found in `nuscenes/eval/detection/configs/detection_cvpr_2019.json`. 
+-
+-## Leaderboard
+-nuScenes will maintain a single leaderboard for the detection task.
+-For each submission the leaderboard will list method aspects and evaluation metrics.
+-Method aspects include input modalities (lidar, radar, vision), use of map data and use of external data.
+-To enable a fair comparison between methods, the user will be able to filter the methods by method aspects.
+- 
+-We define three such filters here which correspond to the tracks in the nuScenes detection challenge.
+-Methods will be compared within these tracks and the winners will be decided for each track separately.
+-Furthermore, there will also be an award for novel ideas, as well as the best student submission.
+-
+-**Lidar track**: 
+-* Only lidar input allowed.
+-* External data or map data <u>not allowed</u>.
+-* May use pre-training.
+-  
+-**Vision track**: 
+-* Only camera input allowed.
+-* External data or map data <u>not allowed</u>.
+-* May use pre-training.
+- 
+-**Open track**: 
+-* Any sensor input allowed.
+-* External data and map data allowed.  
+-* May use pre-training.
+-
+-**Details**:
+-* *Sensor input:*
+-For the lidar and vision tracks we restrict the type of sensor input that may be used.
+-Note that this restriction applies only at test time.
+-At training time any sensor input may be used.
+-In particular this also means that at training time you are allowed to filter the GT boxes using `num_lidar_pts` and `num_radar_pts`, regardless of the track.
+-However, during testing the predicted boxes may *not* be filtered based on input from other sensor modalities.
+-
+-* *Map data:*
+-By `map data` we mean using the *semantic* map provided in nuScenes. 
+-
+-* *Meta data:*
+-Other meta data included in the dataset may be used without restrictions.
+-E.g. calibration parameters, ego poses, `location`, `timestamp`, `num_lidar_pts`, `num_radar_pts`, `translation`, `rotation` and `size`.
+-Note that `instance`, `sample_annotation` and `scene` description are not provided for the test set.
+-
+-* *Pre-training:*
+-By pre-training we mean training a network for the task of image classification using only image-level labels,
+-as done in [[Krizhevsky NIPS 2012]](http://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networ).
+-The pre-training may not involve bounding box, mask or other localized annotations.
+-
+-* *Reporting:* 
+-Users are required to report detailed information on their method regarding sensor input, map data, meta data and pre-training.
+-Users that fail to adequately report this information may be excluded from the challenge. 
+diff --git a/python-sdk/nuscenes/eval/detection/evaluate.py b/python-sdk/nuscenes/eval/detection/evaluate.py
+index 2c4ad5a..dc30725 100644
+--- a/python-sdk/nuscenes/eval/detection/evaluate.py
++++ b/python-sdk/nuscenes/eval/detection/evaluate.py
+@@ -6,31 +6,19 @@ import json
+ import os
+ import random
+ import time
+-from typing import Any, Dict, List, Tuple
++from typing import Tuple, Dict, Any
+ 
+ import numpy as np
++
+ from nuscenes import NuScenes
+ from nuscenes.eval.common.config import config_factory
+ from nuscenes.eval.common.data_classes import EvalBoxes
+-from nuscenes.eval.common.loaders import (
+-    add_center_dist,
+-    filter_eval_boxes,
+-    get_samples_of_custom_split,
+-    load_gt,
+-    load_gt_of_sample_tokens,
+-    load_prediction,
+-    load_prediction_of_sample_tokens,
+-)
++from nuscenes.eval.common.loaders import load_prediction, load_gt, add_center_dist, filter_eval_boxes
+ from nuscenes.eval.detection.algo import accumulate, calc_ap, calc_tp
+ from nuscenes.eval.detection.constants import TP_METRICS
+-from nuscenes.eval.detection.data_classes import (
+-    DetectionBox,
+-    DetectionConfig,
+-    DetectionMetricDataList,
+-    DetectionMetrics,
+-)
+-from nuscenes.eval.detection.render import class_pr_curve, class_tp_curve, dist_pr_curve, summary_plot, visualize_sample
+-from nuscenes.utils.splits import is_predefined_split
++from nuscenes.eval.detection.data_classes import DetectionConfig, DetectionMetrics, DetectionBox, \
++    DetectionMetricDataList
++from nuscenes.eval.detection.render import summary_plot, class_pr_curve, class_tp_curve, dist_pr_curve, visualize_sample
+ 
+ 
+ class DetectionEval:
+@@ -89,16 +77,9 @@ class DetectionEval:
+         # Load data.
+         if verbose:
+             print('Initializing nuScenes detection evaluation')
+-
+-        if is_predefined_split(split_name=eval_set):
+-            self.pred_boxes, self.meta = load_prediction(self.result_path, self.cfg.max_boxes_per_sample, DetectionBox,
+-                                                        verbose=verbose)
+-            self.gt_boxes = load_gt(self.nusc, self.eval_set, DetectionBox, verbose=verbose)
+-        else:
+-            sample_tokens_of_custom_split : List[str] = get_samples_of_custom_split(split_name=eval_set, nusc=nusc)
+-            self.pred_boxes, self.meta = load_prediction_of_sample_tokens(self.result_path, self.cfg.max_boxes_per_sample,
+-                DetectionBox, sample_tokens=sample_tokens_of_custom_split, verbose=verbose)
+-            self.gt_boxes = load_gt_of_sample_tokens(nusc, sample_tokens_of_custom_split, DetectionBox, verbose=verbose)
++        self.pred_boxes, self.meta = load_prediction(self.result_path, self.cfg.max_boxes_per_sample, DetectionBox,
++                                                     verbose=verbose)
++        self.gt_boxes = load_gt(self.nusc, self.eval_set, DetectionBox, verbose=verbose)
+ 
+         assert set(self.pred_boxes.sample_tokens) == set(self.gt_boxes.sample_tokens), \
+             "Samples in split doesn't match samples in predictions."
+@@ -253,17 +234,17 @@ class DetectionEval:
+         # Print per-class metrics.
+         print()
+         print('Per-class results:')
+-        print('%-20s\t%-6s\t%-6s\t%-6s\t%-6s\t%-6s\t%-6s' % ('Object Class', 'AP', 'ATE', 'ASE', 'AOE', 'AVE', 'AAE'))
++        print('Object Class\tAP\tATE\tASE\tAOE\tAVE\tAAE')
+         class_aps = metrics_summary['mean_dist_aps']
+         class_tps = metrics_summary['label_tp_errors']
+         for class_name in class_aps.keys():
+-            print('%-20s\t%-6.3f\t%-6.3f\t%-6.3f\t%-6.3f\t%-6.3f\t%-6.3f'
+-                % (class_name, class_aps[class_name],
+-                    class_tps[class_name]['trans_err'],
+-                    class_tps[class_name]['scale_err'],
+-                    class_tps[class_name]['orient_err'],
+-                    class_tps[class_name]['vel_err'],
+-                    class_tps[class_name]['attr_err']))
++            print('%s\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f'
++                  % (class_name, class_aps[class_name],
++                     class_tps[class_name]['trans_err'],
++                     class_tps[class_name]['scale_err'],
++                     class_tps[class_name]['orient_err'],
++                     class_tps[class_name]['vel_err'],
++                     class_tps[class_name]['attr_err']))
+ 
+         return metrics_summary
+ 
+diff --git a/python-sdk/nuscenes/eval/detection/render.py b/python-sdk/nuscenes/eval/detection/render.py
+index 9fb0ddf..68c56af 100644
+--- a/python-sdk/nuscenes/eval/detection/render.py
++++ b/python-sdk/nuscenes/eval/detection/render.py
+@@ -28,7 +28,6 @@ def visualize_sample(nusc: NuScenes,
+                      conf_th: float = 0.15,
+                      eval_range: float = 50,
+                      verbose: bool = True,
+-                     display_legend: bool = False,
+                      savepath: str = None) -> None:
+     """
+     Visualizes a sample from BEV with annotations and detection results.
+@@ -40,7 +39,6 @@ def visualize_sample(nusc: NuScenes,
+     :param conf_th: The confidence threshold used to filter negatives.
+     :param eval_range: Range in meters beyond which boxes are ignored.
+     :param verbose: Whether to print to stdout.
+-    :param display_legend: Whether to display GT and EST boxes legend on plot.
+     :param savepath: If given, saves the the rendering here instead of displaying.
+     """
+     # Retrieve sensor & pose records.
+@@ -89,11 +87,6 @@ def visualize_sample(nusc: NuScenes,
+         if box.score >= conf_th:
+             box.render(ax, view=np.eye(4), colors=('b', 'b', 'b'), linewidth=1)
+ 
+-    # Add legend.
+-    if display_legend:
+-        ax.legend(['GT', 'EST'], loc='upper right', labels=['GT', 'EST'],
+-                handles=[mpatches.Patch(color='g'), mpatches.Patch(color='b')])
+-
+     # Limit visible range.
+     axes_limit = eval_range + 3  # Slightly bigger to include boxes that extend beyond the range.
+     ax.set_xlim(-axes_limit, axes_limit)
+diff --git a/python-sdk/nuscenes/eval/detection/tests/test_evaluate.py b/python-sdk/nuscenes/eval/detection/tests/test_evaluate.py
+index 9a9057b..0808b03 100644
+--- a/python-sdk/nuscenes/eval/detection/tests/test_evaluate.py
++++ b/python-sdk/nuscenes/eval/detection/tests/test_evaluate.py
+@@ -6,39 +6,28 @@ import os
+ import random
+ import shutil
+ import unittest
+-from typing import Dict, List
+-from unittest.mock import patch
++from typing import Dict
+ 
+ import numpy as np
++from tqdm import tqdm
++
+ from nuscenes import NuScenes
+ from nuscenes.eval.common.config import config_factory
+ from nuscenes.eval.detection.constants import DETECTION_NAMES
+ from nuscenes.eval.detection.evaluate import DetectionEval
+ from nuscenes.eval.detection.utils import category_to_detection_name, detection_name_to_rel_attributes
+-from nuscenes.utils.splits import get_scenes_of_split
+-from parameterized import parameterized
+-from tqdm import tqdm
++from nuscenes.utils.splits import create_splits_scenes
+ 
+ 
+ class TestMain(unittest.TestCase):
+     res_mockup = 'nusc_eval.json'
+     res_eval_folder = 'tmp'
+-    splits_file_mockup = 'mocked_splits.json'
+-
+-    def setUp(self):
+-        with open(self.splits_file_mockup, 'w') as f:
+-            json.dump({
+-                "mini_custom_train": ["scene-0061", "scene-0553"],
+-                "mini_custom_val": ["scene-0103", "scene-0916"]
+-            }, f, indent=2)
+ 
+     def tearDown(self):
+         if os.path.exists(self.res_mockup):
+             os.remove(self.res_mockup)
+         if os.path.exists(self.res_eval_folder):
+             shutil.rmtree(self.res_eval_folder)
+-        if os.path.exists(self.splits_file_mockup):
+-            os.remove(self.splits_file_mockup)
+ 
+     @staticmethod
+     def _mock_submission(nusc: NuScenes, split: str) -> Dict[str, dict]:
+@@ -79,10 +68,10 @@ class TestMain(unittest.TestCase):
+             'use_external': False,
+         }
+         mock_results = {}
+-        scenes_of_eval_split : List[str] = get_scenes_of_split(split_name=split, nusc=nusc)
++        splits = create_splits_scenes()
+         val_samples = []
+         for sample in nusc.sample:
+-            if nusc.get('scene', sample['scene_token'])['name'] in scenes_of_eval_split:
++            if nusc.get('scene', sample['scene_token'])['name'] in splits[split]:
+                 val_samples.append(sample)
+ 
+         for sample in tqdm(val_samples, leave=False):
+@@ -108,21 +97,12 @@ class TestMain(unittest.TestCase):
+         }
+         return mock_submission
+ 
+-
+-
+-    @parameterized.expand([
+-        ('mini_val',),
+-        ('mini_custom_val',)
+-    ])
+-    @patch('nuscenes.utils.splits._get_custom_splits_file_path')
+-    def test_delta(self, eval_split, mock__get_custom_splits_file_path):
++    def test_delta(self):
+         """
+         This tests runs the evaluation for an arbitrary random set of predictions.
+         This score is then captured in this very test such that if we change the eval code,
+         this test will trigger if the results changed.
+         """
+-        mock__get_custom_splits_file_path.return_value = self.splits_file_mockup
+-
+         random.seed(42)
+         np.random.seed(42)
+         assert 'NUSCENES' in os.environ, 'Set NUSCENES env. variable to enable tests.'
+@@ -130,10 +110,10 @@ class TestMain(unittest.TestCase):
+         nusc = NuScenes(version='v1.0-mini', dataroot=os.environ['NUSCENES'], verbose=False)
+ 
+         with open(self.res_mockup, 'w') as f:
+-            json.dump(self._mock_submission(nusc, eval_split), f, indent=2)
++            json.dump(self._mock_submission(nusc, 'mini_val'), f, indent=2)
+ 
+         cfg = config_factory('detection_cvpr_2019')
+-        nusc_eval = DetectionEval(nusc, cfg, self.res_mockup, eval_set=eval_split, output_dir=self.res_eval_folder,
++        nusc_eval = DetectionEval(nusc, cfg, self.res_mockup, eval_set='mini_val', output_dir=self.res_eval_folder,
+                                   verbose=False)
+         metrics, md_list = nusc_eval.evaluate()
+ 
+@@ -146,8 +126,9 @@ class TestMain(unittest.TestCase):
+         # 7. Score = 0.20237925145690996. After TP reversion bug.
+         # 8. Score = 0.24047129251302665. After bike racks bug.
+         # 9. Score = 0.24104572227466886. After bug fix in calc_tp. Include the max recall and exclude the min recall.
+-        # 10. Score = 0.19449091580477748. Changed to use v1.0 mini_val split, and the equal mini_custom_val split.
++        # 10. Score = 0.19449091580477748. Changed to use v1.0 mini_val split.
+         self.assertAlmostEqual(metrics.nd_score, 0.19449091580477748)
+ 
++
+ if __name__ == '__main__':
+     unittest.main()
+diff --git a/python-sdk/nuscenes/eval/lidarseg/README.md b/python-sdk/nuscenes/eval/lidarseg/README.md
+deleted file mode 100644
+index 22295b2..0000000
+--- a/python-sdk/nuscenes/eval/lidarseg/README.md
++++ /dev/null
+@@ -1,257 +0,0 @@
+-# nuScenes lidar segmentation task
+-![nuScenes lidar segmentation logo](https://www.nuscenes.org/public/images/lidarseg_challenge.jpg)
+-
+-## Overview
+-- [Introduction](#introduction)
+-- [Citation](#citation)
+-- [Participation](#participation)
+-- [Challenges](#challenges)
+-- [Submission rules](#submission-rules)
+-- [Results format](#results-format)
+-- [Classes](#classes)
+-- [Evaluation metrics](#evaluation-metrics)
+-- [Leaderboard](#leaderboard)
+-
+-## Introduction
+-Here we define the lidar segmentation task on nuScenes.
+-The goal of this task is to predict the category of every point in a set of point clouds. There are 16 categories (10 foreground classes and 6 background classes).
+-
+-## Citation
+-When using the dataset in your research, please cite [Panoptic nuScenes](https://arxiv.org/abs/2109.03805):
+-```
+-@article{fong2021panoptic,
+-  title={Panoptic nuScenes: A Large-Scale Benchmark for LiDAR Panoptic Segmentation and Tracking},
+-  author={Fong, Whye Kit and Mohan, Rohit and Hurtado, Juana Valeria and Zhou, Lubing and Caesar, Holger and
+-          Beijbom, Oscar and Valada, Abhinav},
+-  journal={arXiv preprint arXiv:2109.03805},
+-  year={2021}
+-}
+-```
+-
+-## Participation
+-The nuScenes lidarseg segmentation [evaluation server](https://eval.ai/web/challenges/challenge-page/720/overview) is open all year round for submission.
+-To participate in the challenge, please create an account at [EvalAI](https://eval.ai).
+-Then upload your zipped result folder with the required [content](#results-format).
+-After each challenge, the results will be exported to the nuScenes [leaderboard](https://www.nuscenes.org/lidar-segmentation).
+-This is the only way to benchmark your method against the test dataset. 
+-We require that all participants send the following information to nuScenes@motional.com after submitting their results on EvalAI: 
+-- Team name
+-- Method name
+-- Authors
+-- Affiliations
+-- Method description (5+ sentences)
+-- Project URL
+-- Paper URL
+-- FPS in Hz (and the hardware used to measure it)
+-
+-## Challenges
+-To allow users to benchmark the performance of their method against the community, we host a single [leaderboard](https://www.nuscenes.org/lidar-segmentation) all-year round.
+-Additionally we organize a number of challenges at leading Computer Vision conference workshops.
+-Users that submit their results during the challenge period are eligible for awards.
+-Any user that cannot attend the workshop (direct or via a representative) will be excluded from the challenge, but will still be listed on the leaderboard.
+-
+-Click [here](https://eval.ai/web/challenges/challenge-page/720/overview) for the **EvalAI lidar segmentation evaluation server**.
+-
+-### 6th AI Driving Olympics, ICRA 2021
+-The second nuScenes lidar segmentation challenge will be held at [ICRA 2021](http://www.icra2021.org/) as part of [The AI Driving Olympics: Evaluating Progress in Robotics through Standardized and Reproducible Benchmarks](https://driving-olympics.ai/).
+-Submissions will be accepted from April 1 to May 26, 2021.
+-The prizes will be awarded to submissions that outperform the previous state-of-the-art in their respective tracks.
+-Results and winners will be announced at [The AI Driving Olympics: Evaluating Progress in Robotics through Standardized and Reproducible Benchmarks](https://driving-olympics.ai/).
+-Note that this challenge uses the same [evaluation server](https://eval.ai/web/challenges/challenge-page/720/overview) as previous lidar segmentation challenges.
+-
+-A summary of the results can be seen below. 
+-For details, please refer to the [lidar segmentation leaderboard](https://www.nuscenes.org/lidar-segmentation).
+-
+-| Rank | Team name          | mIOU  | Awards          |
+-|---   |---                 |---    |---              |
+-|  1   | SPVCNN++           | 0.811 | Best submission |
+-|  2   | GU-Net             | 0.803 | -               |
+-|  3   | 2D3DNet            | 0.800 | -               |
+-
+-### 5th AI Driving Olympics, NeurIPS 2020
+-The first nuScenes lidar segmentation challenge will be held at [NeurIPS 2020](https://nips.cc/Conferences/2020/).
+-Submissions will be accepted from November 1 to December 8, 2020.
+-Results and winners will be announced at the [5th AI Driving Olympics](https://driving-olympics.ai/) at NeurIPS 2020.
+-For more information see the [leaderboard](https://www.nuscenes.org/lidar-segmentation).
+-Note that the [evaluation server](https://eval.ai/web/challenges/challenge-page/720/overview) can still be used to benchmark your results.
+-
+-A summary of the results can be seen below. 
+-For details, please refer to the [lidar segmentation leaderboard](https://www.nuscenes.org/lidar-segmentation).
+-
+-| Rank | Team name          | mIOU  | Awards          |
+-|---   |---                 |---    |---              |
+-|  1   | Noah_Kyber         | 0.783 | Best submission |
+-|  2   | Cylinder3D++       | 0.779 | Second best     |
+-|  3   | CPFusion           | 0.777 | -               |
+-|  4   | MIT-HAN-LAB        | 0.774 | -               |
+-
+-## Submission rules
+-### Lidar segmentation-specific rules
+-* The maximum time window of past sensor data and ego poses that may be used at inference time is approximately 0.5s (at most 6 past camera images, 6 past radar sweeps and 10 past lidar sweeps). At training time there are no restrictions.
+-
+-### General rules
+-* We release annotations for the train and val set, but not for the test set.
+-* We release sensor data for train, val and test set.
+-* Users make predictions on the test set and submit the results to our evaluation server, which returns the metrics listed below.
+-* Every submission provides method information. We encourage publishing code, but do not make it a requirement.
+-* Top leaderboard entries and their papers will be manually reviewed.
+-* Each user or team can have at most one account *per year* on the evaluation server. Users that create multiple accounts to circumvent the rules will be excluded from the competition.
+-* Each user or team can submit at most three results *per year*. These results must come from different models, rather than submitting results from the same model at different training epochs or with slightly different parameters.
+-* Faulty submissions that return an error on Eval AI do not count towards the submission limit.
+-* Any attempt to circumvent these rules will result in a permanent ban of the team or company from all nuScenes challenges. 
+-
+-## Results format
+-We define a standardized lidar segmentation result format that serves as an input to the evaluation code.
+-Results are evaluated for each 2Hz keyframe, also known as a `sample`.
+-The lidar segmentation results for a particular evaluation set (train/val/test) are stored in a folder. 
+-
+-The folder structure of the results should be as follows:
+-```
+-└── results_folder
+-    ├── lidarseg
+-    │   └── {test, train, val} <- Contains the .bin files; a .bin file 
+-    │                             contains the labels of the points in a 
+-    │                             point cloud         
+-    └── {test, train, val}
+-        └── submission.json  <- contains certain information about 
+-                                the submission
+-```
+-
+-The contents of the `submission.json` file and `test` folder are defined below:
+-* The `submission.json` file includes meta data `meta` on the type of inputs used for this method.
+-  ```
+-  "meta": {
+-      "use_camera":   <bool>          -- Whether this submission uses camera data as an input.
+-      "use_lidar":    <bool>          -- Whether this submission uses lidar data as an input.
+-      "use_radar":    <bool>          -- Whether this submission uses radar data as an input.
+-      "use_map":      <bool>          -- Whether this submission uses map data as an input.
+-      "use_external": <bool>          -- Whether this submission uses external data as an input.
+-  },
+-  ```
+-* The `test` folder contains .bin files, where each .bin file contains the labels of the points for the point cloud.
+-  Pay special attention that each set of predictions in the folder must be a .bin file and named as **<lidar_sample_data_token>_lidarseg.bin**.
+-  A .bin file contains an array of `uint8` values in which each value is the predicted [class index](#classes) of the corresponding point in the point cloud, e.g.:
+-  ```
+-  [1, 5, 4, 1, ...]
+-  ```
+-  Below is an example of how to save the predictions for a single point cloud:
+-  ```
+-  bin_file_path = lidar_sample_data_token + '_lidarseg.bin"
+-  np.array(predicted_labels).astype(np.uint8).tofile(bin_file_path)
+-  ```
+-  Note that the arrays should **not** contain the `ignore` class (i.e. class index 0). 
+-  Each `lidar_sample_data_token` from the current evaluation set must be included in the `test` folder.
+-  
+-For the train and val sets, the evaluation can be performed by the user on their local machine.
+-For the test set, the user needs to zip the results folder and submit it to the official evaluation server.
+-
+-For convenience, a `validate_submission.py` [script](https://github.com/nutonomy/nuscenes-devkit/blob/master/python-sdk/nuscenes/eval/lidarseg/validate_submission.py) has been provided to check that a given results folder is of the correct format.
+-
+-Note that the lidar segmentation classes differ from the general nuScenes classes, as detailed below.
+-
+-## Classes
+-The nuScenes-lidarseg dataset comes with annotations for 32 classes ([details](https://www.nuscenes.org/data-annotation)).
+-Some of these only have a handful of samples.
+-Hence we merge similar classes and remove rare classes.
+-This results in 16 classes for the lidar segmentation challenge.
+-Below we show the table of lidar segmentation classes and their counterparts in the nuScenes-lidarseg dataset.
+-For more information on the classes and their frequencies, see [this page](https://www.nuscenes.org/nuscenes#data-annotation).
+-
+-|   lidar segmentation index    |   lidar segmentation class    |   nuScenes-lidarseg general class         |
+-|   ---                         |   ---                         |   ---                                     |
+-|   0                           |   void / ignore               |   animal                                  |
+-|   0                           |   void / ignore               |   human.pedestrian.personal_mobility      |
+-|   0                           |   void / ignore               |   human.pedestrian.stroller               |
+-|   0                           |   void / ignore               |   human.pedestrian.wheelchair             |
+-|   0                           |   void / ignore               |   movable_object.debris                   |
+-|   0                           |   void / ignore               |   movable_object.pushable_pullable        |
+-|   0                           |   void / ignore               |   static_object.bicycle_rack              |
+-|   0                           |   void / ignore               |   vehicle.emergency.ambulance             |
+-|   0                           |   void / ignore               |   vehicle.emergency.police                |
+-|   0                           |   void / ignore               |   noise                                   |
+-|   0                           |   void / ignore               |   static.other                            |
+-|   0                           |   void / ignore               |   vehicle.ego                             |
+-|   1                           |   barrier                     |   movable_object.barrier                  |
+-|   2                           |   bicycle                     |   vehicle.bicycle                         |
+-|   3                           |   bus                         |   vehicle.bus.bendy                       |
+-|   3                           |   bus                         |   vehicle.bus.rigid                       |
+-|   4                           |   car                         |   vehicle.car                             |
+-|   5                           |   construction_vehicle        |   vehicle.construction                    |
+-|   6                           |   motorcycle                  |   vehicle.motorcycle                      |
+-|   7                           |   pedestrian                  |   human.pedestrian.adult                  |
+-|   7                           |   pedestrian                  |   human.pedestrian.child                  |
+-|   7                           |   pedestrian                  |   human.pedestrian.construction_worker    |
+-|   7                           |   pedestrian                  |   human.pedestrian.police_officer         |
+-|   8                           |   traffic_cone                |   movable_object.trafficcone              |
+-|   9                           |   trailer                     |   vehicle.trailer                         |
+-|   10                          |   truck                       |   vehicle.truck                           |
+-|   11                          |   driveable_surface           |   flat.driveable_surface                  |
+-|   12                          |   other_flat                  |   flat.other                              |
+-|   13                          |   sidewalk                    |   flat.sidewalk                           |
+-|   14                          |   terrain                     |   flat.terrain                            |
+-|   15                          |   manmade                     |   static.manmade                          |
+-|   16                          |   vegetation                  |   static.vegetation                       |
+-
+-
+-## Evaluation metrics
+-Below we define the metrics for the nuScenes lidar segmentation task.
+-The challenge winners and leaderboard ranking will be determined by the mean intersection-over-union (mIOU) score.
+-
+-### Preprocessing
+-Contrary to the [nuScenes detection task](https://github.com/nutonomy/nuscenes-devkit/blob/master/python-sdk/nuscenes/eval/detection/README.md), 
+-we do not perform any preprocessing, such as removing GT / predictions if they exceed the class-specific detection range
+-or if they fall inside a bike-rack.
+-
+-### Mean IOU (mIOU)
+-We use the well-known IOU metric, which is defined as TP / (TP + FP + FN). 
+-The IOU score is calculated separately for each class, and then the mean is computed across classes.
+-Note that lidar segmentation index 0 is ignored in the calculation.
+-
+-### Frequency-weighted IOU (fwIOU)
+-Instead of taking the mean of the IOUs across all the classes, each IOU is weighted by the point-level frequency of its class.
+-Note that lidar segmentation index 0 is ignored in the calculation.
+-FWIOU is not used for the challenge.
+-
+-## Leaderboard
+-nuScenes will maintain a single leaderboard for the lidar segmentation task.
+-For each submission the leaderboard will list method aspects and evaluation metrics.
+-Method aspects include input modalities (lidar, radar, vision), use of map data and use of external data.
+-To enable a fair comparison between methods, the user will be able to filter the methods by method aspects.
+-
+-Methods will be compared within these tracks and the winners will be decided for each track separately.
+-Furthermore, there will also be an award for novel ideas, as well as the best student submission.
+-
+-**Lidar track**: 
+-* Only lidar input allowed.
+-* Only lidar segmentation annotations from nuScenes-lidarseg are allowed.
+-* External data or map data <u>not allowed</u>.
+-* May use pre-training.
+-
+-**Open track**: 
+-* Any sensor input allowed.
+-* All nuScenes, nuScenes-lidarseg and nuImages annotations are allowed.
+-* External data and map data allowed.
+-* May use pre-training.
+-
+-**Details**:
+-* *Sensor input:*
+-For the lidar track we restrict the type of sensor input that may be used.
+-Note that this restriction applies only at test time.
+-At training time any sensor input may be used.
+-
+-* *Map data:*
+-By `map data` we mean using the *semantic* map provided in nuScenes. 
+-
+-* *Meta data:*
+-Other meta data included in the dataset may be used without restrictions.
+-E.g. bounding box annotations provided in nuScenes, calibration parameters, ego poses, `location`, `timestamp`, `num_lidar_pts`, `num_radar_pts`, `translation`, `rotation` and `size`.
+-Note that .bin files, `instance`, `sample_annotation` and `scene` description are not provided for the test set.
+-
+-* *Pre-training:*
+-By pre-training we mean training a network for the task of image classification using only image-level labels,
+-as done in [[Krizhevsky NIPS 2012]](http://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networ).
+-The pre-training may not involve bounding boxes, masks or other localized annotations.
+-
+-* *Reporting:* 
+-Users are required to report detailed information on their method regarding sensor input, map data, meta data and pre-training.
+-Users that fail to adequately report this information may be excluded from the challenge. 
+diff --git a/python-sdk/nuscenes/eval/panoptic/README.md b/python-sdk/nuscenes/eval/panoptic/README.md
+deleted file mode 100644
+index add237e..0000000
+--- a/python-sdk/nuscenes/eval/panoptic/README.md
++++ /dev/null
+@@ -1,311 +0,0 @@
+-# nuScenes lidar panoptic segmentation and tracking task
+-![nuScenes lidar panoptic logo](https://www.nuscenes.org/public/images/panoptic_challenge.jpg)
+-
+-## Overview
+-- [Introduction](#introduction)
+-- [Citation](#citation)
+-- [Participation](#participation)
+-- [Challenges](#challenges)
+-- [Submission rules](#submission-rules)
+-- [Results format](#results-format)
+-- [Classes](#classes)
+-- [Evaluation metrics](#evaluation-metrics)
+-- [Leaderboard](#leaderboard)
+-
+-## Introduction
+-We define the lidar panoptic segmentation and panoptic tracking tasks on Panoptic nuScenes. This challenge is a
+-collaboration between Motional and the Robot Learning Lab of Prof. Valada at the University of Freiburg. For panoptic
+-segmentation, the goal is to predict the semantic categories of every point, and additional instance IDs for things.
+-While panoptic segmentation focuses on static frames, panoptic tracking additionally enforces temporal coherence and
+-pixel-level associations over time. For both tasks, there are 16 categories (10 thing and 6 stuff classes). Refer to
+-the [Panoptic nuScenes paper](https://arxiv.org/pdf/2109.03805.pdf) for more details.
+-
+-## Citation
+-When using the dataset in your research, please cite [Panoptic nuScenes](https://arxiv.org/abs/2109.03805):
+-```
+-@article{fong2021panoptic,
+-  title={Panoptic nuScenes: A Large-Scale Benchmark for LiDAR Panoptic Segmentation and Tracking},
+-  author={Fong, Whye Kit and Mohan, Rohit and Hurtado, Juana Valeria and Zhou, Lubing and Caesar, Holger and
+-          Beijbom, Oscar and Valada, Abhinav},
+-  journal={arXiv preprint arXiv:2109.03805},
+-  year={2021}
+-}
+-```
+-
+-## Participation
+-The Panoptic nuScenes challenge [evaluation server](https://eval.ai/web/challenges/challenge-page/1243/overview) is
+-open all year round for submission. Participants can choose to attend both panoptic segmentation and panoptic tracking
+-tasks, or only the panoptic segmentation task. To participate in the challenge, please create an account at
+-[EvalAI](https://eval.ai). Then upload your zipped result folder with the required [content](#results-format). After
+-each challenge, the results will be exported to the [Panoptic nuScenes leaderboard](https://www.nuscenes.org/panoptic).
+-This is the only way to benchmark your method against the test dataset. We require that all participants send the
+-following information to nuScenes@motional.com after submitting their results on EvalAI:
+-- Team name
+-- Method name
+-- Authors
+-- Affiliations
+-- Method description (5+ sentences)
+-- Project URL
+-- Paper URL
+-- FPS in Hz (and the hardware used to measure it)
+-
+-## Challenges
+-To allow users to benchmark the performance of their method against the community, we host a single
+-[Panoptic nuScenes leaderboard](https://www.nuscenes.org/panoptic) with filters for different task tracks all year
+-round. Additionally we organize a number of challenges at leading Computer Vision conference workshops. Users that
+-submit their results during the challenge period are eligible for awards. Any user that cannot attend the workshop
+-(direct or via a representative) will be excluded from the challenge, but will still be listed on the leaderboard.
+-
+-### 7th AI Driving Olympics, NeurIPS 2021
+-The first Panoptic nuScenes challenge will be held at [NeurIPS 2021](https://nips.cc/Conferences/2021/).
+-Submissions will be accepted from 1 September 2021. **The submission deadline is 1 December 2021, 12:00pm, noon, UTC.**
+-Results and winners will be announced at the [7th AI Driving Olympics](https://driving-olympics.ai/) at NeurIPS 2021.
+-For more information see the [leaderboard](https://www.nuscenes.org/panoptic). Note that the
+-[evaluation server](https://eval.ai/web/challenges/challenge-page/1243/overview) can still be used to benchmark your
+-results after the challenge.
+-
+-
+-## Submission rules
+-* We release annotations for the train and val set, but not for the test set.
+-* We release sensor data for train, val and test set.
+-* Users make predictions on the test set and submit the results to our evaluation server, which returns the metrics
+-listed below.
+-* Every submission provides method information. We encourage publishing code, but do not make it a requirement.
+-* Top leaderboard entries and their papers will be manually reviewed.
+-* Each user or team can have at most one account *per year* on the evaluation server. Users that create multiple
+-accounts to circumvent the rules will be excluded from the competition.
+-* Each user or team can submit at most three results *per year*. These results must come from different models, rather
+-than submitting results from the same model at different training epochs or with slightly different parameters.
+-* Faulty submissions that return an error on Eval AI do not count towards the submission limit.
+-* Any attempt to circumvent these rules will result in a permanent ban of the team or company from all nuScenes
+-challenges.
+-
+-## Ground truth format
+-A ground truth label file named `{token}_panoptic.npz` is provided for each sample in the Panoptic nuScenes dataset.
+-A `.npz` file contains the panoptic label array (uint16 format) of the corresponding points in a pointcloud. The
+-panoptic label of each point is: **([general class index](#classes) * 1000 + instance index)**. Note here general class
+-index (32 classes in total) rather than the challenge class index (16 classes in total) is used. For example, a ground
+-truth instance from car class (general class index = 17), and with assigned car instance index 1, will have a ground truth
+-panoptic label of 1000 * 17 + 1 = 17001 in the .npz file. Since these ground truth panoptic labels are generated from
+-annotated bounding boxes, points that are included in more than 1 bounding box will be ignored, and assigned with
+-panoptic label 0: class index 0 and instance index 0. For points from [stuff](#classes), their panoptic labels will be
+-[general class index] * 1000. To align with thing classes, you may think the stuff classes as sharing an instance index
+-of 0 by all points. To load a ground truth file, you can use:
+-```
+-from nuscenes.utils.data_io import load_bin_file
+-label_file_path = /data/sets/nuscenes/panoptic/v1.0-mini/{token}_panoptic.npz
+-panoptic_label_arr = load_bin_file(label_file_path, 'panoptic')
+-```
+-
+-## Results format
+-We define a standardized panoptic segmentation and panoptic tracking result format that serves as an input to the
+-evaluation code. Results are evaluated for each 2Hz keyframe, also known as a `sample`. The results for a particular
+-evaluation set (train/val/test) are stored in a folder.
+-
+-The folder structure of the results should be as follows:
+-```
+-└── results_folder
+-    ├── panoptic
+-    │   └── {test, train, val} <- Contains the .npz files; a .npz file contains the labels of the points in a
+-    │                             pointcloud, note they must have the same indices as in the original pointcloud.
+-    └── {test, train, val}
+-        └── submission.json  <- contains certain information about the submission.
+-```
+-
+-The contents of the `submission.json` file and `test` folder are defined below:
+-* The `submission.json` file includes meta data `meta` on the task to attend and type of inputs used for this method.
+-  The `task` field format is `[segmentation|tracking]-[lidar|open]`, where `segmentation` and `tracking` correspond to
+-  panoptic segmentation and panoptic tracking tasks. The other fields are used to decide whether the
+-  submission belongs to lidar track or open track.
+-  ```
+-  "meta": {
+-      "task":         <str>           -- What task to attend. Must be one of ["segmentation", "tracking"].
+-      "use_camera":   <bool>          -- Whether this submission uses camera data as an input.
+-      "use_lidar":    <bool>          -- Whether this submission uses lidar data as an input.
+-      "use_radar":    <bool>          -- Whether this submission uses radar data as an input.
+-      "use_map":      <bool>          -- Whether this submission uses map data as an input.
+-      "use_external": <bool>          -- Whether this submission uses external data as an input.
+-  },
+-  ```
+-* The `test` folder contains .npz files, where each .npz file contains the labels of the points for the point cloud.
+-  Pay special attention that each set of predictions in the folder must be a .npz file and named as
+-  **<lidar_sample_data_token>_panoptic.npz**. A .npz file contains an array of `uint16` values in which each value is
+-  the predicted panoptic label **(1000 * [challenge class index](#classes) + per-category instance index)** of the
+-  corresponding point in the point cloud. Different from ground truth, here **challenge class index is used rather than
+-  general class index**. **Per-category instance index is reset to start from 1, i.e., [1, 2, 3, ..., N] (N <= 999)**
+-  for all instances of each class within each scene. For example, a predicted instance from car class (challenge class
+-  index = 4), and with assigned car instance index 1, will have a panoptic label of 1000 * 4 + 1 = 4001 in the .npz
+-  file. For stuff classes, we set the instance index in the above equation to 0. Below is an example of a predicted
+-  panoptic array.
+-  ```
+-  [1001, 5001, 4001, 5002, 0, ...]
+-  ```
+-  Below is an example of how to save the predictions for a single point cloud:
+-  ```
+-  npz_file_out = lidar_sample_data_token + '_panoptic.npz"
+-  np.savez_compressed(npz_file_out, data=predictions.astype(np.uint16))
+-  ```
+-  Each `lidar_sample_data_token` from the current evaluation set must be included in the `test` folder.
+-  
+-For the train and val sets, the evaluation can be performed by the user on their local machine.
+-For the test set, the user needs to zip the results folder and submit it to the official evaluation server.
+-
+-Note that the lidar panoptic challenge classes differ from the general nuScenes classes, as detailed below.
+-
+-## Classes
+-The Panoptic nuScenes dataset comes with annotations for 32 classes
+-([details](https://www.nuscenes.org/data-annotation)).
+-Some of these only have a handful of samples. Just as for the nuScenes-lidarseg dataset, we merge similar classes and
+-remove rare classes. This results in 10 thing classes and 6 stuff classes for the lidar panoptic challenge.
+-Below we show the table of panoptic challenge classes and their counterparts in the Panoptic nuScenes dataset.
+-For more information on the classes and their frequencies, see
+-[this page](https://www.nuscenes.org/nuscenes#data-annotation).
+-
+-| general class index |   challenge class index   |  challenge class name (thing/stuff)  |   general class name                     |
+-|   ---               |   ---                     |   ---                                |   ---                                    |
+-|   1                 |   0                       |   void / ignore                      |   animal                                 |
+-|   5                 |   0                       |   void / ignore                      |   human.pedestrian.personal_mobility     |
+-|   7                 |   0                       |   void / ignore                      |   human.pedestrian.stroller              |
+-|   8                 |   0                       |   void / ignore                      |   human.pedestrian.wheelchair            |
+-|   10                |   0                       |   void / ignore                      |   movable_object.debris                  |
+-|   11                |   0                       |   void / ignore                      |   movable_object.pushable_pullable       |
+-|   13                |   0                       |   void / ignore                      |   static_object.bicycle_rack             |
+-|   19                |   0                       |   void / ignore                      |   vehicle.emergency.ambulance            |
+-|   20                |   0                       |   void / ignore                      |   vehicle.emergency.police               |
+-|   0                 |   0                       |   void / ignore                      |   noise                                  |
+-|   29                |   0                       |   void / ignore                      |   static.other                           |
+-|   31                |   0                       |   void / ignore                      |   vehicle.ego                            |
+-|   9                 |   1                       |   barrier               (thing)      |   movable_object.barrier                 |
+-|   14                |   2                       |   bicycle               (thing)      |   vehicle.bicycle                        |
+-|   15                |   3                       |   bus                   (thing)      |   vehicle.bus.bendy                      |
+-|   16                |   3                       |   bus                   (thing)      |   vehicle.bus.rigid                      |
+-|   17                |   4                       |   car                   (thing)      |   vehicle.car                            |
+-|   18                |   5                       |   construction_vehicle  (thing)      |   vehicle.construction                   |
+-|   21                |   6                       |   motorcycle            (thing)      |   vehicle.motorcycle                     |
+-|   2                 |   7                       |   pedestrian            (thing)      |   human.pedestrian.adult                 |
+-|   3                 |   7                       |   pedestrian            (thing)      |   human.pedestrian.child                 |
+-|   4                 |   7                       |   pedestrian            (thing)      |   human.pedestrian.construction_worker   |
+-|   6                 |   7                       |   pedestrian            (thing)      |   human.pedestrian.police_officer        |
+-|   12                |   8                       |   traffic_cone          (thing)      |   movable_object.trafficcone             |
+-|   22                |   9                       |   trailer               (thing)      |   vehicle.trailer                        |
+-|   23                |   10                      |   truck                 (thing)      |   vehicle.truck                          |
+-|   24                |   11                      |   driveable_surface     (stuff)      |   flat.driveable_surface                 |
+-|   25                |   12                      |   other_flat            (stuff)      |   flat.other                             |
+-|   26                |   13                      |   sidewalk              (stuff)      |   flat.sidewalk                          |
+-|   27                |   14                      |   terrain               (stuff)      |   flat.terrain                           |
+-|   28                |   15                      |   manmade               (stuff)      |   static.manmade                         |
+-|   30                |   16                      |   vegetation            (stuff)      |   static.vegetation                      |
+-
+-
+-## Evaluation metrics
+-Below we introduce the key metrics for panoptic segmentation and panoptic tracking tasks. We use Panoptic Quality (PQ)
+-as the primary ranking metric for panoptic segmentation tasks, and Panoptic Tracking (PAT) metric as the primary
+-ranking metric for panoptic tracking tasks.
+-
+-### Panoptic Segmentation
+-
+-#### Panoptic Quality (PQ)
+-We use the standard PQ [Kirillov et al.](https://arxiv.org/pdf/1801.00868.pdf), which is defined as
+-∑{**1(p,g)** IoU(p,g)} / (|TP|+ 0.5|FP|+ 0.5|FN|). The set of true positives (TP), false positives (FP), and false
+-negatives (FN), are computed by matching prediction p to ground-truth g based on the IoU scores. Here **1**(p, g) is an
+-indicator function of being 1 if (p, g) is TP, otherwise 0. Note in lidar panoptic segmentation, the prediction and
+-ground truth are 1D panoptic arrays of panoptic labels for lidar points instead of panoptic label images in standard PQ.
+-
+-#### Segmentation Quality (SQ) and Recognition Quality (RQ)
+-PQ can be decomposed in terms of Segmentation Quality (SQ) and Recognition Quality (RQ) as SQ x RQ. We additionally use
+-SQ and RQ, which are defined as ∑{**1**(p,g) IoU(p,g)} / TP and TP / (|TP|+ 0.5|FP|+ 0.5|FN|), respectively.
+-
+-#### Modified Panoptic Quality (PQ†)
+-We also use PQ† [Porzi et al.](https://arxiv.org/pdf/1905.01220.pdf), which maintains the PQ metric for thing classes,
+-but modifies the metric for stuff classes.  PQ† only uses the IoU for stuff classes without differentiating between
+-different segments.
+-
+-### Panoptic Tracking
+-
+-### Panoptic Tracking (PAT)
+-We define the Panoptic Tracking (PAT) metric, which is based on two separable components that are explicitly related to
+-the task and allow straightforward interpretation. PAT is computed as the harmonic mean of the Panoptic Quality (PQ)
+-and Tracking Quality (TQ): (2 x PQ x TQ) / (PQ + TQ), with range [0, 1]. To better represent the tracking quality,
+-TQ is comprised of association score and track fragmentation components. Interested readers can refer to the
+-[Panoptic nuScenes paper](https://arxiv.org/pdf/2109.03805.pdf) for more details of PAT metric.
+-
+-### LiDAR Segmentation and Tracking Quality (LSTQ)
+-We also use the LSTQ metric [Mehmet et al](https://arxiv.org/pdf/2102.12472.pdf). The LSTQ metric is computed as a
+-geometric mean of the classification score and association score.
+-
+-### Panoptic Tracking Quality (PTQ)
+-
+-We also use the PTQ [Hurtado et al.](https://arxiv.org/pdf/2004.08189.pdf) that extends PQ with the IoU of matched
+-segments with track ID discrepancy, penalizing the incorrect track predictions. PTQ is defined as
+-(∑{**1**(p,g) IoU(p,g)} - |IDS|) / (|TP|+ 0.5|FP|+ 0.5|FN|), where IDS stands for ID switches, and it is computed as
+-the number of true positives (TP) that differ between tracking prediction and ground truth.
+-
+-From the same paper as PTQ, sPTQ (soft PTQ) penalizes the track ID discrepancy by subtracting the IoU scores at frames
+-with ID switches instead of the total number of ID switches. The sPTQ metric is defined as:
+-(∑{**1**(p,g) IoU(p,g)} - ∑(s)∈ IDS {s}) / (|TP|+ 0.5|FP|+ 0.5|FN|).
+-
+-Each score is calculated separately for each class, and then the mean is computed across classes. Note that points of
+-class index 0 is ignored in the calculation.
+-
+-## Leaderboard
+-nuScenes will maintain a single panoptic leaderboard with filters to split 4 specific tracks: Segmentation-lidar,
+-Segmentation-open, Tracking-lidar and Tracking-open. Submissions of the first two panoptic segmentation tracks will be
+-evaluated with segmentation metrics, while the two tracking submissions will be evaluated with both panoptic tracking
+-metrics as well as frame based panoptic segmentation metrics. For each submission the leaderboard will
+-list method aspects and evaluation metrics. Method aspects include input modalities (lidar, radar, vision), use of map
+-data and use of external data. To enable a fair comparison between methods, the user will be able to filter the methods
+-by method aspects.
+-
+-Both panoptic segmentation and panoptic tracking tasks will have a `Lidar track` and `Open Track` respectively.
+-Methods will be compared within these tracks and the winners will be decided for each track separately.
+-
+-**Segmentation-lidar track**:
+-* Only lidar input allowed.
+-* Only current frame and preceding frames within 0.5s are allowed, maximally 10 frames (inclusive of current frame).
+-* Only lidar panoptic annotations from Panoptic nuScenes are allowed.
+-* External data or map data <u>not allowed</u>.
+-* May use pre-training.
+-
+-**Segmentation-open track**:
+-* Any sensor input allowed.
+-* All past data allowed, no future data allowed.
+-* All nuScenes, Panoptic nuScenes, nuScenes-lidarseg and nuImages annotations are allowed.
+-* External data and map data allowed.
+-* May use pre-training.
+-
+-**Tracking-lidar track**:
+-* Only lidar input allowed.
+-* All past data allowed, no future data allowed.
+-* Only lidar panoptic annotations from Panoptic nuScenes are allowed.
+-* External data or map data <u>not allowed</u>.
+-* May use pre-training.
+-
+-**Tracking-open track**:
+-* Any sensor input allowed.
+-* All past data allowed, no future data allowed.
+-* All nuScenes, Panoptic nuScenes, nuScenes-lidarseg and nuImages annotations are allowed.
+-* External data and map data allowed.
+-* May use pre-training.
+-
+-**Details**:
+-* *Sensor input:*
+-For the lidar track we restrict the type of sensor input that may be used. Note that this restriction applies only at
+-test time. At training time any sensor input may be used.
+-
+-* *Map data:*
+-By `map data` we mean using the *semantic* map provided in nuScenes. 
+-
+-* *Meta data:*
+-Other meta data included in the dataset may be used without restrictions. E.g. bounding box annotations provided in
+-nuScenes, calibration parameters, ego poses, `location`, `timestamp`, `num_lidar_pts`, `num_radar_pts`, `translation`,
+-`rotation` and `size`. Note that .npz files, `instance`, `sample_annotation` and `scene` description are not provided
+-for the test set.
+-
+-* *Pre-training:*
+-By pre-training we mean training a network for the task of image classification using only image-level labels, as done
+-in [[Krizhevsky NIPS 2012]](http://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networ).
+-The pre-training may not involve bounding boxes, masks or other localized annotations.
+-
+-* *Reporting:* 
+-Users are required to report detailed information on their method regarding sensor input, map data, meta data and pre-training.
+-Users that fail to adequately report this information may be excluded from the challenge. 
+diff --git a/python-sdk/nuscenes/eval/panoptic/baselines.py b/python-sdk/nuscenes/eval/panoptic/baselines.py
+index 96f52f7..a641257 100644
+--- a/python-sdk/nuscenes/eval/panoptic/baselines.py
++++ b/python-sdk/nuscenes/eval/panoptic/baselines.py
+@@ -1,5 +1,5 @@
+ """
+-Script to generate baselines for Panoptic nuScenes tasks.
++Script to generate baselines for nuScenes-panoptic tasks.
+ Code written by Motional and the Robot Learning Lab, University of Freiburg.
+ """
+ import argparse
+diff --git a/python-sdk/nuscenes/eval/panoptic/evaluate.py b/python-sdk/nuscenes/eval/panoptic/evaluate.py
+index 1c1acf4..ebdeaa0 100644
+--- a/python-sdk/nuscenes/eval/panoptic/evaluate.py
++++ b/python-sdk/nuscenes/eval/panoptic/evaluate.py
+@@ -1,9 +1,9 @@
+ """
+ Code written by Motional and the Robot Learning Lab, University of Freiburg.
+ 
+-Script to evaluate Panoptic nuScenes panoptic segmentation (PS) or panoptic tracking (PT) metrics.
++Script to evaluate nuScenes-panoptic panoptic segmentation (PS) or multi-object panoptic tracking metrics (MOPT).
+ Argument "task" could be one of ["segmentation", "tracking"], check eval/panoptic/README.md for more details of the
+-tasks. Note tracking results will be evaluated with both the PT and PS metrics.
++tasks. Note tracking results will be evaluated with both the MOPT and PS metrics.
+ 
+ Example usage to evaluate tracking metrics.
+ ---------------------------------------------------------
+@@ -36,8 +36,8 @@ from tqdm import tqdm
+ 
+ class NuScenesPanopticEval:
+     """
+-    This is the official Panoptic nuScenes evaluation code. Results are written to the provided output_dir.
+-    Panoptic nuScenes uses the following metrics:
++    This is the official nuScenes-panoptic evaluation code. Results are written to the provided output_dir.
++    nuScenes-panoptic uses the following metrics:
+     - Panoptic Segmentation: we use the PQ (Panoptic Quality) metric: which is defined as:
+       PQ = IOU/(TP + 0.5*FP + 0.5*FN).
+     - Multi-object Panoptic Tracking: we use the PAT (Panoptic Tracking) metric, which is defined as:
+@@ -251,7 +251,7 @@ class NuScenesPanopticEval:
+ 
+         results = self.wrap_result_mopt(pat=pat,
+                                         mean_pq=mean_pq,
+-                                        mean_tq=mean_tq,
++                                        mean_tq=mean_ptq,
+                                         mean_ptq=mean_ptq,
+                                         class_all_ptq=class_all_ptq,
+                                         mean_sptq=mean_sptq,
+@@ -330,13 +330,13 @@ class NuScenesPanopticEval:
+             raise ValueError(f'Invalid output dir: {self.out_dir}')
+ 
+         if self.verbose:
+-            print(f"======\nPanoptic nuScenes {self.task} evaluation for {self.eval_set}")
++            print(f"======\nnuScenes-panoptic {self.task} evaluation for {self.eval_set}")
+             print(json.dumps(results, indent=4, sort_keys=False))
+             print("======")
+ 
+ 
+ def main():
+-    parser = argparse.ArgumentParser(description='Evaluate Panoptic nuScenes results.')
++    parser = argparse.ArgumentParser(description='Evaluate nuScenes-panoptic results.')
+     parser.add_argument('--result_path', type=str, help='The path to the results folder.')
+     parser.add_argument('--eval_set', type=str, default='val',
+                         help='Which dataset split to evaluate on, train, val or test.')
+@@ -351,7 +351,7 @@ def main():
+     parser.add_argument('--out_dir', type=str, default=None, help='Folder to write the panoptic labels to.')
+     args = parser.parse_args()
+ 
+-    out_dir = args.out_dir if args.out_dir is not None else f'Panoptic-nuScenes-{args.version}'
++    out_dir = args.out_dir if args.out_dir is not None else f'nuScenes-panoptic-{args.version}'
+     task = args.task
+     # Overwrite with task from submission.json if the file exists.
+     submission_file = os.path.join(args.result_path, args.eval_set, 'submission.json')
+diff --git a/python-sdk/nuscenes/eval/panoptic/get_panoptic_from_seg_det_or_track.py b/python-sdk/nuscenes/eval/panoptic/get_panoptic_from_seg_det_or_track.py
+index bcbd458..9d841f9 100644
+--- a/python-sdk/nuscenes/eval/panoptic/get_panoptic_from_seg_det_or_track.py
++++ b/python-sdk/nuscenes/eval/panoptic/get_panoptic_from_seg_det_or_track.py
+@@ -1,5 +1,5 @@
+ """
+-Script to generate Panoptic nuScenes predictions from nuScene-lidarseg predictions and nuScenes-tracking or
++Script to generate nuScenes-panoptic predictions from nuScene-lidarseg predictions and nuScenes-tracking or
+ nuScenes-detection predictions.
+ Code written by Motional and the Robot Learning Lab, University of Freiburg.
+ """
+diff --git a/python-sdk/nuscenes/eval/panoptic/panoptic_seg_evaluator.py b/python-sdk/nuscenes/eval/panoptic/panoptic_seg_evaluator.py
+index 0f93989..b87865f 100644
+--- a/python-sdk/nuscenes/eval/panoptic/panoptic_seg_evaluator.py
++++ b/python-sdk/nuscenes/eval/panoptic/panoptic_seg_evaluator.py
+@@ -131,7 +131,7 @@ class PanopticEval:
+             pred_areas = np.array([counts_pred[id2idx_pred[id]] for id in pred_labels])
+             intersections = counts_combo
+             unions = gt_areas + pred_areas - intersections
+-            ious = intersections.astype(np.double) / unions.astype(np.double)
++            ious = intersections.astype(np.float) / unions.astype(np.float)
+ 
+             tp_indexes = ious > 0.5
+             self.pan_tp[cl] += np.sum(tp_indexes)
+diff --git a/python-sdk/nuscenes/eval/panoptic/panoptic_track_evaluator.py b/python-sdk/nuscenes/eval/panoptic/panoptic_track_evaluator.py
+index e9f325f..fcafd71 100644
+--- a/python-sdk/nuscenes/eval/panoptic/panoptic_track_evaluator.py
++++ b/python-sdk/nuscenes/eval/panoptic/panoptic_track_evaluator.py
+@@ -10,7 +10,7 @@ from nuscenes.eval.panoptic.panoptic_seg_evaluator import PanopticEval
+ 
+ 
+ class PanopticTrackingEval(PanopticEval):
+-    """ Panoptic tracking evaluator"""
++    """ Multi-object panoptic tracking evaluator"""
+ 
+     def __init__(self,
+                  n_classes: int,
+@@ -21,7 +21,7 @@ class PanopticTrackingEval(PanopticEval):
+                  iou_thr: float = 0.5):
+         """
+         :param n_classes: Number of classes.
+-        :param min_stuff_cls_id: Minimum stuff class index, 11 for Panoptic nuScenes challenge classes.
++        :param min_stuff_cls_id: Minimum stuff class index, 11 for nuScenes-panoptic challenge classes.
+         :param ignore: List of ignored class index.
+         :param offset: Largest instance number in a frame.
+         :param min_points: minimal number of points to consider instances in GT.
+diff --git a/python-sdk/nuscenes/eval/panoptic/utils.py b/python-sdk/nuscenes/eval/panoptic/utils.py
+index 85596b2..db0ae71 100644
+--- a/python-sdk/nuscenes/eval/panoptic/utils.py
++++ b/python-sdk/nuscenes/eval/panoptic/utils.py
+@@ -1,5 +1,5 @@
+ """
+-Panoptic nuScenes utils.
++nuScenes-panoptic utils.
+ Code written by Motional and the Robot Learning Lab, University of Freiburg.
+ """
+ from typing import Dict
+@@ -12,7 +12,7 @@ get_samples_in_panoptic_eval_set = get_samples_in_eval_set
+ 
+ class PanopticClassMapper(LidarsegClassMapper):
+     """
+-    Maps the general (fine) classes to the challenge (coarse) classes in the Panoptic nuScenes challenge.
++    Maps the general (fine) classes to the challenge (coarse) classes in the nuScenes-panoptic challenge.
+ 
+     Example usage::
+         nusc_ = NuScenes(version='v1.0-mini', dataroot='/data/sets/nuscenes', verbose=True)
+diff --git a/python-sdk/nuscenes/eval/prediction/README.md b/python-sdk/nuscenes/eval/prediction/README.md
+deleted file mode 100644
+index ccc2732..0000000
+--- a/python-sdk/nuscenes/eval/prediction/README.md
++++ /dev/null
+@@ -1,117 +0,0 @@
+-# nuScenes prediction task
+-![nuScenes Prediction logo](https://www.nuscenes.org/public/images/prediction.png)
+-
+-## Overview
+-- [Introduction](#introduction)
+-- [Challenges](#challenges)
+-- [Submission rules](#submission-rules)
+-- [Results format](#results-format)
+-- [Evaluation metrics](#evaluation-metrics)
+-
+-## Introduction
+-The goal of the nuScenes prediction task is to predict the future trajectories of objects in the nuScenes dataset.
+-A trajectory is a sequence of x-y locations. For this challenge, the predictions are 6-seconds long and sampled at
+-2 hertz.
+-
+-## Participation
+-The nuScenes prediction [evaluation server](https://eval.ai/web/challenges/challenge-page/591/overview) is open all year round for submission.
+-To participate in the challenge, please create an account at [EvalAI](https://eval.ai/web/challenges/challenge-page/591/overview).
+-Then upload your zipped result file including all of the required [meta data](#results-format).
+-After each challenge, the results will be exported to the nuScenes [leaderboard](https://www.nuscenes.org/prediction) shown above.
+-This is the only way to benchmark your method against the test dataset. 
+-We require that all participants send the following information to nuScenes@motional.com after submitting their results on EvalAI: 
+-- Team name
+-- Method name
+-- Authors
+-- Affiliations
+-- Method description (5+ sentences)
+-- Project URL
+-- Paper URL
+-- FPS in Hz (and the hardware used to measure it)
+-
+-## Challenges
+-To allow users to benchmark the performance of their method against the community, we will host a single leaderboard all year round.
+-Additionally, we intend to organize a number of challenges at leading Computer Vision and Machine Learning conference workshops.
+-Users that submit their results during the challenge period are eligible for awards. These awards may be different for each challenge.
+-
+-Click [here](https://eval.ai/web/challenges/challenge-page/591/overview) for the **EvalAI prediction evaluation server**.
+-
+-### 6th AI Driving Olympics, ICRA 2021
+-The second nuScenes prediction challenge will be held at [ICRA 2021](http://www.icra2021.org/) as part of [The AI Driving Olympics: Evaluating Progress in Robotics through Standardized and Reproducible Benchmarks](https://driving-olympics.ai/).
+-Submissions will be accepted from April 1 to May 26, 2021.
+-The prizes will be awarded to submissions that outperform the previous state-of-the-art in their respective tracks.
+-Results and winners will be announced at [The AI Driving Olympics: Evaluating Progress in Robotics through Standardized and Reproducible Benchmarks](https://driving-olympics.ai/).
+-Note that this challenge uses the same [evaluation server](https://eval.ai/web/challenges/challenge-page/591/overview) as previous prediction challenges.
+-
+-A summary of the results can be seen below. 
+-For details, please refer to the [prediction leaderboard](https://www.nuscenes.org/prediction).
+-
+-| Rank | Team name    | minADE_5 | Awards          |
+-|---   |---           |---       |---              |
+-|  1   | P2T          | 1.45     | Best submission |
+-|  2   | STSE         | 1.56     | -               |
+-|  3   | SGNet        | 1.85     | -               |
+-
+-### Workshop on Benchmarking Progress in Autonomous Driving, ICRA 2020
+-The first nuScenes prediction challenge will be held at [ICRA 2020](https://www.icra2020.org/).
+-This challenge will be focused on predicting trajectories for vehicles. The submission period will open April 1 and continue until May 28th, 2020.
+-Results and winners will be announced at the [Workshop on Benchmarking Progress in Autonomous Driving](http://montrealrobotics.ca/driving-benchmarks/).
+-Note that the evaluation server can still be used to benchmark your results after the challenge period.
+-
+-*Update:* Due to the COVID-19 situation, participants are **not** required to attend in person
+-to be eligible for the prizes.
+-
+-A summary of the results can be seen below. 
+-For details, please refer to the [prediction leaderboard](https://www.nuscenes.org/prediction).
+-
+-| Rank | Team name    | minADE_5 | Awards          |
+-|---   |---           |---       |---              |
+-|  1   | cxx          | 1.630    | Best submission |
+-|  2   | MHA-JAM      | 1.813    | Second best     |
+-|  3   | Trajectron++ | 1.877    | Third best      |
+-
+-## Submission rules
+-### Prediction-specific rules
+-* The user can submit up to 25 proposed future trajectories, called `modes`, for each agent along with a probability the agent follows that proposal. Our metrics (explained below) will measure how well this proposed set of trajectories matches the ground truth.
+-* Up to two seconds of past history can be used to predict the future trajectory for each agent.
+-* Unlike previous challenges, the leaderboard will be ranked according to performance on the nuScenes val set. This is because we cannot release the annotations on the test set, so users would not be able to run their models on the test set and then submit their predictions to the server. To prevent overfitting on the val set, the top 5 submissions on the leaderboard will be asked to send us their code and we will run their model on the test set. The winners will be chosen based on their performance on the test set, not the val set.
+-* Every submission to the challenge must be accompanied by a brief technical report (no more than 1-2 pages) describing the method in sufficient detail to allow for independent verification.
+-
+-### General rules
+-* We release annotations for the train and val set, but not for the test set. We have created a hold out set for validation
+-from the training set called the `train_val` set.
+-* We release sensor data for train, val and test set.
+-* Top leaderboard entries and their papers will be manually reviewed to ensure no cheating was done.
+-* Each user or team can have at most one account *per year* on the evaluation server. Users that create multiple accounts to circumvent the rules will be excluded from the competition.
+-* Each user or team can submit at most three results *per month*. These results must come from different models, rather than submitting results from the same model at different training epochs or with slightly different parameters.
+-* Faulty submissions that return an error on Eval AI do not count towards the submission limit.
+-* Any attempt to make more submissions than allowed will result in a permanent ban of the team or company from all nuScenes challenges.
+-
+-## Results format
+-Users must submit a json file with a list of [`Predictions`](https://github.com/nutonomy/nuscenes-devkit/blob/master/python-sdk/nuscenes/eval/prediction/data_classes.py) for each agent. A `Prediction` has the following components:
+-
+-```
+-instance: Instance token for agent.
+-sample: Sample token for agent.
+-prediction: Numpy array of shape [num_modes, n_timesteps, state_dim]
+-probabilities: Numpy array of shape [num_modes]
+-```
+-
+-Each agent in nuScenes is indexed by an instance token and a sample token. As mentioned previously, `num_modes` can be up to 25. Since we are making 6 second predictions at 2 Hz, `n_timesteps` is 12. We are concerned only with x-y coordinates, so `state_dim` is 2. Note that the prediction must be reported in **the global coordinate frame**.
+-Consult the [`baseline_model_inference`](https://github.com/nutonomy/nuscenes-devkit/blob/master/python-sdk/nuscenes/eval/prediction/baseline_model_inference.py) script for an example on how to make a submission for two physics-based baseline models.
+-
+-## Evaluation metrics
+-Below we define the metrics for the nuScenes prediction task.
+-
+-### Minimum Average Displacement Error over k (minADE_k)
+-The average of pointwise L2 distances between the predicted trajectory and ground truth over the `k` most likely predictions.
+-
+-### Minimum Final Displacement Error over k (minFDE_k)
+-The final displacement error (FDE) is the L2 distance between the final points of the prediction and ground truth. We take the minimum FDE over the k most likely predictions and average over all agents.
+-
+-### Miss Rate At 2 meters over k (MissRate_2_k)
+-If the maximum pointwise L2 distance between the prediction and ground truth is greater than 2 meters, we define the prediction as a miss.
+-For each agent, we take the k most likely predictions and evaluate if any are misses. The MissRate_2_k is the proportion of misses over all agents.
+-
+-### Configuration
+-The metrics configuration file for the ICRA 2020 challenge can be found in this [file](https://github.com/nutonomy/nuscenes-devkit/blob/master/python-sdk/nuscenes/eval/prediction/configs/predict_2020_icra.json).
+diff --git a/python-sdk/nuscenes/eval/prediction/baseline_model_inference.py b/python-sdk/nuscenes/eval/prediction/baseline_model_inference.py
+index 2a18e74..cd881ac 100644
+--- a/python-sdk/nuscenes/eval/prediction/baseline_model_inference.py
++++ b/python-sdk/nuscenes/eval/prediction/baseline_model_inference.py
+@@ -27,7 +27,7 @@ def main(version: str, data_root: str,
+ 
+     nusc = NuScenes(version=version, dataroot=data_root)
+     helper = PredictHelper(nusc)
+-    dataset = get_prediction_challenge_split(split_name, dataroot=data_root)
++    dataset = get_prediction_challenge_split(split_name)
+     config = load_prediction_config(helper, config_name)
+     oracle = PhysicsOracle(config.seconds, helper)
+     cv_heading = ConstantVelocityHeading(config.seconds, helper)
+diff --git a/python-sdk/nuscenes/eval/prediction/docker_container/README.md b/python-sdk/nuscenes/eval/prediction/docker_container/README.md
+deleted file mode 100644
+index 57650ce..0000000
+--- a/python-sdk/nuscenes/eval/prediction/docker_container/README.md
++++ /dev/null
+@@ -1,74 +0,0 @@
+-# nuScenes Prediction Challenge Docker Submission Process
+-
+-We will ask at least the top five teams ranked on the leader board to submit their code to us so we can
+-evaluate their model on the private test set. To ensure reproducibility, we will run their code
+-in a Docker container. This document explains how you can run your model inside the Docker container we
+-will use. If you follow these steps, then if it runs on your machine, it will run on ours. 
+-
+-## Requirements
+-
+-- Docker version >= 19 (We tested with 19.03.7)
+-- machine with GPU card, nvidia drivers and CUDA 10.1 (for GPU support)
+-- nvidia-docker https://github.com/NVIDIA/nvidia-docker. You can use generic docker image if you don't need GPU support
+-- nuScenes dataset
+-- cloned nuScenes-devkit repo https://github.com/nutonomy/nuscenes-devkit
+-
+-## Usage
+-- Pull docker image. For CUDA 10.1 use:
+-```
+-docker pull nuscenes/dev-challenge:10.1
+-```
+-- Pull docker image. For CUDA 9.2 use:
+-```
+-docker pull nuscenes/dev-challenge:9.2
+-```
+-
+-
+-- Create directory for output data
+-```
+-mkdir -p ~/Documents/submissions
+-```
+-
+-- Create home directory for the image (needed if you need to install extra packages).
+-```
+-mkdir -p ~/Desktop/home_directory
+-```
+-
+-- Modify `do_inference.py` in `nuscenes/eval/prediction/submission` to 
+-run your model. Place your model weights in
+-`nuscenes/eval/prediction/submission` as well. If you need to install any
+-extra packages, add them (along with the **exact** version number) to
+-`nuscenes/eval/prediction/submission/extra_packages.txt`.
+-
+-- Run docker container
+-```
+-cd <NUSCENES ROOT DIR>
+-docker run [ --gpus all ] -ti --rm \
+-   -v <PATH TO NUSCENES DATASET>:/data/sets/nuscenes \
+-   -v <PATH TO nuScenes-devkit ROOT DIR>/python-sdk:/nuscenes-dev/python-sdk \
+-   -v <PATH TO nuscenes/eval/prediction/submission>:/nuscenes-dev/prediction \
+-   -v ~/Documents/:/nuscenes-dev/Documents \
+-   -v ~/Desktop/home_directory:/home/<username>
+-   <name of image>
+-```
+-
+-NOTE: The docker image uses 1000:1000 uid:gid
+-If this is different from your local setup, you may want to add this options into `docker run` command
+-```
+---user `id -u`:`id -g` -v /etc/passwd:/etc/passwd -v /etc/group:/etc/group
+-```
+-
+-- Execute your script inside docker container
+-```
+-source activate /home/nuscenes/.conda/envs/nuscenes
+-
+-pip install -r submission/extra_packages.txt
+-
+-# Use v1.0-trainval and split_name val to run on the entire val set
+-
+-python do_inference.py --version v1.0-mini \
+-    --data_root /data/sets/nuscenes \
+-    --split_name mini_val \
+-    --output_dir /nuscenes-dev/Documents/submissions \
+-    --submission_name <submission-name>
+-```
+diff --git a/python-sdk/nuscenes/eval/prediction/docker_container/docker/Dockerfile b/python-sdk/nuscenes/eval/prediction/docker_container/docker/Dockerfile
+deleted file mode 100644
+index 087b5ed..0000000
+--- a/python-sdk/nuscenes/eval/prediction/docker_container/docker/Dockerfile
++++ /dev/null
+@@ -1,40 +0,0 @@
+-ARG FROM
+-FROM ${FROM}
+-
+-MAINTAINER nutonomy.com
+-
+-RUN apt-get update && apt-get install -y --no-install-recommends \
+-      curl \
+-      libsm6 \
+-      libxext6 \
+-      libxrender-dev \
+-      libgl1-mesa-glx \
+-      libglib2.0-0 \
+-      xvfb \
+-    && rm -rf /var/lib/apt/lists/*
+-
+-RUN curl -OL https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+-    && bash ./Miniconda3-latest-Linux-x86_64.sh -b -p /opt/miniconda3 \
+-    && rm -f Miniconda3-latest-Linux-x86_64.sh
+-
+-ENV PATH /opt/miniconda3/bin:$PATH
+-
+-RUN conda update -n base -c defaults conda
+-
+-RUN groupadd -g 1000 dev \
+-    && useradd -d /home/nuscenes -u 1000 -g 1000 -m -s /bin/bash dev
+-
+-USER dev
+-
+-WORKDIR /nuscenes-dev/prediction
+-
+-ENV PYTHONPATH=/nuscenes-dev/python-sdk
+-
+-COPY setup/requirements.txt .
+-
+-RUN bash -c "conda create -y -n nuscenes python=3.7 \
+-    && source activate nuscenes \
+-    && pip install --no-cache-dir -r /nuscenes-dev/prediction/requirements.txt \
+-    && conda clean --yes --all"
+-
+-VOLUME [ '/nuscenes-dev/python-sdk', '/nuscenes-dev/prediction', '/data/sets/nuscenes', '/nuscenes-dev/Documents' ]
+diff --git a/python-sdk/nuscenes/eval/prediction/docker_container/docker/docker-compose.yml b/python-sdk/nuscenes/eval/prediction/docker_container/docker/docker-compose.yml
+deleted file mode 100644
+index 3bd7a20..0000000
+--- a/python-sdk/nuscenes/eval/prediction/docker_container/docker/docker-compose.yml
++++ /dev/null
+@@ -1,17 +0,0 @@
+-version: '3.7'
+-
+-services:
+-    dev-10.1:
+-        image: nuscenes/dev-challenge:10.1
+-        build:
+-            context: ../../../../../../
+-            dockerfile: python-sdk/nuscenes/eval/prediction/docker_container/docker/Dockerfile
+-            args:
+-                FROM: nvidia/cuda:10.1-base-ubuntu18.04
+-    dev-9.2:
+-        image: nuscenes/dev-challenge:9.2
+-        build:
+-            context: ../../../../../../
+-            dockerfile: python-sdk/nuscenes/eval/prediction/docker_container/docker/Dockerfile
+-            args:
+-                FROM: nvidia/cuda:9.2-base-ubuntu18.04
+diff --git a/python-sdk/nuscenes/eval/prediction/metrics.py b/python-sdk/nuscenes/eval/prediction/metrics.py
+index 5d59ac6..aac4ffa 100644
+--- a/python-sdk/nuscenes/eval/prediction/metrics.py
++++ b/python-sdk/nuscenes/eval/prediction/metrics.py
+@@ -86,8 +86,8 @@ def rank_metric_over_top_k_modes(metric_results: np.ndarray,
+                                  ranking_func: str) -> np.ndarray:
+     """
+     Compute a metric over all trajectories ranked by probability of each trajectory.
+-    :param metric_results: 2-dimensional array of shape [batch_size, num_modes].
+-    :param mode_probabilities: 2-dimensional array of shape [batch_size, num_modes].
++    :param metric_results: 1-dimensional array of shape [batch_size, num_modes].
++    :param mode_probabilities: 1-dimensional array of shape [batch_size, num_modes].
+     :param ranking_func: Either 'min' or 'max'. How you want to metrics ranked over the top
+             k modes.
+     :return: Array of shape [num_modes].
+diff --git a/python-sdk/nuscenes/eval/prediction/submission/extra_packages.txt b/python-sdk/nuscenes/eval/prediction/submission/extra_packages.txt
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/python-sdk/nuscenes/eval/tracking/README.md b/python-sdk/nuscenes/eval/tracking/README.md
+deleted file mode 100644
+index 307d851..0000000
+--- a/python-sdk/nuscenes/eval/tracking/README.md
++++ /dev/null
+@@ -1,378 +0,0 @@
+-# nuScenes tracking task 
+-![nuScenes Tracking logo](https://www.nuscenes.org/public/images/tracking_challenge.png)
+-
+-## Overview
+-- [Introduction](#introduction)
+-- [Authors](#authors)
+-- [Getting started](#getting-started)
+-- [Participation](#participation)
+-- [Challenges](#challenges)
+-- [Submission rules](#submission-rules)
+-- [Results format](#results-format)
+-- [Classes](#classes)
+-- [Evaluation metrics](#evaluation-metrics)
+-- [Baselines](#baselines)
+-- [Leaderboard](#leaderboard)
+-- [Yonohub](#yonohub)
+-
+-## Introduction
+-The [nuScenes dataset](http://www.nuScenes.org) \[1\] has achieved widespread acceptance in academia and industry as a standard dataset for AV perception problems.
+-To advance the state-of-the-art on the problems of interest we propose benchmark challenges to measure the performance on our dataset.
+-At CVPR 2019 we organized the [nuScenes detection challenge](https://www.nuscenes.org/object-detection).
+-The nuScenes tracking challenge is a natural progression to the detection challenge, building on the best known detection algorithms and tracking these across time.
+-Here we describe the challenge, the rules, the classes, evaluation metrics and general infrastructure.
+-
+-## Authors
+-The tracking task and challenge are a joint work between **Motional** (Holger Caesar, Caglayan Dicle, Oscar Beijbom) and **Carnegie Mellon University** (Xinshuo Weng, Kris Kitani).
+-They are based upon the [nuScenes dataset](http://www.nuScenes.org) \[1\] and the [3D MOT baseline and benchmark](https://github.com/xinshuoweng/AB3DMOT) defined in \[2\].
+-
+-# Getting started
+-To participate in the tracking challenge you should first [get familiar with the nuScenes dataset and install it](https://github.com/nutonomy/nuscenes-devkit/blob/master/README.md).
+-In particular, the [tutorial](https://www.nuscenes.org/nuscenes#tutorials) explains how to use the various database tables.
+-The tutorial also shows how to retrieve the images, lidar pointclouds and annotations for each sample (timestamp).
+-To retrieve the instance/track of an object, take a look at the [instance table](https://github.com/nutonomy/nuscenes-devkit/blob/master/docs/schema_nuscenes.md#instance).
+-Now you are ready to train your tracking algorithm on the dataset.
+-If you are only interested in tracking (as opposed to detection), you can use the provided detections for several state-of-the-art methods [below](#baselines).
+-To evaluate the tracking results, use `evaluate.py` in the [eval folder](https://github.com/nutonomy/nuscenes-devkit/tree/master/python-sdk/nuscenes/eval/tracking).
+-In `loaders.py` we provide some methods to organize the raw box data into tracks that may be helpful.
+- 
+-## Participation
+-The nuScenes tracking evaluation server is open all year round for submission.
+-To participate in the challenge, please create an account at [EvalAI](https://eval.ai/web/challenges/challenge-page/476/overview).
+-Then upload your zipped result file including all of the required [meta data](#results-format).
+-The results will be exported to the nuScenes leaderboard shown above (coming soon).
+-This is the only way to benchmark your method against the test dataset.
+-We require that all participants send the following information to nuScenes@motional.com after submitting their results on EvalAI: 
+-- Team name
+-- Method name
+-- Authors
+-- Affiliations
+-- Method description (5+ sentences)
+-- Project URL
+-- Paper URL
+-- FPS in Hz (and the hardware used to measure it)
+-
+-## Challenges
+-To allow users to benchmark the performance of their method against the community, we host a single [leaderboard](#leaderboard) all-year round.
+-Additionally we organize a number of challenges at leading Computer Vision conference workshops.
+-Users that submit their results during the challenge period are eligible for awards.
+-Any user that cannot attend the workshop (direct or via a representative) will be excluded from the challenge, but will still be listed on the leaderboard.
+-
+-Click [here](https://eval.ai/web/challenges/challenge-page/476/overview) for the **EvalAI tracking evaluation server**.
+-
+-### 6th AI Driving Olympics, ICRA 2021
+-The second nuScenes tracking challenge will be held at [ICRA 2021](http://www.icra2021.org/) as part of [The AI Driving Olympics: Evaluating Progress in Robotics through Standardized and Reproducible Benchmarks](https://driving-olympics.ai/).
+-Submissions will be accepted from April 1 to May 26, 2021.
+-The prizes will be awarded to submissions that outperform the previous state-of-the-art in their respective tracks.
+-Results and winners will be announced at [The AI Driving Olympics: Evaluating Progress in Robotics through Standardized and Reproducible Benchmarks](https://driving-olympics.ai/).
+-Note that this challenge uses the same [evaluation server](https://eval.ai/web/challenges/challenge-page/476/overview) as previous tracking challenges.
+-
+-A summary of the results can be seen below. 
+-For details, please refer to the [tracking leaderboard](https://www.nuscenes.org/tracking).
+-
+-| Rank | Team name                    | AMOTA | Awards          |
+-|---   |---                           |---    |---              |
+-|  1   | MLPMOT and CBMOT+            | 68.1% | Best submission |
+-|  2   | OGR3MOT                      | 65.6% | -               |
+-|  3   | StanfordIPRL-TRI-Multi-Modal | 65.5% | -               |
+-
+-### AI Driving Olympics (AIDO), NIPS 2019
+-The first nuScenes tracking challenge will be held at NIPS 2019.
+-Submission will open October 1 and close December 9.
+-The leaderboard will remain private until the end of the challenge.
+-Results and winners will be announced at the [AI Driving Olympics](http://www.driving-olympics.ai/) Workshop (AIDO) at NIPS 2019.
+-
+-A summary of the results can be seen below. 
+-For details, please refer to the [tracking leaderboard](https://www.nuscenes.org/tracking).
+-
+-| Rank | Team name          | AMOTA | Awards          |
+-|---   |---                 |---    |---              |
+-|  1   | StanfordIPRL-TRI   | 55.0% | Best lidar-only submission, best student submission |
+-|  2   | VV_team            | 37.1% | -               |
+-|  3   | CenterTrack-Open   | 10.8% | Best fusion submission |
+-|  4   | CenterTrack-Vision |  4.6% | Best vision-only submission |
+-
+-## Submission rules
+-### Tracking-specific rules
+-* We perform 3D Multi Object Tracking (MOT) as in \[2\], rather than 2D MOT as in KITTI \[4\]. 
+-* Possible input modalities are camera, lidar and radar.
+-* We perform online tracking \[2\]. This means that the tracker may only use past and current, but not future sensor data.
+-* Noisy object detections are provided below (including for the test split), but do not have to be used.
+-* At inference time users may use all past sensor data and ego poses from the current scene, but not from a previous scene. At training time there are no restrictions.
+-
+-### General rules
+-* We release annotations for the train and val set, but not for the test set.
+-* We release sensor data for train, val and test set.
+-* Users make predictions on the test set and submit the results to our evaluation server, which returns the metrics listed below.
+-* We do not use strata. Instead, we filter annotations and predictions beyond class specific distances.
+-* Users must limit the number of submitted boxes per sample to 500.
+-* Every submission provides method information. We encourage publishing code, but do not make it a requirement.
+-* Top leaderboard entries and their papers will be manually reviewed.
+-* Each user or team can have at most one account *per year* on the evaluation server. Users that create multiple accounts to circumvent the rules will be excluded from the competition.
+-* Each user or team can submit at most three results *per year*. These results must come from different models, rather than submitting results from the same model at different training epochs or with slightly different parameters.
+-* Faulty submissions that return an error on Eval AI do not count towards the submission limit.
+-* Any attempt to circumvent these rules will result in a permanent ban of the team or company from all nuScenes challenges.
+-
+-## Results format
+-We define a standardized tracking result format that serves as an input to the evaluation code.
+-Results are evaluated for each 2Hz keyframe, also known as `sample`.
+-The tracking results for a particular evaluation set (train/val/test) are stored in a single JSON file. 
+-For the train and val sets the evaluation can be performed by the user on their local machine.
+-For the test set the user needs to zip the single JSON result file and submit it to the official evaluation server (see above).
+-The JSON file includes meta data `meta` on the type of inputs used for this method.
+-Furthermore it includes a dictionary `results` that maps each sample_token to a list of `sample_result` entries.
+-Each `sample_token` from the current evaluation set must be included in `results`, although the list of predictions may be empty if no object is tracked.
+-```
+-submission {
+-    "meta": {
+-        "use_camera":   <bool>  -- Whether this submission uses camera data as an input.
+-        "use_lidar":    <bool>  -- Whether this submission uses lidar data as an input.
+-        "use_radar":    <bool>  -- Whether this submission uses radar data as an input.
+-        "use_map":      <bool>  -- Whether this submission uses map data as an input.
+-        "use_external": <bool>  -- Whether this submission uses external data as an input.
+-    },
+-    "results": {
+-        sample_token <str>: List[sample_result] -- Maps each sample_token to a list of sample_results.
+-    }
+-}
+-```
+-For the predictions we create a new database table called `sample_result`.
+-The `sample_result` table is designed to mirror the [`sample_annotation`](https://github.com/nutonomy/nuscenes-devkit/blob/master/docs/schema_nuscenes.md#sample_annotation) table.
+-This allows for processing of results and annotations using the same tools.
+-A `sample_result` is a dictionary defined as follows:
+-```
+-sample_result {
+-    "sample_token":   <str>         -- Foreign key. Identifies the sample/keyframe for which objects are detected.
+-    "translation":    <float> [3]   -- Estimated bounding box location in meters in the global frame: center_x, center_y, center_z.
+-    "size":           <float> [3]   -- Estimated bounding box size in meters: width, length, height.
+-    "rotation":       <float> [4]   -- Estimated bounding box orientation as quaternion in the global frame: w, x, y, z.
+-    "velocity":       <float> [2]   -- Estimated bounding box velocity in m/s in the global frame: vx, vy.
+-    "tracking_id":    <str>         -- Unique object id that is used to identify an object track across samples.
+-    "tracking_name":  <str>         -- The predicted class for this sample_result, e.g. car, pedestrian.
+-                                       Note that the tracking_name cannot change throughout a track.
+-    "tracking_score": <float>       -- Object prediction score between 0 and 1 for the class identified by tracking_name.
+-                                       We average over frame level scores to compute the track level score.
+-                                       The score is used to determine positive and negative tracks via thresholding.
+-}
+-```
+-Note that except for the `tracking_*` fields the result format is identical to the [detection challenge](https://www.nuscenes.org/object-detection).
+-
+-## Classes
+-The nuScenes dataset comes with annotations for 23 classes ([details](https://www.nuscenes.org/nuscenes#data-annotation)).
+-Some of these only have a handful of samples.
+-Hence we merge similar classes and remove rare classes.
+-From these *detection challenge classes* we further remove the classes *barrier*, *trafficcone* and *construction_vehicle*, as these are typically static.
+-Below we show the table of the 7 tracking classes and their counterparts in the nuScenes dataset.
+-For more information on the classes and their frequencies, see [this page](https://www.nuscenes.org/nuscenes#data-annotation).
+-
+-|   nuScenes general class                  |   nuScenes tracking class |
+-|   ---                                     |   ---                     |
+-|   animal                                  |   void / ignore           |
+-|   human.pedestrian.personal_mobility      |   void / ignore           |
+-|   human.pedestrian.stroller               |   void / ignore           |
+-|   human.pedestrian.wheelchair             |   void / ignore           |
+-|   movable_object.barrier                  |   void / ignore           |
+-|   movable_object.debris                   |   void / ignore           |
+-|   movable_object.pushable_pullable        |   void / ignore           |
+-|   movable_object.trafficcone              |   void / ignore           |
+-|   static_object.bicycle_rack              |   void / ignore           |
+-|   vehicle.emergency.ambulance             |   void / ignore           |
+-|   vehicle.emergency.police                |   void / ignore           |
+-|   vehicle.construction                    |   void / ignore           |
+-|   vehicle.bicycle                         |   bicycle                 |
+-|   vehicle.bus.bendy                       |   bus                     |
+-|   vehicle.bus.rigid                       |   bus                     |
+-|   vehicle.car                             |   car                     |
+-|   vehicle.motorcycle                      |   motorcycle              |
+-|   human.pedestrian.adult                  |   pedestrian              |
+-|   human.pedestrian.child                  |   pedestrian              |
+-|   human.pedestrian.construction_worker    |   pedestrian              |
+-|   human.pedestrian.police_officer         |   pedestrian              |
+-|   vehicle.trailer                         |   trailer                 |
+-|   vehicle.truck                           |   truck                   |
+-
+-For each nuScenes class, the number of annotations decreases with increasing radius from the ego vehicle, 
+-but the number of annotations per radius varies by class. Therefore, each class has its own upper bound on evaluated
+-detection radius, as shown below:
+-
+-|   nuScenes tracking class     |   KITTI class |   Tracking range (meters) |
+-|   ---                         |   ---         |   ---                     |
+-|   bicycle                     |   cyclist     |   40                      |
+-|   motorcycle                  |   cyclist     |   40                      |
+-|   pedestrian                  |   pedestrian / person (sitting) |   40    |
+-|   bus                         |   -           |   50                      |
+-|   car                         |   car / van   |   50                      |
+-|   trailer                     |   -           |   50                      |
+-|   truck                       |   truck       |   50                      |
+-
+-In the above table we also provide the mapping from nuScenes tracking class to KITTI \[4\] class.
+-While KITTI defines 8 classes in total, only `car` and `pedestrian` are used for the tracking benchmark, as the other classes do not have enough samples.
+-Our goal is to perform tracking of all moving objects in a traffic scene.
+-
+-## Evaluation metrics
+-Below we define the metrics for the nuScenes tracking task.
+-Note that all metrics below (except FPS) are computed per class and then averaged over all classes.
+-The challenge winner will be determined based on AMOTA.
+-Additionally a number of secondary metrics are computed and shown on the leaderboard.
+-
+-### Preprocessing
+-Before running the evaluation code the following pre-processing is done on the data
+-* All boxes (GT and prediction) are removed if they exceed the class-specific detection range.  
+-
+-### Preprocessing
+-Before running the evaluation code the following pre-processing is done on the data:
+-* All boxes (GT and prediction) are removed if they exceed the class-specific tracking range. 
+-* All bikes and motorcycle boxes (GT and prediction) that fall inside a bike-rack are removed. The reason is that we do not annotate bikes inside bike-racks.  
+-* All boxes (GT) without lidar or radar points in them are removed. The reason is that we can not guarantee that they are actually visible in the frame. We do not filter the predicted boxes based on number of points.
+-* To avoid excessive track fragmentation from lidar/radar point filtering, we linearly interpolate GT and predicted tracks.
+-
+-### Matching criterion
+-For all metrics, we define a match by thresholding the 2D center distance on the ground plane rather than Intersection Over Union (IOU) based affinities.
+-We find that this measure is more forgiving for far-away objects than IOU which is often 0, particularly for monocular image-based approaches.
+-The matching threshold (center distance) is 2m.
+-
+-### AMOTA and AMOTP metrics
+-Our main metrics are the AMOTA and AMOTP metrics developed in \[2\].
+-These are integrals over the MOTA/MOTP curves using `n`-point interpolation (`n = 40`).
+-Similar to the detection challenge, we do not include points with `recall < 0.1` (not shown in the equation), as these are typically noisy.
+-
+-- **AMOTA** (average multi object tracking accuracy):
+-Average over the MOTA \[3\] metric (see below) at different recall thresholds.
+-For the traditional MOTA formulation at recall 10% there are at least 90% false negatives, which may lead to negative MOTAs.
+-Therefore the contribution of identity switches and false positives becomes negligible at low recall values.
+-In `MOTAR` we include recall-normalization term `- (1-r) * P` in the nominator, the factor `r` in the denominator and the maximum.
+-These guarantee that the values span the entire `[0, 1]` range and brings the three error types into a similar value range.
+-`P` refers to the number of ground-truth positives for the current class. 
+-<br />
+-<a href="https://www.codecogs.com/eqnedit.php?latex=\dpi{300}&space;\dpi{400}&space;\tiny&space;\mathit{AMOTA}&space;=&space;\small&space;\frac{1}{n-1}&space;\sum_{r&space;\in&space;\{\frac{1}{n-1},&space;\frac{2}{n-1}&space;\,&space;...&space;\,&space;\,&space;1\}}&space;\mathit{MOTAR}" target="_blank">
+-<img width="400" src="https://latex.codecogs.com/gif.latex?\dpi{300}&space;\dpi{400}&space;\tiny&space;\mathit{AMOTA}&space;=&space;\small&space;\frac{1}{n-1}&space;\sum_{r&space;\in&space;\{\frac{1}{n-1},&space;\frac{2}{n-1}&space;\,&space;...&space;\,&space;\,&space;1\}}&space;\mathit{MOTAR}" title="\dpi{400} \tiny \mathit{AMOTA} = \small \frac{1}{n-1} \sum_{r \in \{\frac{1}{n-1}, \frac{2}{n-1} \, ... \, \, 1\}} \mathit{MOTAR}" /></a>
+-<br />
+-<a href="https://www.codecogs.com/eqnedit.php?latex=\dpi{300}&space;\mathit{MOTAR}&space;=&space;\max&space;(0,\;&space;1&space;\,&space;-&space;\,&space;\frac{\mathit{IDS}_r&space;&plus;&space;\mathit{FP}_r&space;&plus;&space;\mathit{FN}_r&space;-&space;(1-r)&space;*&space;\mathit{P}}{r&space;*&space;\mathit{P}})" target="_blank">
+-<img width="450" src="https://latex.codecogs.com/gif.latex?\dpi{300}&space;\mathit{MOTAR}&space;=&space;\max&space;(0,\;&space;1&space;\,&space;-&space;\,&space;\frac{\mathit{IDS}_r&space;&plus;&space;\mathit{FP}_r&space;&plus;&space;\mathit{FN}_r&space;-&space;(1-r)&space;*&space;\mathit{P}}{r&space;*&space;\mathit{P}})" title="\mathit{MOTAR} = \max (0,\; 1 \, - \, \frac{\mathit{IDS}_r + \mathit{FP}_r + \mathit{FN}_r + (1-r) * \mathit{P}}{r * \mathit{P}})" /></a>
+-
+-- **AMOTP** (average multi object tracking precision):
+-Average over the MOTP metric defined below.
+-Here `d_{i,t}` indicates the position error of track `i` at time `t` and `TP_t` indicates the number of matches at time `t`. See \[3\]. 
+-<br />
+-<a href="https://www.codecogs.com/eqnedit.php?latex=\dpi{300}&space;\mathit{AMOTP}&space;=&space;\small&space;\frac{1}{n-1}&space;\sum_{r&space;\in&space;\{\frac{1}{n-1},&space;\frac{2}{n-1},&space;..,&space;1\}}&space;\frac{\sum_{i,t}&space;d_{i,t}}{\sum_t&space;\mathit{TP}_t}" target="_blank">
+-<img width="300" src="https://latex.codecogs.com/png.latex?\dpi{300}&space;\mathit{AMOTP}&space;=&space;\small&space;\frac{1}{n-1}&space;\sum_{r&space;\in&space;\{\frac{1}{n-1},&space;\frac{2}{n-1},&space;..,&space;1\}}&space;\frac{\sum_{i,t}&space;d_{i,t}}{\sum_t&space;\mathit{TP}_t}" title="\mathit{AMOTP} = \small \frac{1}{n-1} \sum_{r \in \{\frac{1}{n-1}, \frac{2}{n-1}, .., 1\}} \frac{\sum_{i,t} d_{i,t}}{\sum_t \mathit{TP}_t}" />
+-</a>
+-
+-### Secondary metrics
+-We use a number of standard MOT metrics including CLEAR MOT \[3\] and ML/MT as listed on [motchallenge.net](https://motchallenge.net).
+-Contrary to the above AMOTA and AMOTP metrics, these metrics use a confidence threshold to determine positive and negative tracks.
+-The confidence threshold is selected for every class independently by picking the threshold that achieves the highest MOTA.
+-The track level scores are determined by averaging the frame level scores.
+-Tracks with a score below the confidence threshold are discarded.
+-* **MOTA** (multi object tracking accuracy) \[3\]: This measure combines three error sources: false positives, missed targets and identity switches.
+-* **MOTP** (multi object tracking precision) \[3\]: The misalignment between the annotated and the predicted bounding boxes.
+-* **FAF**: The average number of false alarms per frame.
+-* **MT** (number of mostly tracked trajectories): The number of ground-truth trajectories that are covered by a track hypothesis for at least 80% of their respective life span.
+-* **ML** (number of mostly lost trajectories): The number of ground-truth trajectories that are covered by a track hypothesis for at most 20% of their respective life span.
+-* **FP** (number of false positives): The total number of false positives.
+-* **FN** (number of false negatives): The total number of false negatives (missed targets).
+-* **IDS** (number of identity switches): The total number of identity switches.
+-* **Frag** (number of track fragmentations): The total number of times a trajectory is fragmented (i.e. interrupted during tracking).
+-
+-Users are asked to provide the runtime of their method:
+-* **FPS** (tracker speed in frames per second): Processing speed in frames per second excluding the detector on the benchmark. Users report both the detector and tracking FPS separately as well as cumulative. This metric is self-reported and therefore not directly comparable.
+-
+-Furthermore we propose a number of additional metrics:
+-* **TID** (average track initialization duration in seconds): Some trackers require a fixed window of past sensor readings. Trackers may also perform poorly without a good initialization. The purpose of this metric is to measure for each track the initialization duration until the first object was successfully detected. If an object is not tracked, we assign the entire track duration as initialization duration. Then we compute the average over all tracks.     
+-* **LGD** (average longest gap duration in seconds): *Frag* measures the number of fragmentations. For the application of Autonomous Driving it is crucial to know how long an object has been missed. We compute this duration for each track. If an object is not tracked, we assign the entire track duration as initialization duration.
+-
+-### Configuration
+-The default evaluation metrics configurations can be found in `nuscenes/eval/tracking/configs/tracking_nips_2019.json`.
+-
+-### Baselines
+-To allow the user focus on the tracking problem, we release object detections from state-of-the-art methods as listed on the [detection leaderboard](https://www.nuscenes.org/object-detection).
+-We thank Alex Lang (Motional), Benjin Zhu (Megvii) and Andrea Simonelli (Mapillary) for providing these.
+-The use of these detections is entirely optional.
+-The detections on the train, val and test splits can be downloaded from the table below.
+-Our tracking baseline is taken from *"A Baseline for 3D Multi-Object Tracking"* \[2\] and uses each of the provided detections.
+-The results for object detection and tracking can be seen below.
+-These numbers are measured on the val split and therefore not identical to the test set numbers on the leaderboard.
+-Note that we no longer use the weighted version of AMOTA (*Updated 10 December 2019*). 
+-
+-|   Method             | NDS  | mAP  | AMOTA | AMOTP | Modality | Detections download                                              | Tracking download                                               |
+-|   ---                | ---  | ---  | ---   | ---   | ---      | ---                                                              | ---                                                             |
+-|   Megvii \[6\]       | 62.8 | 51.9 | 17.9  | 1.50  | Lidar    | [link](https://www.nuscenes.org/data/detection-megvii.zip)       | [link](https://www.nuscenes.org/data/tracking-megvii.zip)       |
+-|   PointPillars \[5\] | 44.8 | 29.5 |  3.5  | 1.69  | Lidar    | [link](https://www.nuscenes.org/data/detection-pointpillars.zip) | [link](https://www.nuscenes.org/data/tracking-pointpillars.zip) |
+-|   Mapillary \[7\]    | 36.9 | 29.8 |  4.5  | 1.79  | Camera   | [link](https://www.nuscenes.org/data/detection-mapillary.zip)    | [link](https://www.nuscenes.org/data/tracking-mapillary.zip)    |
+-
+-#### Overfitting
+-Some object detection methods overfit to the training data.
+-E.g. for the PointPillars method we see a drop in mAP of 6.2% from train to val split (35.7% vs. 29.5%).
+-This may affect (learning-based) tracking algorithms, when the training split has more accurate detections than the validation split.
+-To remedy this problem we have split the existing `train` set into `train_detect` and `train_track` (350 scenes each).
+-Both splits have the same distribution of Singapore, Boston, night and rain data.
+-You can use these splits to train your own detection and tracking algorithms.
+-The use of these splits is entirely optional.
+-The object detection baselines provided in the table above are trained on the *entire* training set, as our tracking baseline \[2\] is not learning-based and therefore not prone to overfitting.
+-
+-## Leaderboard
+-nuScenes will maintain a single leaderboard for the tracking task.
+-For each submission the leaderboard will list method aspects and evaluation metrics.
+-Method aspects include input modalities (lidar, radar, vision), use of map data and use of external data.
+-To enable a fair comparison between methods, the user will be able to filter the methods by method aspects.
+- 
+-We define three such filters here which correspond to the tracks in the nuScenes tracking challenge.
+-Methods will be compared within these tracks and the winners will be decided for each track separately.
+-Note that the tracks are identical to the [nuScenes detection challenge](https://www.nuscenes.org/object-detection) tracks.
+-
+-**Lidar track**: 
+-* Only lidar input allowed.
+-* External data or map data <u>not allowed</u>.
+-* May use pre-training.
+-  
+-**Vision track**: 
+-* Only camera input allowed.
+-* External data or map data <u>not allowed</u>.
+-* May use pre-training.
+- 
+-**Open track**:
+-* Any sensor input allowed (radar, lidar, camera, ego pose).
+-* External data and map data allowed.  
+-* May use pre-training.
+-
+-**Details**:
+-* *Sensor input:*
+-For the lidar and vision tracks we restrict the type of sensor input that may be used.
+-Note that this restriction applies only at test time.
+-At training time any sensor input may be used.
+-In particular this also means that at training time you are allowed to filter the GT boxes using `num_lidar_pts` and `num_radar_pts`, regardless of the track.
+-However, during testing the predicted boxes may *not* be filtered based on input from other sensor modalities.
+-
+-* *Map data:*
+-By `map data` we mean using the *semantic* map provided in nuScenes. 
+-
+-* *Meta data:*
+-Other meta data included in the dataset may be used without restrictions.
+-E.g. calibration parameters, ego poses, `location`, `timestamp`, `num_lidar_pts`, `num_radar_pts`, `translation`, `rotation` and `size`.
+-Note that `instance`, `sample_annotation` and `scene` description are not provided for the test set.
+-
+-* *Pre-training:*
+-By pre-training we mean training a network for the task of image classification using only image-level labels,
+-as done in [[Krizhevsky NIPS 2012]](http://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networ).
+-The pre-training may not involve bounding box, mask or other localized annotations.
+-
+-* *Reporting:* 
+-Users are required to report detailed information on their method regarding sensor input, map data, meta data and pre-training.
+-Users that fail to adequately report this information may be excluded from the challenge.
+-
+-## Yonohub 
+-[Yonohub](https://yonohub.com/) is a web-based system for building, sharing, and evaluating complex systems, such as autonomous vehicles, using drag-and-drop tools.
+-It supports general blocks for nuScenes, as well as the detection and tracking baselines and evaluation code.
+-For more information read the [medium article](https://medium.com/@ahmedmagdyattia1996/using-yonohub-to-participate-in-the-nuscenes-tracking-challenge-338a3e338db9) and the [tutorial](https://docs.yonohub.com/docs/yonohub/nuscenes-package/).
+-Yonohub also provides [free credits](https://yonohub.com/nuscenes-package-and-sponsorship/) of up to $1000 for students to get started with Yonohub on nuScenes.
+-Note that these are available even after the end of the official challenge.   
+-
+-## References
+-- \[1\] *"nuScenes: A multimodal dataset for autonomous driving"*, H. Caesar, V. Bankiti, A. H. Lang, S. Vora, V. E. Liong, Q. Xu, A. Krishnan, Y. Pan, G. Baldan and O. Beijbom, In arXiv 2019.
+-- \[2\] *"A Baseline for 3D Multi-Object Tracking"*, X. Weng and K. Kitani, In arXiv 2019.
+-- \[3\] *"Multiple object tracking performance metrics and evaluation in a smart room environment"*, K. Bernardin, A. Elbs, R. Stiefelhagen, In Sixth IEEE International Workshop on Visual Surveillance, in conjunction with ECCV, 2006.
+-- \[4\] *"Are we ready for Autonomous Driving? The KITTI Vision Benchmark Suite"*, A. Geiger, P. Lenz, R. Urtasun, In CVPR 2012.
+-- \[5\] *"PointPillars: Fast Encoders for Object Detection from Point Clouds"*, A. H. Lang, S. Vora, H. Caesar, L. Zhou, J. Yang and O. Beijbom, In CVPR 2019.
+-- \[6\] *"Class-balanced Grouping and Sampling for Point Cloud 3D Object Detection"*, B. Zhu, Z. Jiang, X. Zhou, Z. Li, G. Yu, In arXiv 2019.
+-- \[7\] *"Disentangling Monocular 3D Object Detection"*, A. Simonelli, S. R. Bulo, L. Porzi, M. Lopez-Antequera, P. Kontschieder, In arXiv 2019.
+-- \[8\] *"PointRCNN: 3D Object Proposal Generation and Detection from Point Cloud"*, S. Shi, X. Wang, H. Li, In CVPR 2019.
+diff --git a/python-sdk/nuscenes/eval/tracking/algo.py b/python-sdk/nuscenes/eval/tracking/algo.py
+index 6708721..5d64e39 100644
+--- a/python-sdk/nuscenes/eval/tracking/algo.py
++++ b/python-sdk/nuscenes/eval/tracking/algo.py
+@@ -155,19 +155,17 @@ class TrackingEvaluation(object):
+         else:
+             summary = pandas.concat(thresh_metrics)
+ 
+-        # Get the number of thresholds which were not achieved (i.e. nan).
+-        unachieved_thresholds = np.array([t for t in thresholds if np.isnan(t)])
+-        num_unachieved_thresholds = len(unachieved_thresholds)
+-
+-        # Get the number of thresholds which were achieved (i.e. not nan).
++        # Sanity checks.
++        unachieved_thresholds = np.sum(np.isnan(thresholds))
+         valid_thresholds = [t for t in thresholds if not np.isnan(t)]
+-        assert valid_thresholds == sorted(valid_thresholds)
+-        num_duplicate_thresholds = len(valid_thresholds) - len(np.unique(valid_thresholds))
+-
+-        # Sanity check.
+-        assert num_unachieved_thresholds + num_duplicate_thresholds + len(thresh_metrics) == self.num_thresholds
++        # duplicate_thresholds = len(thresholds) - len(np.unique(thresholds))
++        duplicate_thresholds = len(valid_thresholds) - len(np.unique(valid_thresholds))
++        # import pdb; pdb.set_trace()
++        assert unachieved_thresholds + duplicate_thresholds + len(thresh_metrics) == self.num_thresholds
+ 
+         # Figure out how many times each threshold should be repeated.
++        # valid_thresholds = [t for t in thresholds if not np.isnan(t)]
++        assert valid_thresholds == sorted(valid_thresholds)
+         rep_counts = [np.sum(thresholds == t) for t in np.unique(valid_thresholds)]
+ 
+         # Store all traditional metrics.
+@@ -200,7 +198,7 @@ class TrackingEvaluation(object):
+                 values = np.concatenate([([v] * r) for (v, r) in zip(values, rep_counts)])
+ 
+                 # Pad values with nans for unachieved recall thresholds.
+-                all_values = [np.nan] * num_unachieved_thresholds
++                all_values = [np.nan] * unachieved_thresholds
+                 all_values.extend(values)
+ 
+             assert len(all_values) == TrackingMetricData.nelem
+diff --git a/python-sdk/nuscenes/eval/tracking/evaluate.py b/python-sdk/nuscenes/eval/tracking/evaluate.py
+index 971f7c6..8cc1d45 100644
+--- a/python-sdk/nuscenes/eval/tracking/evaluate.py
++++ b/python-sdk/nuscenes/eval/tracking/evaluate.py
+@@ -11,15 +11,7 @@ import numpy as np
+ 
+ from nuscenes import NuScenes
+ from nuscenes.eval.common.config import config_factory
+-from nuscenes.eval.common.loaders import (
+-    add_center_dist,
+-    filter_eval_boxes,
+-    get_samples_of_custom_split,
+-    load_gt,
+-    load_gt_of_sample_tokens,
+-    load_prediction,
+-    load_prediction_of_sample_tokens,
+-)
++from nuscenes.eval.common.loaders import load_prediction, load_gt, add_center_dist, filter_eval_boxes
+ from nuscenes.eval.tracking.algo import TrackingEvaluation
+ from nuscenes.eval.tracking.constants import AVG_METRIC_MAP, MOT_METRIC_MAP, LEGACY_METRICS
+ from nuscenes.eval.tracking.data_classes import TrackingMetrics, TrackingMetricDataList, TrackingConfig, TrackingBox, \
+@@ -27,7 +19,6 @@ from nuscenes.eval.tracking.data_classes import TrackingMetrics, TrackingMetricD
+ from nuscenes.eval.tracking.loaders import create_tracks
+ from nuscenes.eval.tracking.render import recall_metric_curve, summary_plot
+ from nuscenes.eval.tracking.utils import print_final_metrics
+-from nuscenes.utils.splits import is_predefined_split
+ 
+ 
+ class TrackingEval:
+@@ -89,17 +80,9 @@ class TrackingEval:
+         # Load data.
+         if verbose:
+             print('Initializing nuScenes tracking evaluation')
+-
+-        if is_predefined_split(split_name=eval_set):
+-            pred_boxes, self.meta = load_prediction(
+-                self.result_path, self.cfg.max_boxes_per_sample, TrackingBox, verbose=verbose
+-            )
+-            gt_boxes = load_gt(nusc, self.eval_set, TrackingBox, verbose=verbose)
+-        else:
+-            sample_tokens_of_custom_split : List[str] = get_samples_of_custom_split(split_name=eval_set, nusc=nusc)
+-            pred_boxes, self.meta = load_prediction_of_sample_tokens(self.result_path, self.cfg.max_boxes_per_sample,
+-                TrackingBox, sample_tokens=sample_tokens_of_custom_split, verbose=verbose)
+-            gt_boxes = load_gt_of_sample_tokens(nusc, sample_tokens_of_custom_split, TrackingBox, verbose=verbose)
++        pred_boxes, self.meta = load_prediction(self.result_path, self.cfg.max_boxes_per_sample, TrackingBox,
++                                                verbose=verbose)
++        gt_boxes = load_gt(nusc, self.eval_set, TrackingBox, verbose=verbose)
+ 
+         assert set(pred_boxes.sample_tokens) == set(gt_boxes.sample_tokens), \
+             "Samples in split don't match samples in predicted tracks."
+diff --git a/python-sdk/nuscenes/eval/tracking/loaders.py b/python-sdk/nuscenes/eval/tracking/loaders.py
+index 92def2d..02430d4 100644
+--- a/python-sdk/nuscenes/eval/tracking/loaders.py
++++ b/python-sdk/nuscenes/eval/tracking/loaders.py
+@@ -3,14 +3,15 @@
+ 
+ from bisect import bisect
+ from collections import defaultdict
+-from typing import DefaultDict, Dict, List
++from typing import List, Dict, DefaultDict
+ 
+ import numpy as np
++from pyquaternion import Quaternion
++
+ from nuscenes.eval.common.data_classes import EvalBoxes
+ from nuscenes.eval.tracking.data_classes import TrackingBox
+ from nuscenes.nuscenes import NuScenes
+-from nuscenes.utils.splits import get_scenes_of_split
+-from pyquaternion import Quaternion
++from nuscenes.utils.splits import create_splits_scenes
+ 
+ 
+ def interpolate_tracking_boxes(left_box: TrackingBox, right_box: TrackingBox, right_ratio: float) -> TrackingBox:
+@@ -104,13 +105,12 @@ def create_tracks(all_boxes: EvalBoxes, nusc: NuScenes, eval_split: str, gt: boo
+     :return: The tracks.
+     """
+     # Only keep samples from this split.
+-    scenes_of_eval_split : List[str] = get_scenes_of_split(split_name=eval_split, nusc=nusc)
+-
++    splits = create_splits_scenes()
+     scene_tokens = set()
+     for sample_token in all_boxes.sample_tokens:
+         scene_token = nusc.get('sample', sample_token)['scene_token']
+         scene = nusc.get('scene', scene_token)
+-        if scene['name'] in scenes_of_eval_split:
++        if scene['name'] in splits[eval_split]:
+             scene_tokens.add(scene_token)
+ 
+     # Tracks are stored as dict {scene_token: {timestamp: List[TrackingBox]}}.
+diff --git a/python-sdk/nuscenes/eval/tracking/mot.py b/python-sdk/nuscenes/eval/tracking/mot.py
+index aa18421..d176610 100644
+--- a/python-sdk/nuscenes/eval/tracking/mot.py
++++ b/python-sdk/nuscenes/eval/tracking/mot.py
+@@ -122,7 +122,7 @@ class MOTAccumulatorCustom(motmetrics.mot.MOTAccumulator):
+                 copy['HId'] = copy['HId'].map(lambda x: hid_map[x], na_action='ignore')
+                 infos['hid_map'] = hid_map
+ 
+-            r = pd.concat((r, copy))
++            r = r.append(copy)
+             mapping_infos.append(infos)
+ 
+         if return_mappings:
+diff --git a/python-sdk/nuscenes/eval/tracking/tests/test_evaluate.py b/python-sdk/nuscenes/eval/tracking/tests/test_evaluate.py
+index 5142a50..ca6a8e2 100644
+--- a/python-sdk/nuscenes/eval/tracking/tests/test_evaluate.py
++++ b/python-sdk/nuscenes/eval/tracking/tests/test_evaluate.py
+@@ -7,38 +7,27 @@ import random
+ import shutil
+ import sys
+ import unittest
+-from typing import Any, Dict, List, Optional
+-from unittest.mock import patch
++from typing import Dict, Optional, Any
+ 
+ import numpy as np
++from tqdm import tqdm
++
+ from nuscenes import NuScenes
+ from nuscenes.eval.common.config import config_factory
+ from nuscenes.eval.tracking.evaluate import TrackingEval
+ from nuscenes.eval.tracking.utils import category_to_tracking_name
+-from nuscenes.utils.splits import get_scenes_of_split
+-from parameterized import parameterized
+-from tqdm import tqdm
++from nuscenes.utils.splits import create_splits_scenes
+ 
+ 
+ class TestMain(unittest.TestCase):
+     res_mockup = 'nusc_eval.json'
+     res_eval_folder = 'tmp'
+-    splits_file_mockup = 'mocked_splits.json'
+-
+-    def setUp(self):
+-        with open(self.splits_file_mockup, 'w') as f:
+-            json.dump({
+-                "mini_custom_train": ["scene-0061", "scene-0553"],
+-                "mini_custom_val": ["scene-0103", "scene-0916"]
+-            }, f, indent=2)
+ 
+     def tearDown(self):
+         if os.path.exists(self.res_mockup):
+             os.remove(self.res_mockup)
+         if os.path.exists(self.res_eval_folder):
+             shutil.rmtree(self.res_eval_folder)
+-        if os.path.exists(self.splits_file_mockup):
+-            os.remove(self.splits_file_mockup)
+ 
+     @staticmethod
+     def _mock_submission(nusc: NuScenes,
+@@ -86,10 +75,10 @@ class TestMain(unittest.TestCase):
+         mock_results = {}
+ 
+         # Get all samples in the current evaluation split.
+-        scenes_of_eval_split : List[str] = get_scenes_of_split(split_name=split, nusc=nusc)
++        splits = create_splits_scenes()
+         val_samples = []
+         for sample in nusc.sample:
+-            if nusc.get('scene', sample['scene_token'])['name'] in scenes_of_eval_split:
++            if nusc.get('scene', sample['scene_token'])['name'] in splits[split]:
+                 val_samples.append(sample)
+ 
+         # Prepare results.
+@@ -145,6 +134,7 @@ class TestMain(unittest.TestCase):
+         }
+         return mock_submission
+ 
++    @unittest.skip
+     def basic_test(self,
+                    eval_set: str = 'mini_val',
+                    add_errors: bool = False,
+@@ -204,14 +194,9 @@ class TestMain(unittest.TestCase):
+         else:
+             print('Skipping checks due to choice of custom eval_set: %s' % eval_set)
+ 
+-    @parameterized.expand([
+-        ('mini_val',),
+-        ('mini_custom_train',)
+-    ])
+-    @patch('nuscenes.utils.splits._get_custom_splits_file_path')
++    @unittest.skip
+     def test_delta_gt(self,
+-                      eval_set: str,
+-                      mock__get_custom_splits_file_path: str,
++                      eval_set: str = 'mini_val',
+                       render_curves: bool = False):
+         """
+         This tests runs the evaluation with the ground truth used as predictions.
+@@ -221,15 +206,13 @@ class TestMain(unittest.TestCase):
+         :param eval_set: Which set to evaluate on.
+         :param render_curves: Whether to render stats curves to disk.
+         """
+-        mock__get_custom_splits_file_path.return_value = self.splits_file_mockup
+-
+         # Run the evaluation without errors.
+         metrics = self.basic_test(eval_set, add_errors=False, render_curves=render_curves)
+ 
+         # Compare metrics to known solution. Do not check:
+         # - MT/TP (hard to figure out here).
+         # - AMOTA/AMOTP (unachieved recall values lead to hard unintuitive results).
+-        if eval_set in ['mini_val', 'mini_custom_train']:
++        if eval_set == 'mini_val':
+             self.assertAlmostEqual(metrics['amota'], 1.0)
+             self.assertAlmostEqual(metrics['amotp'], 0.0, delta=1e-5)
+             self.assertAlmostEqual(metrics['motar'], 1.0)
+diff --git a/python-sdk/nuscenes/map_expansion/arcline_path_utils.py b/python-sdk/nuscenes/map_expansion/arcline_path_utils.py
+index 78b501e..3fe1e00 100644
+--- a/python-sdk/nuscenes/map_expansion/arcline_path_utils.py
++++ b/python-sdk/nuscenes/map_expansion/arcline_path_utils.py
+@@ -235,7 +235,7 @@ def project_pose_to_lane(pose: Pose, lane: List[ArcLinePath], resolution_meters:
+     closest_pose_index = np.linalg.norm(xy_points - pose[:2], axis=1).argmin()
+ 
+     closest_pose = discretized_lane[closest_pose_index]
+-    distance_along_lane = closest_pose_index * resolution_meters
++    distance_along_lane = closest_pose_index * 0.5
+     return closest_pose, distance_along_lane
+ 
+ 
+diff --git a/python-sdk/nuscenes/panoptic/generate_panoptic_labels.py b/python-sdk/nuscenes/panoptic/generate_panoptic_labels.py
+index 6b33d0c..ba5ee5b 100644
+--- a/python-sdk/nuscenes/panoptic/generate_panoptic_labels.py
++++ b/python-sdk/nuscenes/panoptic/generate_panoptic_labels.py
+@@ -1,5 +1,5 @@
+ """
+-Script to generate Panoptic nuScenes ground truth data from nuScenes database and nuScene-lidarseg.
++Script to generate nuScenes-panoptic ground truth data from nuScenes database and nuScene-lidarseg.
+ Code written by Motional and the Robot Learning Lab, University of Freiburg.
+ 
+ Example usage:
+@@ -22,7 +22,7 @@ from nuscenes.utils.geometry_utils import points_in_box
+ 
+ def generate_panoptic_labels(nusc: NuScenes, out_dir: str, verbose: bool = False) -> None:
+     """
+-    Generate Panoptic nuScenes ground truth labels.
++    Generate nuScenes lidar panoptic ground truth labels.
+     :param nusc: NuScenes instance.
+     :param out_dir: output directory.
+     :param verbose: True to print verbose.
+@@ -113,7 +113,7 @@ def main():
+     parser.add_argument('--verbose', type=bool, default=True, help='Whether to print to stdout.')
+     parser.add_argument('--out_dir', type=str, default=None, help='Folder to write the panoptic labels to.')
+     args = parser.parse_args()
+-    out_dir = args.out_dir if args.out_dir is not None else f'Panoptic-nuScenes-{args.version}'
++    out_dir = args.out_dir if args.out_dir is not None else f'nuScenes-panoptic-{args.version}'
+     print(f'Start panoptic ground truths generation... \nArguments: {args}')
+     nusc = NuScenes(version=args.version, dataroot=args.dataroot, verbose=args.verbose)
+     generate_panoptic_labels(nusc=nusc, out_dir=out_dir, verbose=args.verbose)
+diff --git a/python-sdk/nuscenes/panoptic/panoptic_utils.py b/python-sdk/nuscenes/panoptic/panoptic_utils.py
+index 82a866d..46aea7a 100644
+--- a/python-sdk/nuscenes/panoptic/panoptic_utils.py
++++ b/python-sdk/nuscenes/panoptic/panoptic_utils.py
+@@ -1,5 +1,5 @@
+ """
+-Panoptic nuScenes utils.
++nuScenes-panoptic utils.
+ Code written by Motional and the Robot Learning Lab, University of Freiburg.
+ """
+ from typing import Any, Dict, Iterable, List, Tuple
+diff --git a/python-sdk/nuscenes/prediction/models/covernet.py b/python-sdk/nuscenes/prediction/models/covernet.py
+index 7c48923..05cf3c8 100644
+--- a/python-sdk/nuscenes/prediction/models/covernet.py
++++ b/python-sdk/nuscenes/prediction/models/covernet.py
+@@ -46,7 +46,6 @@ class CoverNet(nn.Module):
+                          for in_dim, out_dim in zip(n_hidden_layers[:-1], n_hidden_layers[1:])]
+ 
+         self.head = nn.ModuleList(linear_layers)
+-        self.relu = nn.ReLU()
+ 
+     def forward(self, image_tensor: torch.Tensor,
+                 agent_state_vector: torch.Tensor) -> torch.Tensor:
+@@ -61,7 +60,7 @@ class CoverNet(nn.Module):
+         logits = torch.cat([backbone_features, agent_state_vector], dim=1)
+ 
+         for linear in self.head:
+-            logits = self.relu(linear(logits))
++            logits = linear(logits)
+ 
+         return logits
+ 
+diff --git a/python-sdk/nuscenes/prediction/models/mtp.py b/python-sdk/nuscenes/prediction/models/mtp.py
+index 59ded97..4970d62 100644
+--- a/python-sdk/nuscenes/prediction/models/mtp.py
++++ b/python-sdk/nuscenes/prediction/models/mtp.py
+@@ -69,8 +69,7 @@ class MTP(nn.Module):
+ 
+         features = torch.cat([backbone_features, agent_state_vector], dim=1)
+ 
+-        x = f.relu(self.fc1(features))
+-        predictions = self.fc2(x)
++        predictions = self.fc2(self.fc1(features))
+ 
+         # Normalize the probabilities to sum to 1 for inference.
+         mode_probabilities = predictions[:, -self.num_modes:].clone()
+diff --git a/python-sdk/nuscenes/scripts/README.md b/python-sdk/nuscenes/scripts/README.md
+deleted file mode 100644
+index 9f7bd00..0000000
+--- a/python-sdk/nuscenes/scripts/README.md
++++ /dev/null
+@@ -1 +0,0 @@
+-Misc scripts not part of the core code-base.
+\ No newline at end of file
+diff --git a/python-sdk/nuscenes/utils/splits.py b/python-sdk/nuscenes/utils/splits.py
+index 6988b5c..45aa5f2 100644
+--- a/python-sdk/nuscenes/utils/splits.py
++++ b/python-sdk/nuscenes/utils/splits.py
+@@ -1,8 +1,6 @@
+ # nuScenes dev-kit.
+ # Code written by Holger Caesar, 2018.
+ 
+-import json
+-import os
+ from typing import Dict, List
+ 
+ from nuscenes import NuScenes
+@@ -215,57 +213,6 @@ def create_splits_scenes(verbose: bool = False) -> Dict[str, List[str]]:
+     return scene_splits
+ 
+ 
+-def get_scenes_of_split(split_name: str, nusc : NuScenes, verbose: bool = False) -> List[str]:
+-    """
+-    Returns the scenes in a given split.
+-    :param split_name: The name of the split.
+-    :param nusc: The NuScenes instance to know where to look up potential custom splits.
+-    :param verbose: Whether to print out statistics on a scene level.
+-    :return: A list of scenes in that split.
+-    """
+-
+-    if is_predefined_split(split_name=split_name):
+-        return create_splits_scenes(verbose=verbose)[split_name]
+-    else:
+-        return get_scenes_of_custom_split(split_name=split_name, nusc=nusc)
+-
+-def is_predefined_split(split_name: str) -> bool:
+-    """
+-    Returns whether the split name is one of the predefined splits in the nuScenes dataset.
+-    :param split_name: The name of the split.
+-    :return: Whether the split is predefined.
+-    """
+-    return split_name in create_splits_scenes().keys()
+-
+-
+-def get_scenes_of_custom_split(split_name: str, nusc : NuScenes) -> List[str]:
+-    """Returns the scene names from a custom `splits.json` file."""
+-
+-    splits_file_path: str = _get_custom_splits_file_path(nusc)
+-
+-    splits_data: dict = {}
+-    with open(splits_file_path, 'r') as file:
+-        splits_data = json.load(file)
+-
+-    if split_name not in splits_data.keys():
+-        raise ValueError(f"Custom split {split_name} requested, but not found in {splits_file_path}.")
+-
+-    scene_names_of_split : List[str] = splits_data[split_name]
+-    assert isinstance(scene_names_of_split, list), \
+-        f'Custom split {split_name} must be a list of scene names in {splits_file_path}.'
+-    return scene_names_of_split
+-
+-
+-def _get_custom_splits_file_path(nusc : NuScenes) -> str:
+-    """Use a separate function for this so we can mock it well in unit tests."""
+-
+-    splits_file_path: str = os.path.join(nusc.dataroot, nusc.version, "splits.json")
+-    if (not os.path.exists(splits_file_path)) or (not os.path.isfile(splits_file_path)):
+-        raise ValueError(f"Custom split requested, but no valid file found at {splits_file_path}.")
+-
+-    return splits_file_path
+-
+-
+ if __name__ == '__main__':
+     # Print the scene-level stats.
+     create_splits_scenes(verbose=True)
+-- 
+2.39.3 (Apple Git-146)
+
