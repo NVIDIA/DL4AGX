@@ -1,0 +1,3 @@
+[submodule "stb"]
+	path = AV-Solutions/uniad_tensorrt/cpp/dependencies/stb
+	url = https://github.com/nothings/stb.git
