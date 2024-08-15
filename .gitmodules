@@ -4,3 +4,15 @@
 [submodule "AV-Solutions/uniad-trt/dependencies/BEVFormer_tensorrt"]
 	path = AV-Solutions/uniad-trt/dependencies/BEVFormer_tensorrt
 	url = https://github.com/DerryHub/BEVFormer_tensorrt.git
+[submodule "AV-Solutions/uniad_tensorrt/BEVFormer_tensorrt"]
+	path = AV-Solutions/uniad_tensorrt/BEVFormer_tensorrt
+	url = https://github.com/DerryHub/BEVFormer_tensorrt.git
+[submodule "AV-Solutions/uniad_tensorrt/nuscenes-devkit"]
+	path = AV-Solutions/uniad_tensorrt/nuscenes-devkit
+	url = https://github.com/nutonomy/nuscenes-devkit.git
+[submodule "AV-Solutions/uniad_tensorrt/UniAD"]
+	path = AV-Solutions/uniad_tensorrt/UniAD
+	url = https://github.com/OpenDriveLab/UniAD.git
+[submodule "AV-Solutions/uniad_tensorrt/cpp/dependencies/stb"]
+	path = AV-Solutions/uniad_tensorrt/cpp/dependencies/stb
+	url = https://github.com/nothings/stb.git

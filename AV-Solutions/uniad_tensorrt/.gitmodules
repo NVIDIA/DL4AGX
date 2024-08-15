@@ -1,9 +1,0 @@
-[submodule "UniAD"]
-	path = AV-Solutions/uniad_tensorrt/UniAD
-	url = https://github.com/OpenDriveLab/UniAD.git
-[submodule "BEVFormer_tensorrt"]
-	path = AV-Solutions/uniad_tensorrt/BEVFormer_tensorrt
-	url = https://github.com/DerryHub/BEVFormer_tensorrt.git
-[submodule "nuscenes-devkit"]
-	path = AV-Solutions/uniad_tensorrt/nuscenes-devkit
-	url = https://github.com/nutonomy/nuscenes-devkit.git
