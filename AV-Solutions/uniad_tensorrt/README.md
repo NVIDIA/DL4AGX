@@ -2,10 +2,10 @@
 
 ## Re-create UniAD deployment project
 ### Steps for Clones, Copies, Downloads, and Modifications
-Step 1: clone `uniad_trt_support_tools`
+Step 1: clone `uniad_tensorrt`
 ```
-git clone uniad_trt_support_tools
-cd uniad_trt_support_tools
+git clone uniad_tensorrt
+cd uniad_tensorrt
 git submodule update --init --recursive
 ```
 
@@ -59,7 +59,7 @@ chmod +x ./tools/step9.sh
 chmod +x ./UniAD/tools/*.sh
 ```
 
-Step 10(TODO): copy C++ inference and visualization App
+Step 10: copy C++ inference and visualization App
 ```
 cp -r ./cpp ./UniAD/
 ```
@@ -188,7 +188,7 @@ cd /workspace/UniAD
 
 ## C++ Inference App and Visualization
 
-TODO
+See [C++ Inference App Instructions](cpp/)
 
 
 ## Appendix: UniAD_tiny Training
