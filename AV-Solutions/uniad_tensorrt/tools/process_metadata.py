@@ -70,7 +70,7 @@ def process_metadata(data_loader, data_root, folder, trt_path, onnx_path, stop_i
             onnx_inputs["img_metas_scene_token"] = np.float32(scene_token_preprocess(img_metas[0][0]["scene_token"]).cpu().numpy())
             onnx_inputs["l2g_t"] = np.float32(data["l2g_t"].cpu().numpy())
             onnx_inputs["l2g_r_mat"] = np.float32(data["l2g_r_mat"].cpu().numpy())
-            onnx_inputs["timestamp"] = np.int64(timestamp[0].cpu().numpy())
+            onnx_inputs["timestamp"] = np.int64(timestamp.cpu().numpy())
             onnx_inputs["command"] = np.float32(data["command"][0].cpu().numpy())
             onnx_inputs["img_metas_can_bus"] = np.float32(img_metas[0][0]["can_bus"])
             onnx_inputs['img'] = np.float32(data["img"][0].data[0].cpu().numpy())

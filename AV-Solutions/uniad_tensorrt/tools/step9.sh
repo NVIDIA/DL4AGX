@@ -34,10 +34,10 @@ FILES=(
     "projects/configs/stage2_e2e/tiny_imgx0.25_e2e.py"
     "projects/configs/stage1_track_map/tiny_imgx0.25_track_map.py"
     "README.md"
-    "tools/deploy.py"
+    "tools/export_onnx.py"
     "tools/process_metadata.py"
     "tools/run_trtexec.sh"
-    "tools/uniad_deploy.sh"
+    "tools/uniad_export_onnx.sh"
 )
 
 # Copy each file to the destination directory, preserving directory structure

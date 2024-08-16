@@ -68,7 +68,7 @@ index 1548171..7c35ebc 100644
  ]
  dataset_type = 'NuScenesDataset'
 -data_root = 'data/nuscenes/'
-+data_root = '/data1/nuscenes-le/data/nuscenes/'
++data_root = './data/nuscenes/'
  # Input modality for nuScenes dataset, this is consistent with the submission
  # format which requires the information in input_modality.
  input_modality = dict(
@@ -93,8 +93,8 @@ index 0f056d4..12e01cd 100644
  dataset_type = "NuScenesE2EDataset"
 -data_root = "data/nuscenes/"
 -info_root = "data/infos/"
-+data_root = "/data1/nuscenes-le/data/nuscenes/"
-+info_root = "/data1/nuscenes-le/data/infos/"
++data_root = "./data/nuscenes/"
++info_root = "./data/infos/"
  file_client_args = dict(backend="disk")
  ann_file_train=info_root + f"nuscenes_infos_temporal_train.pkl"
  ann_file_val=info_root + f"nuscenes_infos_temporal_val.pkl"
@@ -131,7 +131,7 @@ index 9903440..83f7160 100644
          num_anchor=6,
          use_nonlinear_optimizer=use_nonlinear_optimizer,
 -        anchor_info_path='data/others/motion_anchor_infos_mode6.pkl',
-+        anchor_info_path='/data1/nuscenes-le/data/others/motion_anchor_infos_mode6.pkl',
++        anchor_info_path='./data/others/motion_anchor_infos_mode6.pkl',
          transformerlayers=dict(
              type='MotionTransformerDecoder',
              pc_range=point_cloud_range,
@@ -141,8 +141,8 @@ index 9903440..83f7160 100644
  dataset_type = "NuScenesE2EDataset"
 -data_root = "data/nuscenes/"
 -info_root = "data/infos/"
-+data_root = "/data1/nuscenes-le/data/nuscenes/"
-+info_root = "/data1/nuscenes-le/data/infos/"
++data_root = "./data/nuscenes/"
++info_root = "./data/infos/"
  file_client_args = dict(backend="disk")
  ann_file_train=info_root + f"nuscenes_infos_temporal_train.pkl"
  ann_file_val=info_root + f"nuscenes_infos_temporal_val.pkl"
@@ -297,7 +297,7 @@ index 553e20b..44b35f6 100644
      parser.add_argument('--eval_set', type=str, default='val',
                          help='Which dataset split to evaluate on, train, val or test.')
 -    parser.add_argument('--dataroot', type=str, default='data/nuscenes',
-+    parser.add_argument('--dataroot', type=str, default='/data1/nuscenes-le/data/nuscenes',
++    parser.add_argument('--dataroot', type=str, default='./data/nuscenes',
                          help='Default nuScenes data directory.')
      parser.add_argument('--version', type=str, default='v1.0-trainval',
                          help='Which version of the nuScenes dataset to evaluate on, e.g. v1.0-trainval.')
@@ -319,7 +319,7 @@ index 3af54f4..18c6303 100644
          default='val',
          help='Which dataset split to evaluate on, train, val or test.')
 -    parser.add_argument('--dataroot', type=str, default='data/nuscenes',
-+    parser.add_argument('--dataroot', type=str, default='/data1/nuscenes-le/data/nuscenes',
++    parser.add_argument('--dataroot', type=str, default='./data/nuscenes',
                          help='Default nuScenes data directory.')
      parser.add_argument(
          '--version',

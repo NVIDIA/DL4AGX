@@ -61,7 +61,7 @@ chmod +x ./UniAD/tools/*.sh
 
 Step 10: copy C++ inference and visualization App
 ```
-cp -r ./cpp ./UniAD/
+cp -r ./inference_app ./UniAD/
 ```
 
 Step 11: 
@@ -113,7 +113,7 @@ PYTHONPATH=$(pwd) python3  ./tools/process_metadata.py --num_frame NUM_FRAME
 Please make sure the structure of `UniAD` is as follows:
 ```
 UniAD
-├── cpp/
+├── inference_app/
 ├── third_party/
 │   ├── uniad_mmdet3d/
 ├── nuscenes_np/

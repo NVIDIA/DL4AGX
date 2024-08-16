@@ -128,11 +128,7 @@ RUN cd / && \
 RUN pip install mmsegmentation>=0.20.0
 
 RUN python3 -m pip install --upgrade pip
-pip3 install google-cloud-bigquery
-pip3 install motmetrics==1.1.3
-pip3 install einops==0.4.1
-pip3 install casadi==3.5.6rc2
-pip3 install pytorch-lightning==1.2.5
+RUN pip3 install google-cloud-bigquery motmetrics==1.1.3 einops==0.4.1 casadi==3.5.6rc2 pytorch-lightning==1.2.5
 
 RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
 
