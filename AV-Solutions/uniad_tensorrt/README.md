@@ -21,7 +21,7 @@ git apply --exclude='*.DS_Store' ../patch/0001-step3-modification-of-UniAD-code-
 
 Step 4: copy `bev_mmdet3d` to `UniAD`
 ```
-cp -r ./BEVFormer_tensorrt/third_party ./UniAD/
+cp -r ./dependencies/BEVFormer_tensorrt/third_party ./UniAD/
 ```
 
 Step 5: rename `bev_mmdet3d` as `uniad_mmdet3d`
@@ -47,7 +47,7 @@ git apply --exclude='*.DS_Store' ../patch/0001-step7-modifications-on-derrhub-co
 Step 8: copy `BEVFormer_tensorrt` plugin & rename & replace the `CMakeLists.txt` with ours
 ```
 cd ..
-cp -r ./BEVFormer_tensorrt/TensorRT ./UniAD/tools/
+cp -r ./dependencies/BEVFormer_tensorrt/TensorRT ./UniAD/tools/
 mv ./UniAD/tools/TensorRT ./UniAD/tools/tensorrt_plugin
 cp ./tools/CMakeLists.txt ./UniAD/tools/tensorrt_plugin/
 ```
@@ -76,13 +76,13 @@ Step 11:
 ### Steps for Preparing Environments
 Step 1: Apply a patch to `nuscenes-devkit` for current env support
 ```
-cd nuscenes-devkit
-git apply --exclude='*.DS_Store' ../patch/0001-update-nuscenes_python-sdk-for-torch1.12.patch
-cp -r ./python-sdk/nuscenes ../docker
+cd dependencies/nuscenes-devkit
+git apply --exclude='*.DS_Store' ../../patch/0001-update-nuscenes_python-sdk-for-torch1.12.patch
+cp -r ./python-sdk/nuscenes ../../docker
 ```
 Step 2: build docker image
 ```
-cd ../docker
+cd ../../docker
 docker build -t uniad_torch1.12 -f uniad_torch1.12.dockerfile .
 ```
 

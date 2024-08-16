@@ -24,7 +24,7 @@
 #!/bin/bash
 
 # Define the source and destination directories
-SOURCE_DIR="./BEVFormer_tensorrt/det2trt/models"
+SOURCE_DIR="./dependencies/BEVFormer_tensorrt/det2trt/models"
 DEST_DIR="./UniAD/projects/mmdet3d_plugin/uniad"
 
 # List of files to copy
