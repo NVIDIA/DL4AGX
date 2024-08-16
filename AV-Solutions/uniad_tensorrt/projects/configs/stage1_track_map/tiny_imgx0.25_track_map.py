@@ -1,13 +1,27 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+
 _base_ = ["../_base_/datasets/nus-3d.py",
           "../_base_/default_runtime.py"]
-
-# Update-2023-06-12: 
-# [Enhance] Update some freezing args of UniAD 
-# [Bugfix] Reproduce the from-scratch results of stage1
-# 1. Remove loss_past_traj in stage1 training
-# 2. Unfreeze neck and BN
-# --> Reproduced tracking result: AMOTA 0.393
-
 
 # Unfreeze neck and BN, the from-scratch results of stage1 could be reproduced
 plugin = True
@@ -17,7 +31,6 @@ plugin_dir = "projects/mmdet3d_plugin/"
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size = [0.2, 0.2, 8]
 patch_size = [102.4, 102.4]
-# img_norm_cfg = dict(mean=[103.530, 116.280, 123.675], std=[1.0, 1.0, 1.0], to_rgb=False)
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True
 )
@@ -41,9 +54,6 @@ input_modality = dict(
 _dim_ = 256
 _pos_dim_ = _dim_ // 2
 _ffn_dim_ = _dim_ * 2
-# _num_levels_ = 4
-# bev_h_ = 200
-# bev_w_ = 200
 _num_levels_ = 1
 bev_h_ = 50
 bev_w_ = 50
@@ -92,29 +102,6 @@ model = dict(
     num_query=900,
     num_classes=10,
     pc_range=point_cloud_range,
-    # img_backbone=dict(
-    #     type="ResNet",
-    #     depth=101,
-    #     num_stages=4,
-    #     out_indices=(1, 2, 3),
-    #     frozen_stages=4,
-    #     norm_cfg=dict(type="BN2d", requires_grad=False),
-    #     norm_eval=True,
-    #     style="caffe",
-    #     dcn=dict(
-    #         type="DCNv2", deform_groups=1, fallback_on_stride=False
-    #     ),  # original DCNv2 will print log when perform load_state_dict
-    #     stage_with_dcn=(False, False, True, True),
-    # ),
-    # img_neck=dict(
-    #     type="FPN",
-    #     in_channels=[512, 1024, 2048],
-    #     out_channels=_dim_,
-    #     start_level=0,
-    #     add_extra_convs="on_output",
-    #     num_outs=4,
-    #     relu_before_extra_convs=True,
-    # ),
     pretrained=dict(img="torchvision://resnet50"),
     img_backbone=dict(
         type="ResNet",

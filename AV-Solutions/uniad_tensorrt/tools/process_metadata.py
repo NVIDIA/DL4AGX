@@ -40,8 +40,9 @@ def scene_token_preprocess(scene_token):
         scene_token_list.append(ord(ch))
     return torch.tensor(scene_token_list)
 
-def process_metadata(data_loader, folder, trt_path, onnx_path, stop_id):
+def process_metadata(data_loader, data_root, folder, trt_path, onnx_path, stop_id):
     assert stop_id>5
+    dump_info_str_lst = []
     for sample_id, data in tqdm.tqdm(enumerate(data_loader)):
         if sample_id >= stop_id:
             break
@@ -87,6 +88,12 @@ def process_metadata(data_loader, folder, trt_path, onnx_path, stop_id):
             trt_inputs[key] = np.ravel(trt_inputs[key]).astype(np.float32)
             trt_inputs[key] = np.ascontiguousarray(trt_inputs[key]).astype(np.float32)
             trt_inputs[key].tofile(os.path.join(trt_path, key, str(sample_id)+".bin"))
+        dump_info_str = [f"{os.path.join(data_root, jpg_file)};" for jpg_file in img_metas[0][0]["filename"]]
+        dump_info_str = ''.join(dump_info_str)
+        dump_info_str_lst.append(dump_info_str+"\n")
+    info_file = open(os.path.join(folder, "info.txt"), "w")
+    info_file.writelines(dump_info_str_lst)
+    info_file.close()
     return
     
 def parse_args():
@@ -124,4 +131,4 @@ if __name__ == '__main__':
         shuffle=False,
         nonshuffler_sampler=cfg.data.nonshuffler_sampler,
     )
-    process_metadata(data_loader, args.dump_folder, args.dump_trt_path, args.dump_onnx_path, args.num_frame)
+    process_metadata(data_loader, cfg.data_root, args.dump_folder, args.dump_trt_path, args.dump_onnx_path, args.num_frame)
