@@ -83,12 +83,12 @@ cp -r ./python-sdk/nuscenes ../docker
 Step 2: build docker image
 ```
 cd ../docker
-docker build -t uniad_deploy -f Dockerfile .
+docker build -t uniad_torch1.12 -f uniad_torch1.12.dockerfile .
 ```
 
 Step 3: create docker containder (add `-v /host/system/path/to/UniAD/xxx:/workspace/UniAD/FOLDER` if any host system `./UniAD/FOLDER` is symbolic link)
 ```
-docker run -it --gpus all --shm-size=8g -v /host/system/path/to/UniAD:/workspace/UniAD -d uniad_deploy /bin/bash
+docker run -it --gpus all --shm-size=8g -v /host/system/path/to/UniAD:/workspace/UniAD -d uniad_torch1.12 /bin/bash
 ```
 Step 4: show container and run 
 ```
@@ -142,7 +142,7 @@ UniAD
 ### Pytorch to ONNX
 ```
 cd /workspace/UniAD
-CUDA_VISIBLE_DEVICES=0 ./tools/uniad_deploy.sh ./projects/configs/stage2_e2e/tiny_imgx0.25_e2e_trt_p.py ./ckpts/tiny_imgx0.25_e2e_ep20.pth 1
+CUDA_VISIBLE_DEVICES=0 ./tools/uniad_export_onnx.sh ./projects/configs/stage2_e2e/tiny_imgx0.25_e2e_trt_p.py ./ckpts/tiny_imgx0.25_e2e_ep20.pth 1
 ```
 
 

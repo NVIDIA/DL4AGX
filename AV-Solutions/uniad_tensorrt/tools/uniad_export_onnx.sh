@@ -45,7 +45,7 @@ PYTHONPATH="$(dirname $0)/..":$PYTHONPATH \
 python -m torch.distributed.launch \
     --nproc_per_node=$GPUS_PER_NODE \
     --master_port=$MASTER_PORT \
-    $(dirname "$0")/deploy.py \
+    $(dirname "$0")/export_onnx.py \
     $CFG \
     $CKPT \
     --launcher pytorch ${@:4} \
