@@ -56,7 +56,9 @@ def process_metadata(data_loader, data_root, folder, trt_path, onnx_path, stop_i
         trt_inputs["img_metas_scene_token"] = np.float32(scene_token_preprocess(img_metas[0][0]["scene_token"]).cpu().numpy())
         trt_inputs["l2g_t"] = np.float32(data["l2g_t"].cpu().numpy())
         trt_inputs["l2g_r_mat"] = np.float32(data["l2g_r_mat"].cpu().numpy())
-        trt_inputs["timestamp"] = np.int64(timestamp[0].cpu().numpy())
+        if sample_id == 0:
+            timestamp0 = timestamp[0].cpu().numpy()
+        trt_inputs["timestamp"] = timestamp[0].cpu().numpy()-timestamp0
         trt_inputs["command"] = np.float32(data["command"][0].cpu().numpy())
         
         # Get the delta of ego position and angle between two timestamps.
