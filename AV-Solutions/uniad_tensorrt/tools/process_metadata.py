@@ -25,6 +25,7 @@ import numpy as np
 import importlib
 import tqdm
 import torch
+import copy
 from mmcv import Config
 from third_party.uniad_mmdet3d.datasets.builder import build_dataloader, build_dataset
 
@@ -43,6 +44,8 @@ def scene_token_preprocess(scene_token):
 def process_metadata(data_loader, data_root, folder, trt_path, onnx_path, stop_id):
     assert stop_id>5
     dump_info_str_lst = []
+    prev_pos = 0
+    prev_angle = 0
     for sample_id, data in tqdm.tqdm(enumerate(data_loader)):
         if sample_id >= stop_id:
             break
@@ -55,6 +58,16 @@ def process_metadata(data_loader, data_root, folder, trt_path, onnx_path, stop_i
         trt_inputs["l2g_r_mat"] = np.float32(data["l2g_r_mat"].cpu().numpy())
         trt_inputs["timestamp"] = np.int64(timestamp[0].cpu().numpy())
         trt_inputs["command"] = np.float32(data["command"][0].cpu().numpy())
+        
+        # Get the delta of ego position and angle between two timestamps.
+        tmp_pos = copy.deepcopy(img_metas[0][0]['can_bus'][:3])
+        tmp_angle = copy.deepcopy(img_metas[0][0]['can_bus'][-1])
+        img_metas[0][0]['can_bus'][:3] -= prev_pos
+        img_metas[0][0]['can_bus'][-1] -= prev_angle
+        prev_pos = tmp_pos
+        prev_angle = tmp_angle
+
+        # then this img_metas[0][0]['can_bus'] is what you need to dump
         trt_inputs["img_metas_can_bus"] = np.float32(img_metas[0][0]["can_bus"])
 
         if not os.path.exists(folder):
@@ -70,7 +83,7 @@ def process_metadata(data_loader, data_root, folder, trt_path, onnx_path, stop_i
             onnx_inputs["img_metas_scene_token"] = np.float32(scene_token_preprocess(img_metas[0][0]["scene_token"]).cpu().numpy())
             onnx_inputs["l2g_t"] = np.float32(data["l2g_t"].cpu().numpy())
             onnx_inputs["l2g_r_mat"] = np.float32(data["l2g_r_mat"].cpu().numpy())
-            onnx_inputs["timestamp"] = np.int64(timestamp.cpu().numpy())
+            onnx_inputs["timestamp"] = timestamp.cpu().numpy()
             onnx_inputs["command"] = np.float32(data["command"][0].cpu().numpy())
             onnx_inputs["img_metas_can_bus"] = np.float32(img_metas[0][0]["can_bus"])
             onnx_inputs['img'] = np.float32(data["img"][0].data[0].cpu().numpy())

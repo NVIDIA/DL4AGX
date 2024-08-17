@@ -431,7 +431,7 @@ def main():
     test_track_instances =[item*0 for item in _generate_empty_zeros_tracks_trt()] 
     l2g_r_mat0 = torch.zeros(1, 3, 3)
     l2g_t0 = torch.zeros(1,3)
-    for iid in tqdm(range(69)):
+    for iid in tqdm(range(6)):
         DUMPED_INPUTS = './nuscenes_np/uniad_onnx_input/'
         DUMPED_OUTPUTS = './nuscenes_np/uniad_pth_trtp_out/'
         inputs = {}
