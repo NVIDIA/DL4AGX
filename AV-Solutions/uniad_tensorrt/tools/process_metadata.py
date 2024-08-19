@@ -106,7 +106,7 @@ def process_metadata(data_loader, data_root, folder, trt_path, onnx_path, stop_i
         dump_info_str = [f"{os.path.join(data_root, jpg_file)};" for jpg_file in img_metas[0][0]["filename"]]
         dump_info_str = ''.join(dump_info_str)
         dump_info_str_lst.append(dump_info_str+"\n")
-    info_file = open(os.path.join(folder, "info.txt"), "w")
+    info_file = open(os.path.join(trt_path, "info.txt"), "w")
     info_file.writelines(dump_info_str_lst)
     info_file.close()
     return

@@ -23,7 +23,7 @@
 #!/bin/bash
 
 # Define variables
-TRT_VERSION=8.6.15.17
+TRT_VERSION=8.6.13.3
 FP=fp32
 DAT_PATH=./dumped_inputs/uniad_trtexec_fp64
 MODEL=uniad_tiny_imgx0.25_cp.repaired
@@ -49,7 +49,7 @@ INPUTS="max_obj_id:${DAT_PATH}/max_obj_id.dat,img_metas_can_bus:${DAT_PATH}/img_
 LD_LIBRARY_PATH=${TRT_PATH}/TensorRT-${TRT_VERSION}/lib:$LD_LIBRARY_PATH \
 ${TRT_PATH}/TensorRT-${TRT_VERSION}/bin/trtexec \
   --onnx=${ONNX_PATH}/${MODEL}.onnx \
-  --saveEngine=${ENGINE_PATH}/${MODEL}_trt${TRT_VERSION}_${FP}.trt \
+  --saveEngine=${ENGINE_PATH}/${MODEL}_trt${TRT_VERSION}_${FP}.plan \
   --plugins=${PLUGINS_PATH}/tensorrt_plugin_trt${TRT_VERSION}/lib/libtensorrt_ops.so \
   --verbose \
   --dumpLayerInfo \

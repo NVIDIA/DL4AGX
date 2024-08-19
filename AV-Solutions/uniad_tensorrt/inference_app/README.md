@@ -1,5 +1,5 @@
 # UniAD-TRT
-[UniAD](https://arxiv.org/abs/2212.10156) is a Unified Autonomous Driving algorithm framework which follows an end-to-end manner, taking multi view vision input and could output planning results directly. Unid achieves SOTA performance in many autonomous driving tasks especially on planning task. The code for UniAD can be found [here](https://github.com/OpenDriveLab/UniAD).
+[UniAD](https://arxiv.org/abs/2212.10156) is a Unified Autonomous Driving algorithm framework which follows an end-to-end manner, taking multi view vision input and could output planning results directly. UniAD achieves SOTA performance in many autonomous driving tasks especially on planning task. The code for UniAD can be found [here](https://github.com/OpenDriveLab/UniAD).
 
 <img src="./media/pipeline.png" width="1024">
 

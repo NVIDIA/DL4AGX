@@ -4548,7 +4548,7 @@ index 577ae38..7fece7e 100644
 +
 +
 +# the vectorized version of track_base_update_trt_script_v4, can save 20-25ms TRT engine inference time on Orin.
-+# TODO: waiting for bug fix of TensorRT-8.6.15.17
++# TODO: waiting for bug fix of TensorRT-8.6.13.3
 +def track_base_update_trt_script_v5(track_instances3, track_instances5, track_instances7, length,
 +                                 score_thresh, filter_score_thresh, max_obj_id, miss_tolerance):
 +    track_instances3_c = track_instances3.int().clone()

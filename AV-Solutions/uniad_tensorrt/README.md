@@ -70,7 +70,7 @@ Step 11:
 
 2. download [pretrained weights](https://nvidia-my.sharepoint.com/:u:/r/personal/joshp_nvidia_com/Documents/Internal/onnx/UniAD_weights/tiny_imgx0.25_e2e_ep20.pth?csf=1&web=1&e=C8khhs) of UniAD_tiny to `./UniAD/ckpts`
 
-3. download `TensorRT-8.6.15.17`(CUDA 11.4) to `./UniAD/TensorRT-8.6.15.17`
+3. download `TensorRT-8.6.13.3`(CUDA 11.4) to `./UniAD/TensorRT-8.6.13.3`
 
 
 ### Steps for Preparing Environments
@@ -121,7 +121,7 @@ UniAD
 │   ├── uniad_trt_input/
 ├── projects/
 ├── tools/
-├── TensorRT-8.6.15.17/
+├── TensorRT-8.6.13.3/
 ├── ckpts/
 │   ├── tiny_imgx0.25_e2e_ep20.pth
 ├── data/
@@ -148,7 +148,7 @@ CUDA_VISIBLE_DEVICES=0 ./tools/uniad_export_onnx.sh ./projects/configs/stage2_e2
 
 ### ONNX to TensorRT
 
-Engine has been verified on `TensorRT-8.6.15.17`
+Engine has been verified on `TensorRT-8.6.13.3`
 
 #### TensorRT Plugin Compilation:
 
@@ -161,8 +161,8 @@ set(TENSORRT_LIBRARY_DIRS /usr/lib/x86_64-linux-gnu/)
 ```
 to
 ```
-set(TENSORRT_INCLUDE_DIRS /workspace/UniAD/TensorRT-8.6.15.17/include/)
-set(TENSORRT_LIBRARY_DIRS /workspace/UniAD/TensorRT-8.6.15.17/lib/)
+set(TENSORRT_INCLUDE_DIRS /workspace/UniAD/TensorRT-8.6.13.3/include/)
+set(TENSORRT_LIBRARY_DIRS /workspace/UniAD/TensorRT-8.6.13.3/lib/)
 ```
 
 
@@ -172,7 +172,7 @@ Then complie by
 cd /workspace/UniAD/tools/tensorrt_plugin
 mkdir build
 cd build
-cmake .. -DCMAKE_TENSORRT_PATH=/workspace/UniAD/TensorRT-8.6.15.17
+cmake .. -DCMAKE_TENSORRT_PATH=/workspace/UniAD/TensorRT-8.6.13.3
 make -j$(nproc)
 make install
 ```
