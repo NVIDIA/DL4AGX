@@ -1,0 +1,27 @@
+net_config:
+  name: b2_rf
+  dropout: 0
+
+data_provider:
+  data_aug:
+  - name: randaug
+    n: 2
+    m: 5
+  - name: erase
+    p: 0.2
+    
+run_config:
+  base_lr: 0.0004
+  mixup_config:
+    op:
+    - - mixup
+      - 0.2
+      - 1.0
+    - - cutmix
+      - 0.2
+      - 1.0
+
+backbone_drop:
+  drop_prob: 0.1
+  linear_decay: true
+  skip: 1

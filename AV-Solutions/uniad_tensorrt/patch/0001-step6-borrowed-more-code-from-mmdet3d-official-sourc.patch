@@ -1,0 +1,1352 @@
+From 1b78354a5c916d2cafd3314671fefe15272bfdf0 Mon Sep 17 00:00:00 2001
+From: Bianjiang Yang <bianjiangy@bianjiangy-mlt.client.nvidia.com>
+Date: Tue, 13 Aug 2024 14:43:40 -0700
+Subject: [PATCH] step6: borrowed more code from mmdet3d official source code
+
+---
+ third_party/.DS_Store                         | Bin 6148 -> 6148 bytes
+ third_party/uniad_mmdet3d/.DS_Store           | Bin 6148 -> 0 bytes
+ third_party/uniad_mmdet3d/__init__.py         |   1 +
+ .../uniad_mmdet3d/core/bbox/__init__.py       |   1 +
+ .../bbox/assigners/hungarian_assigner_3d.py   |   2 +-
+ .../core/bbox/coders/nms_free_coder.py        |   2 +-
+ .../core/bbox/iou_calculators/__init__.py     |  11 +
+ .../bbox/iou_calculators/iou3d_calculator.py  | 321 ++++++++++++++++
+ .../core/bbox/structures/__init__.py          |   2 +
+ .../core/bbox/structures/base_box3d.py        |   2 +-
+ .../core/bbox/structures/cam_box3d.py         | 324 +++++++++++++++++
+ .../core/bbox/structures/depth_box3d.py       | 343 ++++++++++++++++++
+ .../core/bbox/structures/lidar_box3d.py       |   4 +-
+ .../core/post_processing/box3d_nms.py         |   2 +-
+ .../core/post_processing/merge_augs.py        |   2 +-
+ .../datasets/pipelines/data_augment_utils.py  |   2 +-
+ .../datasets/pipelines/dbsampler.py           |   2 +-
+ .../datasets/pipelines/formating.py           |   4 +-
+ .../datasets/pipelines/loading.py             |   2 +-
+ .../models/detectors/mvx_two_stage.py         |   2 +-
+ third_party/uniad_mmdet3d/utils/__init__.py   |   9 +
+ .../uniad_mmdet3d/utils/collect_env.py        |  21 ++
+ third_party/uniad_mmdet3d/utils/logger.py     |  30 ++
+ 23 files changed, 1076 insertions(+), 13 deletions(-)
+ delete mode 100644 third_party/uniad_mmdet3d/.DS_Store
+ create mode 100644 third_party/uniad_mmdet3d/core/bbox/iou_calculators/__init__.py
+ create mode 100644 third_party/uniad_mmdet3d/core/bbox/iou_calculators/iou3d_calculator.py
+ create mode 100644 third_party/uniad_mmdet3d/core/bbox/structures/cam_box3d.py
+ create mode 100644 third_party/uniad_mmdet3d/core/bbox/structures/depth_box3d.py
+ create mode 100644 third_party/uniad_mmdet3d/utils/__init__.py
+ create mode 100644 third_party/uniad_mmdet3d/utils/collect_env.py
+ create mode 100644 third_party/uniad_mmdet3d/utils/logger.py
+
+diff --git a/third_party/.DS_Store b/third_party/.DS_Store
+index 56115bf98a9953ce47369c4f32902894d843a768..025b0d87d3c99b689be2955b290fd53d6cc0aaae 100644
+GIT binary patch
+delta 135
+zcmZoMXfc=&$(_Ow&yWj*DGaHTA2KdCV`X4q;AJRf$YaQ4NCb+)Wf@8sj2Ti=ij#Aa
+m^7C_ms*sgUwq#W1M$$GpnNb~uKM|F`c|W5G+h%r-zx)713m*jl
+
+delta 95
+zcmZoMXfc=&$(_rP%aFp5%22{!JeiScIX5c<0|Pfh5>TXUvJ|5XJB;nfs0?T4GpfVc
+V3lZ$iml;jiCN_v{X6N|J4*<<W6?6aq
+
+diff --git a/third_party/uniad_mmdet3d/.DS_Store b/third_party/uniad_mmdet3d/.DS_Store
+deleted file mode 100644
+index aa89c5af3e5c7f758a7f63da0486faa2e3a631fc..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 6148
+zcmeHKu};G<5Ir{mA`nssBp5R>g1WG<gc3Fer2YW3sQ{@_A_{vp79_rbKj16i8yJxK
+z4+t^9z&qQtc2hb6LU+>nrM^4A^OF+SM5NkRS&OJiL=l`ZT*ffNIL=<PhMidhDqdr7
+z+UoR*ysTx)geV{i{6z)$-3{r4N;;>Z|NidoyRp1T)9#??VlH}odD{$j9`^irHaA|L
+zx!;B(l!CWM1zk|z;|<a~H|Fw|OCJ+nTbmaX-dS;vH@s)wh%)T>5<a9p(BF5k{X8qj
+z?PGOo+(&IKx1V`=USGk8`&y(NdSvKnFx}JZ;dI>X=l16POBZhqx0mm7ygnAV4GPdj
+zIn_a9{b>?$xvyJeEo`03T90~sjS=&S{f+`Sv)Q5*gEEQ&qJStcR)D_`F`O~6SQ*rx
+z4h;GV01Pp$4bOa+;F{QCVzDxa2uzt$pea@MilIz7=3|?eSgZ`1a#Hs4p)9kqHx#AW
+zv3{)6NhJnl6a_>9UxC2<Z1VYk@csSYFOpxPfGF^<6i{K>N!!?xJzHy=<Fht~AH&%=
+ouQI4hFxcZ*Kk!k!0oR6D%n!iCVr39BF!>{(WspG>_)!Hu0lgrd9{>OV
+
+diff --git a/third_party/uniad_mmdet3d/__init__.py b/third_party/uniad_mmdet3d/__init__.py
+index 7adb3a3..9c0435a 100644
+--- a/third_party/uniad_mmdet3d/__init__.py
++++ b/third_party/uniad_mmdet3d/__init__.py
+@@ -2,3 +2,4 @@ from .apis.train import custom_train_model
+ from .models import *
+ from .core import *
+ from .datasets import *
++from .utils import *
+\ No newline at end of file
+diff --git a/third_party/uniad_mmdet3d/core/bbox/__init__.py b/third_party/uniad_mmdet3d/core/bbox/__init__.py
+index 1453914..d0e2a32 100644
+--- a/third_party/uniad_mmdet3d/core/bbox/__init__.py
++++ b/third_party/uniad_mmdet3d/core/bbox/__init__.py
+@@ -3,3 +3,4 @@ from .assigners import *
+ from .match_costs import *
+ from .transforms import *
+ from .structures import *
++from .iou_calculators import *
+\ No newline at end of file
+diff --git a/third_party/uniad_mmdet3d/core/bbox/assigners/hungarian_assigner_3d.py b/third_party/uniad_mmdet3d/core/bbox/assigners/hungarian_assigner_3d.py
+index a605d58..92317a1 100644
+--- a/third_party/uniad_mmdet3d/core/bbox/assigners/hungarian_assigner_3d.py
++++ b/third_party/uniad_mmdet3d/core/bbox/assigners/hungarian_assigner_3d.py
+@@ -13,7 +13,7 @@ except ImportError:
+     linear_sum_assignment = None
+ 
+ 
+-@BBOX_ASSIGNERS.register_module()
++@BBOX_ASSIGNERS.register_module(force=True)
+ class HungarianAssigner3D(BaseAssigner):
+     """Computes one-to-one matching between predictions and ground truth.
+     This class computes an assignment between the targets and the predictions
+diff --git a/third_party/uniad_mmdet3d/core/bbox/coders/nms_free_coder.py b/third_party/uniad_mmdet3d/core/bbox/coders/nms_free_coder.py
+index 6591069..c5f00aa 100644
+--- a/third_party/uniad_mmdet3d/core/bbox/coders/nms_free_coder.py
++++ b/third_party/uniad_mmdet3d/core/bbox/coders/nms_free_coder.py
+@@ -6,7 +6,7 @@ from ..util import denormalize_bbox
+ import numpy as np
+ 
+ 
+-@BBOX_CODERS.register_module()
++@BBOX_CODERS.register_module(force=True)
+ class NMSFreeCoder(BaseBBoxCoder):
+     """Bbox coder for NMS-free detector.
+     Args:
+diff --git a/third_party/uniad_mmdet3d/core/bbox/iou_calculators/__init__.py b/third_party/uniad_mmdet3d/core/bbox/iou_calculators/__init__.py
+new file mode 100644
+index 0000000..d2faf69
+--- /dev/null
++++ b/third_party/uniad_mmdet3d/core/bbox/iou_calculators/__init__.py
+@@ -0,0 +1,11 @@
++# Copyright (c) OpenMMLab. All rights reserved.
++from .iou3d_calculator import (AxisAlignedBboxOverlaps3D, BboxOverlaps3D,
++                               BboxOverlapsNearest3D,
++                               axis_aligned_bbox_overlaps_3d, bbox_overlaps_3d,
++                               bbox_overlaps_nearest_3d)
++
++__all__ = [
++    'BboxOverlapsNearest3D', 'BboxOverlaps3D', 'bbox_overlaps_nearest_3d',
++    'bbox_overlaps_3d', 'AxisAlignedBboxOverlaps3D',
++    'axis_aligned_bbox_overlaps_3d'
++]
+diff --git a/third_party/uniad_mmdet3d/core/bbox/iou_calculators/iou3d_calculator.py b/third_party/uniad_mmdet3d/core/bbox/iou_calculators/iou3d_calculator.py
+new file mode 100644
+index 0000000..7cc8af6
+--- /dev/null
++++ b/third_party/uniad_mmdet3d/core/bbox/iou_calculators/iou3d_calculator.py
+@@ -0,0 +1,321 @@
++# Copyright (c) OpenMMLab. All rights reserved.
++import torch
++
++from mmdet.core.bbox import bbox_overlaps
++from mmdet.core.bbox.iou_calculators.builder import IOU_CALCULATORS
++from ..structures import get_box_type
++
++
++@IOU_CALCULATORS.register_module()
++class BboxOverlapsNearest3D(object):
++    """Nearest 3D IoU Calculator.
++
++    Note:
++        This IoU calculator first finds the nearest 2D boxes in bird eye view
++        (BEV), and then calculates the 2D IoU using :meth:`bbox_overlaps`.
++
++    Args:
++        coordinate (str): 'camera', 'lidar', or 'depth' coordinate system.
++    """
++
++    def __init__(self, coordinate='lidar'):
++        assert coordinate in ['camera', 'lidar', 'depth']
++        self.coordinate = coordinate
++
++    def __call__(self, bboxes1, bboxes2, mode='iou', is_aligned=False):
++        """Calculate nearest 3D IoU.
++
++        Note:
++            If ``is_aligned`` is ``False``, then it calculates the ious between
++            each bbox of bboxes1 and bboxes2, otherwise it calculates the ious
++            between each aligned pair of bboxes1 and bboxes2.
++
++        Args:
++            bboxes1 (torch.Tensor): shape (N, 7+N) [x, y, z, h, w, l, ry, v].
++            bboxes2 (torch.Tensor): shape (M, 7+N) [x, y, z, h, w, l, ry, v].
++            mode (str): "iou" (intersection over union) or iof
++                (intersection over foreground).
++            is_aligned (bool): Whether the calculation is aligned.
++
++        Return:
++            torch.Tensor: If ``is_aligned`` is ``True``, return ious between \
++                bboxes1 and bboxes2 with shape (M, N). If ``is_aligned`` is \
++                ``False``, return shape is M.
++        """
++        return bbox_overlaps_nearest_3d(bboxes1, bboxes2, mode, is_aligned,
++                                        self.coordinate)
++
++    def __repr__(self):
++        """str: Return a string that describes the module."""
++        repr_str = self.__class__.__name__
++        repr_str += f'(coordinate={self.coordinate}'
++        return repr_str
++
++
++@IOU_CALCULATORS.register_module()
++class BboxOverlaps3D(object):
++    """3D IoU Calculator.
++
++    Args:
++        coordinate (str): The coordinate system, valid options are
++            'camera', 'lidar', and 'depth'.
++    """
++
++    def __init__(self, coordinate):
++        assert coordinate in ['camera', 'lidar', 'depth']
++        self.coordinate = coordinate
++
++    def __call__(self, bboxes1, bboxes2, mode='iou'):
++        """Calculate 3D IoU using cuda implementation.
++
++        Note:
++            This function calculate the IoU of 3D boxes based on their volumes.
++            IoU calculator ``:class:BboxOverlaps3D`` uses this function to
++            calculate the actual 3D IoUs of boxes.
++
++        Args:
++            bboxes1 (torch.Tensor): shape (N, 7+C) [x, y, z, h, w, l, ry].
++            bboxes2 (torch.Tensor): shape (M, 7+C) [x, y, z, h, w, l, ry].
++            mode (str): "iou" (intersection over union) or
++                iof (intersection over foreground).
++
++        Return:
++            torch.Tensor: Bbox overlaps results of bboxes1 and bboxes2 \
++                with shape (M, N) (aligned mode is not supported currently).
++        """
++        return bbox_overlaps_3d(bboxes1, bboxes2, mode, self.coordinate)
++
++    def __repr__(self):
++        """str: return a string that describes the module"""
++        repr_str = self.__class__.__name__
++        repr_str += f'(coordinate={self.coordinate}'
++        return repr_str
++
++
++def bbox_overlaps_nearest_3d(bboxes1,
++                             bboxes2,
++                             mode='iou',
++                             is_aligned=False,
++                             coordinate='lidar'):
++    """Calculate nearest 3D IoU.
++
++    Note:
++        This function first finds the nearest 2D boxes in bird eye view
++        (BEV), and then calculates the 2D IoU using :meth:`bbox_overlaps`.
++        Ths IoU calculator :class:`BboxOverlapsNearest3D` uses this
++        function to calculate IoUs of boxes.
++
++        If ``is_aligned`` is ``False``, then it calculates the ious between
++        each bbox of bboxes1 and bboxes2, otherwise the ious between each
++        aligned pair of bboxes1 and bboxes2.
++
++    Args:
++        bboxes1 (torch.Tensor): shape (N, 7+C) [x, y, z, h, w, l, ry, v].
++        bboxes2 (torch.Tensor): shape (M, 7+C) [x, y, z, h, w, l, ry, v].
++        mode (str): "iou" (intersection over union) or iof
++            (intersection over foreground).
++        is_aligned (bool): Whether the calculation is aligned
++
++    Return:
++        torch.Tensor: If ``is_aligned`` is ``True``, return ious between \
++            bboxes1 and bboxes2 with shape (M, N). If ``is_aligned`` is \
++            ``False``, return shape is M.
++    """
++    assert bboxes1.size(-1) == bboxes2.size(-1) >= 7
++
++    box_type, _ = get_box_type(coordinate)
++
++    bboxes1 = box_type(bboxes1, box_dim=bboxes1.shape[-1])
++    bboxes2 = box_type(bboxes2, box_dim=bboxes2.shape[-1])
++
++    # Change the bboxes to bev
++    # box conversion and iou calculation in torch version on CUDA
++    # is 10x faster than that in numpy version
++    bboxes1_bev = bboxes1.nearest_bev
++    bboxes2_bev = bboxes2.nearest_bev
++
++    ret = bbox_overlaps(
++        bboxes1_bev, bboxes2_bev, mode=mode, is_aligned=is_aligned)
++    return ret
++
++
++def bbox_overlaps_3d(bboxes1, bboxes2, mode='iou', coordinate='camera'):
++    """Calculate 3D IoU using cuda implementation.
++
++    Note:
++        This function calculates the IoU of 3D boxes based on their volumes.
++        IoU calculator :class:`BboxOverlaps3D` uses this function to
++        calculate the actual IoUs of boxes.
++
++    Args:
++        bboxes1 (torch.Tensor): shape (N, 7+C) [x, y, z, h, w, l, ry].
++        bboxes2 (torch.Tensor): shape (M, 7+C) [x, y, z, h, w, l, ry].
++        mode (str): "iou" (intersection over union) or
++            iof (intersection over foreground).
++        coordinate (str): 'camera' or 'lidar' coordinate system.
++
++    Return:
++        torch.Tensor: Bbox overlaps results of bboxes1 and bboxes2 \
++            with shape (M, N) (aligned mode is not supported currently).
++    """
++    assert bboxes1.size(-1) == bboxes2.size(-1) >= 7
++
++    box_type, _ = get_box_type(coordinate)
++
++    bboxes1 = box_type(bboxes1, box_dim=bboxes1.shape[-1])
++    bboxes2 = box_type(bboxes2, box_dim=bboxes2.shape[-1])
++
++    return bboxes1.overlaps(bboxes1, bboxes2, mode=mode)
++
++
++@IOU_CALCULATORS.register_module()
++class AxisAlignedBboxOverlaps3D(object):
++    """Axis-aligned 3D Overlaps (IoU) Calculator."""
++
++    def __call__(self, bboxes1, bboxes2, mode='iou', is_aligned=False):
++        """Calculate IoU between 2D bboxes.
++
++        Args:
++            bboxes1 (Tensor): shape (B, m, 6) in <x1, y1, z1, x2, y2, z2>
++                format or empty.
++            bboxes2 (Tensor): shape (B, n, 6) in <x1, y1, z1, x2, y2, z2>
++                format or empty.
++                B indicates the batch dim, in shape (B1, B2, ..., Bn).
++                If ``is_aligned`` is ``True``, then m and n must be equal.
++            mode (str): "iou" (intersection over union) or "giou" (generalized
++                intersection over union).
++            is_aligned (bool, optional): If True, then m and n must be equal.
++                Default False.
++        Returns:
++            Tensor: shape (m, n) if ``is_aligned`` is False else shape (m,)
++        """
++        assert bboxes1.size(-1) == bboxes2.size(-1) == 6
++        return axis_aligned_bbox_overlaps_3d(bboxes1, bboxes2, mode,
++                                             is_aligned)
++
++    def __repr__(self):
++        """str: a string describing the module"""
++        repr_str = self.__class__.__name__ + '()'
++        return repr_str
++
++
++def axis_aligned_bbox_overlaps_3d(bboxes1,
++                                  bboxes2,
++                                  mode='iou',
++                                  is_aligned=False,
++                                  eps=1e-6):
++    """Calculate overlap between two set of axis aligned 3D bboxes. If
++    ``is_aligned`` is ``False``, then calculate the overlaps between each bbox
++    of bboxes1 and bboxes2, otherwise the overlaps between each aligned pair of
++    bboxes1 and bboxes2.
++
++    Args:
++        bboxes1 (Tensor): shape (B, m, 6) in <x1, y1, z1, x2, y2, z2>
++            format or empty.
++        bboxes2 (Tensor): shape (B, n, 6) in <x1, y1, z1, x2, y2, z2>
++            format or empty.
++            B indicates the batch dim, in shape (B1, B2, ..., Bn).
++            If ``is_aligned`` is ``True``, then m and n must be equal.
++        mode (str): "iou" (intersection over union) or "giou" (generalized
++            intersection over union).
++        is_aligned (bool, optional): If True, then m and n must be equal.
++            Default False.
++        eps (float, optional): A value added to the denominator for numerical
++            stability. Default 1e-6.
++
++    Returns:
++        Tensor: shape (m, n) if ``is_aligned`` is False else shape (m,)
++
++    Example:
++        >>> bboxes1 = torch.FloatTensor([
++        >>>     [0, 0, 0, 10, 10, 10],
++        >>>     [10, 10, 10, 20, 20, 20],
++        >>>     [32, 32, 32, 38, 40, 42],
++        >>> ])
++        >>> bboxes2 = torch.FloatTensor([
++        >>>     [0, 0, 0, 10, 20, 20],
++        >>>     [0, 10, 10, 10, 19, 20],
++        >>>     [10, 10, 10, 20, 20, 20],
++        >>> ])
++        >>> overlaps = axis_aligned_bbox_overlaps_3d(bboxes1, bboxes2)
++        >>> assert overlaps.shape == (3, 3)
++        >>> overlaps = bbox_overlaps(bboxes1, bboxes2, is_aligned=True)
++        >>> assert overlaps.shape == (3, )
++    Example:
++        >>> empty = torch.empty(0, 6)
++        >>> nonempty = torch.FloatTensor([[0, 0, 0, 10, 9, 10]])
++        >>> assert tuple(bbox_overlaps(empty, nonempty).shape) == (0, 1)
++        >>> assert tuple(bbox_overlaps(nonempty, empty).shape) == (1, 0)
++        >>> assert tuple(bbox_overlaps(empty, empty).shape) == (0, 0)
++    """
++
++    assert mode in ['iou', 'giou'], f'Unsupported mode {mode}'
++    # Either the boxes are empty or the length of boxes's last dimenstion is 6
++    assert (bboxes1.size(-1) == 6 or bboxes1.size(0) == 0)
++    assert (bboxes2.size(-1) == 6 or bboxes2.size(0) == 0)
++
++    # Batch dim must be the same
++    # Batch dim: (B1, B2, ... Bn)
++    assert bboxes1.shape[:-2] == bboxes2.shape[:-2]
++    batch_shape = bboxes1.shape[:-2]
++
++    rows = bboxes1.size(-2)
++    cols = bboxes2.size(-2)
++    if is_aligned:
++        assert rows == cols
++
++    if rows * cols == 0:
++        if is_aligned:
++            return bboxes1.new(batch_shape + (rows, ))
++        else:
++            return bboxes1.new(batch_shape + (rows, cols))
++
++    area1 = (bboxes1[..., 3] -
++             bboxes1[..., 0]) * (bboxes1[..., 4] - bboxes1[..., 1]) * (
++                 bboxes1[..., 5] - bboxes1[..., 2])
++    area2 = (bboxes2[..., 3] -
++             bboxes2[..., 0]) * (bboxes2[..., 4] - bboxes2[..., 1]) * (
++                 bboxes2[..., 5] - bboxes2[..., 2])
++
++    if is_aligned:
++        lt = torch.max(bboxes1[..., :3], bboxes2[..., :3])  # [B, rows, 3]
++        rb = torch.min(bboxes1[..., 3:], bboxes2[..., 3:])  # [B, rows, 3]
++
++        wh = (rb - lt).clamp(min=0)  # [B, rows, 2]
++        overlap = wh[..., 0] * wh[..., 1] * wh[..., 2]
++
++        if mode in ['iou', 'giou']:
++            union = area1 + area2 - overlap
++        else:
++            union = area1
++        if mode == 'giou':
++            enclosed_lt = torch.min(bboxes1[..., :3], bboxes2[..., :3])
++            enclosed_rb = torch.max(bboxes1[..., 3:], bboxes2[..., 3:])
++    else:
++        lt = torch.max(bboxes1[..., :, None, :3],
++                       bboxes2[..., None, :, :3])  # [B, rows, cols, 3]
++        rb = torch.min(bboxes1[..., :, None, 3:],
++                       bboxes2[..., None, :, 3:])  # [B, rows, cols, 3]
++
++        wh = (rb - lt).clamp(min=0)  # [B, rows, cols, 3]
++        overlap = wh[..., 0] * wh[..., 1] * wh[..., 2]
++
++        if mode in ['iou', 'giou']:
++            union = area1[..., None] + area2[..., None, :] - overlap
++        if mode == 'giou':
++            enclosed_lt = torch.min(bboxes1[..., :, None, :3],
++                                    bboxes2[..., None, :, :3])
++            enclosed_rb = torch.max(bboxes1[..., :, None, 3:],
++                                    bboxes2[..., None, :, 3:])
++
++    eps = union.new_tensor([eps])
++    union = torch.max(union, eps)
++    ious = overlap / union
++    if mode in ['iou']:
++        return ious
++    # calculate gious
++    enclose_wh = (enclosed_rb - enclosed_lt).clamp(min=0)
++    enclose_area = enclose_wh[..., 0] * enclose_wh[..., 1] * enclose_wh[..., 2]
++    enclose_area = torch.max(enclose_area, eps)
++    gious = ious - (enclose_area - union) / enclose_area
++    return gious
+diff --git a/third_party/uniad_mmdet3d/core/bbox/structures/__init__.py b/third_party/uniad_mmdet3d/core/bbox/structures/__init__.py
+index 1360f02..6d427e2 100644
+--- a/third_party/uniad_mmdet3d/core/bbox/structures/__init__.py
++++ b/third_party/uniad_mmdet3d/core/bbox/structures/__init__.py
+@@ -2,6 +2,8 @@
+ from .base_box3d import BaseInstance3DBoxes
+ from .box_3d_mode import Box3DMode
+ from .lidar_box3d import LiDARInstance3DBoxes
++from .cam_box3d import CameraInstance3DBoxes
++from .depth_box3d import DepthInstance3DBoxes
+ from .coord_3d_mode import Coord3DMode
+ from .utils import (
+     get_box_type,
+diff --git a/third_party/uniad_mmdet3d/core/bbox/structures/base_box3d.py b/third_party/uniad_mmdet3d/core/bbox/structures/base_box3d.py
+index e78ef84..3e1d0b1 100644
+--- a/third_party/uniad_mmdet3d/core/bbox/structures/base_box3d.py
++++ b/third_party/uniad_mmdet3d/core/bbox/structures/base_box3d.py
+@@ -3,7 +3,7 @@ import numpy as np
+ import torch
+ from abc import abstractmethod
+ 
+-from third_party.bev_mmdet3d.ops.iou3d import iou3d_cuda
++from third_party.uniad_mmdet3d.ops.iou3d import iou3d_cuda
+ from .utils import limit_period, xywhr2xyxyr
+ 
+ 
+diff --git a/third_party/uniad_mmdet3d/core/bbox/structures/cam_box3d.py b/third_party/uniad_mmdet3d/core/bbox/structures/cam_box3d.py
+new file mode 100644
+index 0000000..083df0e
+--- /dev/null
++++ b/third_party/uniad_mmdet3d/core/bbox/structures/cam_box3d.py
+@@ -0,0 +1,324 @@
++# Copyright (c) OpenMMLab. All rights reserved.
++import numpy as np
++import torch
++
++from third_party.uniad_mmdet3d.core.points import BasePoints
++from .base_box3d import BaseInstance3DBoxes
++from .utils import limit_period, rotation_3d_in_axis
++
++
++class CameraInstance3DBoxes(BaseInstance3DBoxes):
++    """3D boxes of instances in CAM coordinates.
++
++    Coordinates in camera:
++
++    .. code-block:: none
++
++                z front (yaw=-0.5*pi)
++               /
++              /
++             0 ------> x right (yaw=0)
++             |
++             |
++             v
++        down y
++
++    The relative coordinate of bottom center in a CAM box is (0.5, 1.0, 0.5),
++    and the yaw is around the y axis, thus the rotation axis=1.
++    The yaw is 0 at the positive direction of x axis, and decreases from
++    the positive direction of x to the positive direction of z.
++
++    A refactor is ongoing to make the three coordinate systems
++    easier to understand and convert between each other.
++
++    Attributes:
++        tensor (torch.Tensor): Float matrix of N x box_dim.
++        box_dim (int): Integer indicates the dimension of a box
++            Each row is (x, y, z, x_size, y_size, z_size, yaw, ...).
++        with_yaw (bool): If True, the value of yaw will be set to 0 as minmax
++            boxes.
++    """
++
++    def __init__(self,
++                 tensor,
++                 box_dim=7,
++                 with_yaw=True,
++                 origin=(0.5, 1.0, 0.5)):
++        if isinstance(tensor, torch.Tensor):
++            device = tensor.device
++        else:
++            device = torch.device('cpu')
++        tensor = torch.as_tensor(tensor, dtype=torch.float32, device=device)
++        if tensor.numel() == 0:
++            # Use reshape, so we don't end up creating a new tensor that
++            # does not depend on the inputs (and consequently confuses jit)
++            tensor = tensor.reshape((0, box_dim)).to(
++                dtype=torch.float32, device=device)
++        assert tensor.dim() == 2 and tensor.size(-1) == box_dim, tensor.size()
++
++        if tensor.shape[-1] == 6:
++            # If the dimension of boxes is 6, we expand box_dim by padding
++            # 0 as a fake yaw and set with_yaw to False.
++            assert box_dim == 6
++            fake_rot = tensor.new_zeros(tensor.shape[0], 1)
++            tensor = torch.cat((tensor, fake_rot), dim=-1)
++            self.box_dim = box_dim + 1
++            self.with_yaw = False
++        else:
++            self.box_dim = box_dim
++            self.with_yaw = with_yaw
++        self.tensor = tensor.clone()
++
++        if origin != (0.5, 1.0, 0.5):
++            dst = self.tensor.new_tensor((0.5, 1.0, 0.5))
++            src = self.tensor.new_tensor(origin)
++            self.tensor[:, :3] += self.tensor[:, 3:6] * (dst - src)
++
++    @property
++    def height(self):
++        """torch.Tensor: A vector with height of each box."""
++        return self.tensor[:, 4]
++
++    @property
++    def top_height(self):
++        """torch.Tensor: A vector with the top height of each box."""
++        # the positive direction is down rather than up
++        return self.bottom_height - self.height
++
++    @property
++    def bottom_height(self):
++        """torch.Tensor: A vector with bottom's height of each box."""
++        return self.tensor[:, 1]
++
++    @property
++    def gravity_center(self):
++        """torch.Tensor: A tensor with center of each box."""
++        bottom_center = self.bottom_center
++        gravity_center = torch.zeros_like(bottom_center)
++        gravity_center[:, [0, 2]] = bottom_center[:, [0, 2]]
++        gravity_center[:, 1] = bottom_center[:, 1] - self.tensor[:, 4] * 0.5
++        return gravity_center
++
++    @property
++    def corners(self):
++        """torch.Tensor: Coordinates of corners of all the boxes in
++                         shape (N, 8, 3).
++
++        Convert the boxes to  in clockwise order, in the form of
++        (x0y0z0, x0y0z1, x0y1z1, x0y1z0, x1y0z0, x1y0z1, x1y1z1, x1y1z0)
++
++        .. code-block:: none
++
++                         front z
++                              /
++                             /
++               (x0, y0, z1) + -----------  + (x1, y0, z1)
++                           /|            / |
++                          / |           /  |
++            (x0, y0, z0) + ----------- +   + (x1, y1, z1)
++                         |  /      .   |  /
++                         | / origin    | /
++            (x0, y1, z0) + ----------- + -------> x right
++                         |             (x1, y1, z0)
++                         |
++                         v
++                    down y
++        """
++        # TODO: rotation_3d_in_axis function do not support
++        #  empty tensor currently.
++        assert len(self.tensor) != 0
++        dims = self.dims
++        corners_norm = torch.from_numpy(
++            np.stack(np.unravel_index(np.arange(8), [2] * 3), axis=1)).to(
++                device=dims.device, dtype=dims.dtype)
++
++        corners_norm = corners_norm[[0, 1, 3, 2, 4, 5, 7, 6]]
++        # use relative origin [0.5, 1, 0.5]
++        corners_norm = corners_norm - dims.new_tensor([0.5, 1, 0.5])
++        corners = dims.view([-1, 1, 3]) * corners_norm.reshape([1, 8, 3])
++
++        # rotate around y axis
++        corners = rotation_3d_in_axis(corners, self.tensor[:, 6], axis=1)
++        corners += self.tensor[:, :3].view(-1, 1, 3)
++        return corners
++
++    @property
++    def bev(self):
++        """torch.Tensor: A n x 5 tensor of 2D BEV box of each box
++        with rotation in XYWHR format."""
++        return self.tensor[:, [0, 2, 3, 5, 6]]
++
++    @property
++    def nearest_bev(self):
++        """torch.Tensor: A tensor of 2D BEV box of each box
++        without rotation."""
++        # Obtain BEV boxes with rotation in XZWHR format
++        bev_rotated_boxes = self.bev
++        # convert the rotation to a valid range
++        rotations = bev_rotated_boxes[:, -1]
++        normed_rotations = torch.abs(limit_period(rotations, 0.5, np.pi))
++
++        # find the center of boxes
++        conditions = (normed_rotations > np.pi / 4)[..., None]
++        bboxes_xywh = torch.where(conditions, bev_rotated_boxes[:,
++                                                                [0, 1, 3, 2]],
++                                  bev_rotated_boxes[:, :4])
++
++        centers = bboxes_xywh[:, :2]
++        dims = bboxes_xywh[:, 2:]
++        bev_boxes = torch.cat([centers - dims / 2, centers + dims / 2], dim=-1)
++        return bev_boxes
++
++    def rotate(self, angle, points=None):
++        """Rotate boxes with points (optional) with the given angle or \
++        rotation matrix.
++
++        Args:
++            angle (float | torch.Tensor | np.ndarray):
++                Rotation angle or rotation matrix.
++            points (torch.Tensor, numpy.ndarray, :obj:`BasePoints`, optional):
++                Points to rotate. Defaults to None.
++
++        Returns:
++            tuple or None: When ``points`` is None, the function returns \
++                None, otherwise it returns the rotated points and the \
++                rotation matrix ``rot_mat_T``.
++        """
++        if not isinstance(angle, torch.Tensor):
++            angle = self.tensor.new_tensor(angle)
++        assert angle.shape == torch.Size([3, 3]) or angle.numel() == 1, \
++            f'invalid rotation angle shape {angle.shape}'
++
++        if angle.numel() == 1:
++            rot_sin = torch.sin(angle)
++            rot_cos = torch.cos(angle)
++            rot_mat_T = self.tensor.new_tensor([[rot_cos, 0, -rot_sin],
++                                                [0, 1, 0],
++                                                [rot_sin, 0, rot_cos]])
++        else:
++            rot_mat_T = angle
++            rot_sin = rot_mat_T[2, 0]
++            rot_cos = rot_mat_T[0, 0]
++            angle = np.arctan2(rot_sin, rot_cos)
++
++        self.tensor[:, :3] = self.tensor[:, :3] @ rot_mat_T
++        self.tensor[:, 6] += angle
++
++        if points is not None:
++            if isinstance(points, torch.Tensor):
++                points[:, :3] = points[:, :3] @ rot_mat_T
++            elif isinstance(points, np.ndarray):
++                rot_mat_T = rot_mat_T.numpy()
++                points[:, :3] = np.dot(points[:, :3], rot_mat_T)
++            elif isinstance(points, BasePoints):
++                # clockwise
++                points.rotate(-angle)
++            else:
++                raise ValueError
++            return points, rot_mat_T
++
++    def flip(self, bev_direction='horizontal', points=None):
++        """Flip the boxes in BEV along given BEV direction.
++
++        In CAM coordinates, it flips the x (horizontal) or z (vertical) axis.
++
++        Args:
++            bev_direction (str): Flip direction (horizontal or vertical).
++            points (torch.Tensor, numpy.ndarray, :obj:`BasePoints`, None):
++                Points to flip. Defaults to None.
++
++        Returns:
++            torch.Tensor, numpy.ndarray or None: Flipped points.
++        """
++        assert bev_direction in ('horizontal', 'vertical')
++        if bev_direction == 'horizontal':
++            self.tensor[:, 0::7] = -self.tensor[:, 0::7]
++            if self.with_yaw:
++                self.tensor[:, 6] = -self.tensor[:, 6] + np.pi
++        elif bev_direction == 'vertical':
++            self.tensor[:, 2::7] = -self.tensor[:, 2::7]
++            if self.with_yaw:
++                self.tensor[:, 6] = -self.tensor[:, 6]
++
++        if points is not None:
++            assert isinstance(points, (torch.Tensor, np.ndarray, BasePoints))
++            if isinstance(points, (torch.Tensor, np.ndarray)):
++                if bev_direction == 'horizontal':
++                    points[:, 0] = -points[:, 0]
++                elif bev_direction == 'vertical':
++                    points[:, 2] = -points[:, 2]
++            elif isinstance(points, BasePoints):
++                points.flip(bev_direction)
++            return points
++
++    def in_range_bev(self, box_range):
++        """Check whether the boxes are in the given range.
++
++        Args:
++            box_range (list | torch.Tensor): The range of box
++                (x_min, z_min, x_max, z_max).
++
++        Note:
++            The original implementation of SECOND checks whether boxes in
++            a range by checking whether the points are in a convex
++            polygon, we reduce the burden for simpler cases.
++
++        Returns:
++            torch.Tensor: Indicating whether each box is inside \
++                the reference range.
++        """
++        in_range_flags = ((self.tensor[:, 0] > box_range[0])
++                          & (self.tensor[:, 2] > box_range[1])
++                          & (self.tensor[:, 0] < box_range[2])
++                          & (self.tensor[:, 2] < box_range[3]))
++        return in_range_flags
++
++    @classmethod
++    def height_overlaps(cls, boxes1, boxes2, mode='iou'):
++        """Calculate height overlaps of two boxes.
++
++        This function calculates the height overlaps between ``boxes1`` and
++        ``boxes2``, where ``boxes1`` and ``boxes2`` should be in the same type.
++
++        Args:
++            boxes1 (:obj:`CameraInstance3DBoxes`): Boxes 1 contain N boxes.
++            boxes2 (:obj:`CameraInstance3DBoxes`): Boxes 2 contain M boxes.
++            mode (str, optional): Mode of iou calculation. Defaults to 'iou'.
++
++        Returns:
++            torch.Tensor: Calculated iou of boxes' heights.
++        """
++        assert isinstance(boxes1, CameraInstance3DBoxes)
++        assert isinstance(boxes2, CameraInstance3DBoxes)
++
++        boxes1_top_height = boxes1.top_height.view(-1, 1)
++        boxes1_bottom_height = boxes1.bottom_height.view(-1, 1)
++        boxes2_top_height = boxes2.top_height.view(1, -1)
++        boxes2_bottom_height = boxes2.bottom_height.view(1, -1)
++
++        # In camera coordinate system
++        # from up to down is the positive direction
++        heighest_of_bottom = torch.min(boxes1_bottom_height,
++                                       boxes2_bottom_height)
++        lowest_of_top = torch.max(boxes1_top_height, boxes2_top_height)
++        overlaps_h = torch.clamp(heighest_of_bottom - lowest_of_top, min=0)
++        return overlaps_h
++
++    def convert_to(self, dst, rt_mat=None):
++        """Convert self to ``dst`` mode.
++
++        Args:
++            dst (:obj:`Box3DMode`): The target Box mode.
++            rt_mat (np.ndarray | torch.Tensor): The rotation and translation
++                matrix between different coordinates. Defaults to None.
++                The conversion from ``src`` coordinates to ``dst`` coordinates
++                usually comes along the change of sensors, e.g., from camera
++                to LiDAR. This requires a transformation matrix.
++
++        Returns:
++            :obj:`BaseInstance3DBoxes`:  \
++                The converted box of the same type in the ``dst`` mode.
++        """
++        from .box_3d_mode import Box3DMode
++        return Box3DMode.convert(
++            box=self, src=Box3DMode.CAM, dst=dst, rt_mat=rt_mat)
+diff --git a/third_party/uniad_mmdet3d/core/bbox/structures/depth_box3d.py b/third_party/uniad_mmdet3d/core/bbox/structures/depth_box3d.py
+new file mode 100644
+index 0000000..cd3a0be
+--- /dev/null
++++ b/third_party/uniad_mmdet3d/core/bbox/structures/depth_box3d.py
+@@ -0,0 +1,343 @@
++# Copyright (c) OpenMMLab. All rights reserved.
++import numpy as np
++import torch
++
++from third_party.uniad_mmdet3d.core.points import BasePoints
++from third_party.uniad_mmdet3d.ops.roiaware_pool3d import points_in_boxes_batch
++from .base_box3d import BaseInstance3DBoxes
++from .utils import limit_period, rotation_3d_in_axis
++
++
++class DepthInstance3DBoxes(BaseInstance3DBoxes):
++    """3D boxes of instances in Depth coordinates.
++
++    Coordinates in Depth:
++
++    .. code-block:: none
++
++                    up z    y front (yaw=-0.5*pi)
++                       ^   ^
++                       |  /
++                       | /
++                       0 ------> x right (yaw=0)
++
++    The relative coordinate of bottom center in a Depth box is (0.5, 0.5, 0),
++    and the yaw is around the z axis, thus the rotation axis=2.
++    The yaw is 0 at the positive direction of x axis, and decreases from
++    the positive direction of x to the positive direction of y.
++    Also note that rotation of DepthInstance3DBoxes is counterclockwise,
++    which is reverse to the definition of the yaw angle (clockwise).
++
++    A refactor is ongoing to make the three coordinate systems
++    easier to understand and convert between each other.
++
++    Attributes:
++        tensor (torch.Tensor): Float matrix of N x box_dim.
++        box_dim (int): Integer indicates the dimension of a box
++            Each row is (x, y, z, x_size, y_size, z_size, yaw, ...).
++        with_yaw (bool): If True, the value of yaw will be set to 0 as minmax
++            boxes.
++    """
++
++    @property
++    def gravity_center(self):
++        """torch.Tensor: A tensor with center of each box."""
++        bottom_center = self.bottom_center
++        gravity_center = torch.zeros_like(bottom_center)
++        gravity_center[:, :2] = bottom_center[:, :2]
++        gravity_center[:, 2] = bottom_center[:, 2] + self.tensor[:, 5] * 0.5
++        return gravity_center
++
++    @property
++    def corners(self):
++        """torch.Tensor: Coordinates of corners of all the boxes
++        in shape (N, 8, 3).
++
++        Convert the boxes to corners in clockwise order, in form of
++        ``(x0y0z0, x0y0z1, x0y1z1, x0y1z0, x1y0z0, x1y0z1, x1y1z1, x1y1z0)``
++
++        .. code-block:: none
++
++                                           up z
++                            front y           ^
++                                 /            |
++                                /             |
++                  (x0, y1, z1) + -----------  + (x1, y1, z1)
++                              /|            / |
++                             / |           /  |
++               (x0, y0, z1) + ----------- +   + (x1, y1, z0)
++                            |  /      .   |  /
++                            | / origin    | /
++               (x0, y0, z0) + ----------- + --------> right x
++                                          (x1, y0, z0)
++        """
++        # TODO: rotation_3d_in_axis function do not support
++        #  empty tensor currently.
++        assert len(self.tensor) != 0
++        dims = self.dims
++        corners_norm = torch.from_numpy(
++            np.stack(np.unravel_index(np.arange(8), [2] * 3), axis=1)).to(
++                device=dims.device, dtype=dims.dtype)
++
++        corners_norm = corners_norm[[0, 1, 3, 2, 4, 5, 7, 6]]
++        # use relative origin (0.5, 0.5, 0)
++        corners_norm = corners_norm - dims.new_tensor([0.5, 0.5, 0])
++        corners = dims.view([-1, 1, 3]) * corners_norm.reshape([1, 8, 3])
++
++        # rotate around z axis
++        corners = rotation_3d_in_axis(corners, self.tensor[:, 6], axis=2)
++        corners += self.tensor[:, :3].view(-1, 1, 3)
++        return corners
++
++    @property
++    def bev(self):
++        """torch.Tensor: A n x 5 tensor of 2D BEV box of each box
++        in XYWHR format."""
++        return self.tensor[:, [0, 1, 3, 4, 6]]
++
++    @property
++    def nearest_bev(self):
++        """torch.Tensor: A tensor of 2D BEV box of each box
++        without rotation."""
++        # Obtain BEV boxes with rotation in XYWHR format
++        bev_rotated_boxes = self.bev
++        # convert the rotation to a valid range
++        rotations = bev_rotated_boxes[:, -1]
++        normed_rotations = torch.abs(limit_period(rotations, 0.5, np.pi))
++
++        # find the center of boxes
++        conditions = (normed_rotations > np.pi / 4)[..., None]
++        bboxes_xywh = torch.where(conditions, bev_rotated_boxes[:,
++                                                                [0, 1, 3, 2]],
++                                  bev_rotated_boxes[:, :4])
++
++        centers = bboxes_xywh[:, :2]
++        dims = bboxes_xywh[:, 2:]
++        bev_boxes = torch.cat([centers - dims / 2, centers + dims / 2], dim=-1)
++        return bev_boxes
++
++    def rotate(self, angle, points=None):
++        """Rotate boxes with points (optional) with the given angle or \
++        rotation matrix.
++
++        Args:
++            angle (float | torch.Tensor | np.ndarray):
++                Rotation angle or rotation matrix.
++            points (torch.Tensor, numpy.ndarray, :obj:`BasePoints`, optional):
++                Points to rotate. Defaults to None.
++
++        Returns:
++            tuple or None: When ``points`` is None, the function returns \
++                None, otherwise it returns the rotated points and the \
++                rotation matrix ``rot_mat_T``.
++        """
++        if not isinstance(angle, torch.Tensor):
++            angle = self.tensor.new_tensor(angle)
++        assert angle.shape == torch.Size([3, 3]) or angle.numel() == 1, \
++            f'invalid rotation angle shape {angle.shape}'
++
++        if angle.numel() == 1:
++            rot_sin = torch.sin(angle)
++            rot_cos = torch.cos(angle)
++            rot_mat_T = self.tensor.new_tensor([[rot_cos, -rot_sin, 0],
++                                                [rot_sin, rot_cos, 0],
++                                                [0, 0, 1]]).T
++        else:
++            rot_mat_T = angle.T
++            rot_sin = rot_mat_T[0, 1]
++            rot_cos = rot_mat_T[0, 0]
++            angle = np.arctan2(rot_sin, rot_cos)
++
++        self.tensor[:, 0:3] = self.tensor[:, 0:3] @ rot_mat_T
++        if self.with_yaw:
++            self.tensor[:, 6] -= angle
++        else:
++            corners_rot = self.corners @ rot_mat_T
++            new_x_size = corners_rot[..., 0].max(
++                dim=1, keepdim=True)[0] - corners_rot[..., 0].min(
++                    dim=1, keepdim=True)[0]
++            new_y_size = corners_rot[..., 1].max(
++                dim=1, keepdim=True)[0] - corners_rot[..., 1].min(
++                    dim=1, keepdim=True)[0]
++            self.tensor[:, 3:5] = torch.cat((new_x_size, new_y_size), dim=-1)
++
++        if points is not None:
++            if isinstance(points, torch.Tensor):
++                points[:, :3] = points[:, :3] @ rot_mat_T
++            elif isinstance(points, np.ndarray):
++                rot_mat_T = rot_mat_T.numpy()
++                points[:, :3] = np.dot(points[:, :3], rot_mat_T)
++            elif isinstance(points, BasePoints):
++                # anti-clockwise
++                points.rotate(angle)
++            else:
++                raise ValueError
++            return points, rot_mat_T
++
++    def flip(self, bev_direction='horizontal', points=None):
++        """Flip the boxes in BEV along given BEV direction.
++
++        In Depth coordinates, it flips x (horizontal) or y (vertical) axis.
++
++        Args:
++            bev_direction (str): Flip direction (horizontal or vertical).
++            points (torch.Tensor, numpy.ndarray, :obj:`BasePoints`, None):
++                Points to flip. Defaults to None.
++
++        Returns:
++            torch.Tensor, numpy.ndarray or None: Flipped points.
++        """
++        assert bev_direction in ('horizontal', 'vertical')
++        if bev_direction == 'horizontal':
++            self.tensor[:, 0::7] = -self.tensor[:, 0::7]
++            if self.with_yaw:
++                self.tensor[:, 6] = -self.tensor[:, 6] + np.pi
++        elif bev_direction == 'vertical':
++            self.tensor[:, 1::7] = -self.tensor[:, 1::7]
++            if self.with_yaw:
++                self.tensor[:, 6] = -self.tensor[:, 6]
++
++        if points is not None:
++            assert isinstance(points, (torch.Tensor, np.ndarray, BasePoints))
++            if isinstance(points, (torch.Tensor, np.ndarray)):
++                if bev_direction == 'horizontal':
++                    points[:, 0] = -points[:, 0]
++                elif bev_direction == 'vertical':
++                    points[:, 1] = -points[:, 1]
++            elif isinstance(points, BasePoints):
++                points.flip(bev_direction)
++            return points
++
++    def in_range_bev(self, box_range):
++        """Check whether the boxes are in the given range.
++
++        Args:
++            box_range (list | torch.Tensor): The range of box
++                (x_min, y_min, x_max, y_max).
++
++        Note:
++            In the original implementation of SECOND, checking whether
++            a box in the range checks whether the points are in a convex
++            polygon, we try to reduce the burdun for simpler cases.
++
++        Returns:
++            torch.Tensor: Indicating whether each box is inside \
++                the reference range.
++        """
++        in_range_flags = ((self.tensor[:, 0] > box_range[0])
++                          & (self.tensor[:, 1] > box_range[1])
++                          & (self.tensor[:, 0] < box_range[2])
++                          & (self.tensor[:, 1] < box_range[3]))
++        return in_range_flags
++
++    def convert_to(self, dst, rt_mat=None):
++        """Convert self to ``dst`` mode.
++
++        Args:
++            dst (:obj:`Box3DMode`): The target Box mode.
++            rt_mat (np.ndarray | torch.Tensor): The rotation and translation
++                matrix between different coordinates. Defaults to None.
++                The conversion from ``src`` coordinates to ``dst`` coordinates
++                usually comes along the change of sensors, e.g., from camera
++                to LiDAR. This requires a transformation matrix.
++
++        Returns:
++            :obj:`DepthInstance3DBoxes`: \
++                The converted box of the same type in the ``dst`` mode.
++        """
++        from .box_3d_mode import Box3DMode
++        return Box3DMode.convert(
++            box=self, src=Box3DMode.DEPTH, dst=dst, rt_mat=rt_mat)
++
++    def points_in_boxes(self, points):
++        """Find points that are in boxes (CUDA).
++
++        Args:
++            points (torch.Tensor): Points in shape [1, M, 3] or [M, 3], \
++                3 dimensions are [x, y, z] in LiDAR coordinate.
++
++        Returns:
++            torch.Tensor: The index of boxes each point lies in with shape \
++                of (B, M, T).
++        """
++        from .box_3d_mode import Box3DMode
++
++        # to lidar
++        points_lidar = points.clone()
++        points_lidar = points_lidar[..., [1, 0, 2]]
++        points_lidar[..., 1] *= -1
++        if points.dim() == 2:
++            points_lidar = points_lidar.unsqueeze(0)
++        else:
++            assert points.dim() == 3 and points_lidar.shape[0] == 1
++
++        boxes_lidar = self.convert_to(Box3DMode.LIDAR).tensor
++        boxes_lidar = boxes_lidar.to(points.device).unsqueeze(0)
++        box_idxs_of_pts = points_in_boxes_batch(points_lidar, boxes_lidar)
++
++        return box_idxs_of_pts.squeeze(0)
++
++    def enlarged_box(self, extra_width):
++        """Enlarge the length, width and height boxes.
++
++        Args:
++            extra_width (float | torch.Tensor): Extra width to enlarge the box.
++
++        Returns:
++            :obj:`LiDARInstance3DBoxes`: Enlarged boxes.
++        """
++        enlarged_boxes = self.tensor.clone()
++        enlarged_boxes[:, 3:6] += extra_width * 2
++        # bottom center z minus extra_width
++        enlarged_boxes[:, 2] -= extra_width
++        return self.new_box(enlarged_boxes)
++
++    def get_surface_line_center(self):
++        """Compute surface and line center of bounding boxes.
++
++        Returns:
++            torch.Tensor: Surface and line center of bounding boxes.
++        """
++        obj_size = self.dims
++        center = self.gravity_center.view(-1, 1, 3)
++        batch_size = center.shape[0]
++
++        rot_sin = torch.sin(-self.yaw)
++        rot_cos = torch.cos(-self.yaw)
++        rot_mat_T = self.yaw.new_zeros(tuple(list(self.yaw.shape) + [3, 3]))
++        rot_mat_T[..., 0, 0] = rot_cos
++        rot_mat_T[..., 0, 1] = -rot_sin
++        rot_mat_T[..., 1, 0] = rot_sin
++        rot_mat_T[..., 1, 1] = rot_cos
++        rot_mat_T[..., 2, 2] = 1
++
++        # Get the object surface center
++        offset = obj_size.new_tensor([[0, 0, 1], [0, 0, -1], [0, 1, 0],
++                                      [0, -1, 0], [1, 0, 0], [-1, 0, 0]])
++        offset = offset.view(1, 6, 3) / 2
++        surface_3d = (offset *
++                      obj_size.view(batch_size, 1, 3).repeat(1, 6, 1)).reshape(
++                          -1, 3)
++
++        # Get the object line center
++        offset = obj_size.new_tensor([[1, 0, 1], [-1, 0, 1], [0, 1, 1],
++                                      [0, -1, 1], [1, 0, -1], [-1, 0, -1],
++                                      [0, 1, -1], [0, -1, -1], [1, 1, 0],
++                                      [1, -1, 0], [-1, 1, 0], [-1, -1, 0]])
++        offset = offset.view(1, 12, 3) / 2
++
++        line_3d = (offset *
++                   obj_size.view(batch_size, 1, 3).repeat(1, 12, 1)).reshape(
++                       -1, 3)
++
++        surface_rot = rot_mat_T.repeat(6, 1, 1)
++        surface_3d = torch.matmul(
++            surface_3d.unsqueeze(-2), surface_rot.transpose(2, 1)).squeeze(-2)
++        surface_center = center.repeat(1, 6, 1).reshape(-1, 3) + surface_3d
++
++        line_rot = rot_mat_T.repeat(12, 1, 1)
++        line_3d = torch.matmul(
++            line_3d.unsqueeze(-2), line_rot.transpose(2, 1)).squeeze(-2)
++        line_center = center.repeat(1, 12, 1).reshape(-1, 3) + line_3d
++
++        return surface_center, line_center
+diff --git a/third_party/uniad_mmdet3d/core/bbox/structures/lidar_box3d.py b/third_party/uniad_mmdet3d/core/bbox/structures/lidar_box3d.py
+index 02f3c9a..be5731f 100644
+--- a/third_party/uniad_mmdet3d/core/bbox/structures/lidar_box3d.py
++++ b/third_party/uniad_mmdet3d/core/bbox/structures/lidar_box3d.py
+@@ -2,8 +2,8 @@
+ import numpy as np
+ import torch
+ 
+-from third_party.bev_mmdet3d.core.points import BasePoints
+-from third_party.bev_mmdet3d.ops.roiaware_pool3d import points_in_boxes_gpu
++from third_party.uniad_mmdet3d.core.points import BasePoints
++from third_party.uniad_mmdet3d.ops.roiaware_pool3d import points_in_boxes_gpu
+ from .base_box3d import BaseInstance3DBoxes
+ from .utils import limit_period, rotation_3d_in_axis
+ 
+diff --git a/third_party/uniad_mmdet3d/core/post_processing/box3d_nms.py b/third_party/uniad_mmdet3d/core/post_processing/box3d_nms.py
+index 927e10c..0f6070b 100644
+--- a/third_party/uniad_mmdet3d/core/post_processing/box3d_nms.py
++++ b/third_party/uniad_mmdet3d/core/post_processing/box3d_nms.py
+@@ -4,7 +4,7 @@ import numpy as np
+ import torch
+ from mmcv.ops import nms_rotated
+ 
+-from third_party.bev_mmdet3d.ops.iou3d.iou3d_utils import nms_gpu, nms_normal_gpu
++from third_party.uniad_mmdet3d.ops.iou3d.iou3d_utils import nms_gpu, nms_normal_gpu
+ 
+ 
+ def box3d_multiclass_nms(
+diff --git a/third_party/uniad_mmdet3d/core/post_processing/merge_augs.py b/third_party/uniad_mmdet3d/core/post_processing/merge_augs.py
+index abed9e3..255b0f3 100644
+--- a/third_party/uniad_mmdet3d/core/post_processing/merge_augs.py
++++ b/third_party/uniad_mmdet3d/core/post_processing/merge_augs.py
+@@ -1,7 +1,7 @@
+ # Copyright (c) OpenMMLab. All rights reserved.
+ import torch
+ 
+-from third_party.bev_mmdet3d.ops.iou3d.iou3d_utils import nms_gpu, nms_normal_gpu
++from third_party.uniad_mmdet3d.ops.iou3d.iou3d_utils import nms_gpu, nms_normal_gpu
+ from ..bbox import bbox3d2result, bbox3d_mapping_back, xywhr2xyxyr
+ 
+ 
+diff --git a/third_party/uniad_mmdet3d/datasets/pipelines/data_augment_utils.py b/third_party/uniad_mmdet3d/datasets/pipelines/data_augment_utils.py
+index 71bb56c..8ce260f 100644
+--- a/third_party/uniad_mmdet3d/datasets/pipelines/data_augment_utils.py
++++ b/third_party/uniad_mmdet3d/datasets/pipelines/data_augment_utils.py
+@@ -2,7 +2,7 @@
+ import numba
+ import numpy as np
+ 
+-from third_party.bev_mmdet3d.core.bbox import box_np_ops
++from third_party.uniad_mmdet3d.core.bbox import box_np_ops
+ 
+ 
+ @numba.njit
+diff --git a/third_party/uniad_mmdet3d/datasets/pipelines/dbsampler.py b/third_party/uniad_mmdet3d/datasets/pipelines/dbsampler.py
+index 4ac7bc2..cc63857 100644
+--- a/third_party/uniad_mmdet3d/datasets/pipelines/dbsampler.py
++++ b/third_party/uniad_mmdet3d/datasets/pipelines/dbsampler.py
+@@ -4,7 +4,7 @@ import mmcv
+ import numpy as np
+ import os
+ 
+-from third_party.bev_mmdet3d.core.bbox import box_np_ops
++from third_party.uniad_mmdet3d.core.bbox import box_np_ops
+ from . import data_augment_utils
+ from mmdet.datasets import PIPELINES
+ from ..builder import OBJECTSAMPLERS
+diff --git a/third_party/uniad_mmdet3d/datasets/pipelines/formating.py b/third_party/uniad_mmdet3d/datasets/pipelines/formating.py
+index 2b9fec0..fba2b92 100644
+--- a/third_party/uniad_mmdet3d/datasets/pipelines/formating.py
++++ b/third_party/uniad_mmdet3d/datasets/pipelines/formating.py
+@@ -2,8 +2,8 @@
+ import numpy as np
+ from mmcv.parallel import DataContainer as DC
+ 
+-from third_party.bev_mmdet3d.core.bbox import BaseInstance3DBoxes
+-from third_party.bev_mmdet3d.core.points import BasePoints
++from third_party.uniad_mmdet3d.core.bbox import BaseInstance3DBoxes
++from third_party.uniad_mmdet3d.core.points import BasePoints
+ from mmdet.datasets.builder import PIPELINES
+ from mmdet.datasets.pipelines import to_tensor
+ 
+diff --git a/third_party/uniad_mmdet3d/datasets/pipelines/loading.py b/third_party/uniad_mmdet3d/datasets/pipelines/loading.py
+index ece660c..e4f1fd8 100644
+--- a/third_party/uniad_mmdet3d/datasets/pipelines/loading.py
++++ b/third_party/uniad_mmdet3d/datasets/pipelines/loading.py
+@@ -5,7 +5,7 @@ from pyquaternion import Quaternion
+ import mmcv
+ import numpy as np
+ 
+-from third_party.bev_mmdet3d.core.points import BasePoints, get_points_type
++from third_party.uniad_mmdet3d.core.points import BasePoints, get_points_type
+ from mmdet.datasets.builder import PIPELINES
+ from mmdet.datasets.pipelines import LoadAnnotations, LoadImageFromFile
+ from ...core.bbox import LiDARInstance3DBoxes
+diff --git a/third_party/uniad_mmdet3d/models/detectors/mvx_two_stage.py b/third_party/uniad_mmdet3d/models/detectors/mvx_two_stage.py
+index c35b90c..98c0b0a 100644
+--- a/third_party/uniad_mmdet3d/models/detectors/mvx_two_stage.py
++++ b/third_party/uniad_mmdet3d/models/detectors/mvx_two_stage.py
+@@ -10,7 +10,7 @@ from torch.nn import functional as F
+ from ...core.bbox import Box3DMode, Coord3DMode, bbox3d2result
+ from ...core.visualizer import show_result
+ from ...core.post_processing import merge_aug_bboxes_3d
+-from third_party.bev_mmdet3d.ops.voxel import Voxelization
++from third_party.uniad_mmdet3d.ops.voxel import Voxelization
+ from mmdet.core import multi_apply
+ from mmdet.models import DETECTORS
+ from .. import builder
+diff --git a/third_party/uniad_mmdet3d/utils/__init__.py b/third_party/uniad_mmdet3d/utils/__init__.py
+new file mode 100644
+index 0000000..e9958ab
+--- /dev/null
++++ b/third_party/uniad_mmdet3d/utils/__init__.py
+@@ -0,0 +1,9 @@
++# Copyright (c) OpenMMLab. All rights reserved.
++from mmcv.utils import Registry, build_from_cfg, print_log
++
++from .collect_env import collect_env
++from .logger import get_root_logger
++
++__all__ = [
++    'Registry', 'build_from_cfg', 'get_root_logger', 'collect_env', 'print_log'
++]
+diff --git a/third_party/uniad_mmdet3d/utils/collect_env.py b/third_party/uniad_mmdet3d/utils/collect_env.py
+new file mode 100644
+index 0000000..732a044
+--- /dev/null
++++ b/third_party/uniad_mmdet3d/utils/collect_env.py
+@@ -0,0 +1,21 @@
++# Copyright (c) OpenMMLab. All rights reserved.
++from mmcv.utils import collect_env as collect_base_env
++from mmcv.utils import get_git_hash
++
++import mmdet
++# import mmseg
++
++
++def collect_env():
++    """Collect the information of the running environments."""
++    env_info = collect_base_env()
++    env_info['MMDetection'] = mmdet.__version__
++    env_info['MMSegmentation'] = 'do not import mmseg'
++    env_info['MMDetection3D'] = 'my_custom_mmdet3d' + '+' + get_git_hash()[:7]
++
++    return env_info
++
++
++if __name__ == '__main__':
++    for name, val in collect_env().items():
++        print(f'{name}: {val}')
+diff --git a/third_party/uniad_mmdet3d/utils/logger.py b/third_party/uniad_mmdet3d/utils/logger.py
+new file mode 100644
+index 0000000..d9f0891
+--- /dev/null
++++ b/third_party/uniad_mmdet3d/utils/logger.py
+@@ -0,0 +1,30 @@
++# Copyright (c) OpenMMLab. All rights reserved.
++import logging
++from mmcv.utils import get_logger
++
++
++def get_root_logger(log_file=None, log_level=logging.INFO, name='mmdet3d'):
++    """Get root logger and add a keyword filter to it.
++
++    The logger will be initialized if it has not been initialized. By default a
++    StreamHandler will be added. If `log_file` is specified, a FileHandler will
++    also be added. The name of the root logger is the top-level package name,
++    e.g., "mmdet3d".
++
++    Args:
++        log_file (str, optional): File path of log. Defaults to None.
++        log_level (int, optional): The level of logger.
++            Defaults to logging.INFO.
++        name (str, optional): The name of the root logger, also used as a
++            filter keyword. Defaults to 'mmdet3d'.
++
++    Returns:
++        :obj:`logging.Logger`: The obtained logger
++    """
++    logger = get_logger(name=name, log_file=log_file, log_level=log_level)
++
++    # add a logging filter
++    logging_filter = logging.Filter(name)
++    logging_filter.filter = lambda record: record.find(name) != -1
++
++    return logger
+-- 
+2.39.3 (Apple Git-146)
+

@@ -7,7 +7,7 @@
 
 
 
-## ***[Emulating attention mechanism in transformer models with a fully convolutional network (link to be fixed to Blogpost)](https://arxiv.org/abs/2204.13791)***<br />
+## ***[Emulating attention mechanism in transformer models with a fully convolutional network](https://developer.nvidia.com/blog/emulating-the-attention-mechanism-in-transformer-models-with-a-fully-convolutional-network/)***<br />
 John Yang, Le An, Su Inn Park  
 
 Unlike other convolutional models that try to ingest the attention module from transformer model, 

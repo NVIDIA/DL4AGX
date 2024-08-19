@@ -1,0 +1,771 @@
+From d8224e81177aafb4876aa341e7d965f2b9fce67c Mon Sep 17 00:00:00 2001
+From: Bianjiang Yang <bianjiangy@bianjiangy-mlt.client.nvidia.com>
+Date: Tue, 13 Aug 2024 13:36:21 -0700
+Subject: [PATCH] step2: make UniAD compatible with torch1.12
+
+---
+ projects/configs/_base_/datasets/nus-3d.py    |  2 +-
+ .../stage1_track_map/base_track_map.py        | 14 ++--------
+ projects/configs/stage2_e2e/base_e2e.py       | 16 +++--------
+ projects/mmdet3d_plugin/__init__.py           |  0
+ .../core/bbox/assigners/__init__.py           |  0
+ .../bbox/assigners/hungarian_assigner_3d.py   |  4 +--
+ .../assigners/hungarian_assigner_3d_track.py  |  2 +-
+ .../core/bbox/coders/__init__.py              |  0
+ .../core/bbox/coders/detr3d_track_coder.py    |  7 +++--
+ .../core/bbox/coders/nms_free_coder.py        |  2 +-
+ .../core/bbox/match_costs/__init__.py         |  0
+ .../core/bbox/match_costs/match_cost.py       |  4 +--
+ projects/mmdet3d_plugin/core/bbox/util.py     |  0
+ .../datasets/data_utils/trajectory_api.py     |  5 +++-
+ .../datasets/eval_utils/nuscenes_eval.py      |  2 +-
+ .../eval_utils/nuscenes_eval_motion.py        |  4 +--
+ .../datasets/nuscenes_e2e_dataset.py          | 23 ++++++---------
+ .../datasets/pipelines/__init__.py            |  0
+ .../datasets/pipelines/formating.py           | 13 ++++++---
+ .../datasets/pipelines/loading.py             |  9 ++++--
+ .../datasets/pipelines/occflow_label.py       |  2 +-
+ .../datasets/pipelines/transform_3d.py        | 28 +++++++++++--------
+ .../datasets/samplers/distributed_sampler.py  |  2 +-
+ .../datasets/samplers/group_sampler.py        |  2 +-
+ projects/mmdet3d_plugin/losses/dice_loss.py   |  2 +-
+ projects/mmdet3d_plugin/losses/mtp_loss.py    |  2 +-
+ .../mmdet3d_plugin/losses/occflow_loss.py     |  4 +--
+ .../mmdet3d_plugin/losses/planning_loss.py    |  4 +--
+ projects/mmdet3d_plugin/losses/track_loss.py  |  8 ++++--
+ projects/mmdet3d_plugin/losses/traj_loss.py   |  2 +-
+ .../models/backbones/__init__.py              |  0
+ .../mmdet3d_plugin/models/backbones/vovnet.py |  2 +-
+ projects/mmdet3d_plugin/models/hooks/hooks.py |  2 +-
+ projects/mmdet3d_plugin/models/opt/adamw.py   |  2 +-
+ .../mmdet3d_plugin/models/utils/__init__.py   |  0
+ .../mmdet3d_plugin/models/utils/grid_mask.py  |  0
+ .../uniad/hooks/custom_hooks.py               |  2 +-
+ .../modules/custom_base_transformer_layer.py  |  2 +-
+ 38 files changed, 87 insertions(+), 86 deletions(-)
+ mode change 100755 => 100644 projects/mmdet3d_plugin/__init__.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/core/bbox/assigners/__init__.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/core/bbox/assigners/hungarian_assigner_3d.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/core/bbox/coders/__init__.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/core/bbox/coders/detr3d_track_coder.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/core/bbox/match_costs/__init__.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/core/bbox/match_costs/match_cost.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/core/bbox/util.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/datasets/pipelines/__init__.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/datasets/pipelines/transform_3d.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/models/backbones/__init__.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/models/backbones/vovnet.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/models/utils/__init__.py
+ mode change 100755 => 100644 projects/mmdet3d_plugin/models/utils/grid_mask.py
+
+diff --git a/projects/configs/_base_/datasets/nus-3d.py b/projects/configs/_base_/datasets/nus-3d.py
+index 1548171..7c35ebc 100644
+--- a/projects/configs/_base_/datasets/nus-3d.py
++++ b/projects/configs/_base_/datasets/nus-3d.py
+@@ -7,7 +7,7 @@ class_names = [
+     'motorcycle', 'pedestrian', 'traffic_cone', 'barrier'
+ ]
+ dataset_type = 'NuScenesDataset'
+-data_root = 'data/nuscenes/'
++data_root = './data/nuscenes/'
+ # Input modality for nuScenes dataset, this is consistent with the submission
+ # format which requires the information in input_modality.
+ input_modality = dict(
+diff --git a/projects/configs/stage1_track_map/base_track_map.py b/projects/configs/stage1_track_map/base_track_map.py
+index 0f056d4..12e01cd 100644
+--- a/projects/configs/stage1_track_map/base_track_map.py
++++ b/projects/configs/stage1_track_map/base_track_map.py
+@@ -63,10 +63,6 @@ occ_n_future_max = max([occ_n_future, occ_n_future_plan])
+ ### planning ###
+ planning_steps = 6
+ use_col_optim = True
+-# there exists multiple interpretations of the planning metric, where it differs between uniad and stp3/vad
+-# uniad: computed at a particular time (e.g., L2 distance between the predicted and ground truth future trajectory at time 3.0s)
+-# stp3: computed as the average up to a particular time (e.g., average L2 distance between the predicted and ground truth future trajectory up to 3.0s)
+-planning_evaluation_strategy = "uniad"  # uniad or stp3
+ 
+ ### Occ args ### 
+ occflow_grid_conf = {
+@@ -359,8 +355,8 @@ model = dict(
+     ),
+ )
+ dataset_type = "NuScenesE2EDataset"
+-data_root = "data/nuscenes/"
+-info_root = "data/infos/"
++data_root = "./data/nuscenes/"
++info_root = "./data/infos/"
+ file_client_args = dict(backend="disk")
+ ann_file_train=info_root + f"nuscenes_infos_temporal_train.pkl"
+ ann_file_val=info_root + f"nuscenes_infos_temporal_val.pkl"
+@@ -574,11 +570,7 @@ lr_config = dict(
+     min_lr_ratio=1e-3,
+ )
+ total_epochs = 6
+-evaluation = dict(
+-    interval=6,
+-    pipeline=test_pipeline,
+-    planning_evaluation_strategy=planning_evaluation_strategy,
+-)
++evaluation = dict(interval=6, pipeline=test_pipeline)
+ runner = dict(type="EpochBasedRunner", max_epochs=total_epochs)
+ log_config = dict(
+     interval=10, hooks=[dict(type="TextLoggerHook"), dict(type="TensorboardLoggerHook")]
+diff --git a/projects/configs/stage2_e2e/base_e2e.py b/projects/configs/stage2_e2e/base_e2e.py
+index 9903440..83f7160 100644
+--- a/projects/configs/stage2_e2e/base_e2e.py
++++ b/projects/configs/stage2_e2e/base_e2e.py
+@@ -55,10 +55,6 @@ occ_n_future_max = max([occ_n_future, occ_n_future_plan])
+ ### planning ###
+ planning_steps = 6
+ use_col_optim = True
+-# there exists multiple interpretations of the planning metric, where it differs between uniad and stp3/vad
+-# uniad: computed at a particular time (e.g., L2 distance between the predicted and ground truth future trajectory at time 3.0s)
+-# stp3: computed as the average up to a particular time (e.g., average L2 distance between the predicted and ground truth future trajectory up to 3.0s)
+-planning_evaluation_strategy = "uniad"  # uniad or stp3
+ 
+ ### Occ args ### 
+ occflow_grid_conf = {
+@@ -416,7 +412,7 @@ model = dict(
+         group_id_list=group_id_list,
+         num_anchor=6,
+         use_nonlinear_optimizer=use_nonlinear_optimizer,
+-        anchor_info_path='data/others/motion_anchor_infos_mode6.pkl',
++        anchor_info_path='./data/others/motion_anchor_infos_mode6.pkl',
+         transformerlayers=dict(
+             type='MotionTransformerDecoder',
+             pc_range=point_cloud_range,
+@@ -473,8 +469,8 @@ model = dict(
+     ),
+ )
+ dataset_type = "NuScenesE2EDataset"
+-data_root = "data/nuscenes/"
+-info_root = "data/infos/"
++data_root = "./data/nuscenes/"
++info_root = "./data/infos/"
+ file_client_args = dict(backend="disk")
+ ann_file_train=info_root + f"nuscenes_infos_temporal_train.pkl"
+ ann_file_val=info_root + f"nuscenes_infos_temporal_val.pkl"
+@@ -689,11 +685,7 @@ lr_config = dict(
+     min_lr_ratio=1e-3,
+ )
+ total_epochs = 20
+-evaluation = dict(
+-    interval=4,
+-    pipeline=test_pipeline,
+-    planning_evaluation_strategy=planning_evaluation_strategy,
+-)
++evaluation = dict(interval=4, pipeline=test_pipeline)
+ runner = dict(type="EpochBasedRunner", max_epochs=total_epochs)
+ log_config = dict(
+     interval=10, hooks=[dict(type="TextLoggerHook"), dict(type="TensorboardLoggerHook")]
+diff --git a/projects/mmdet3d_plugin/__init__.py b/projects/mmdet3d_plugin/__init__.py
+old mode 100755
+new mode 100644
+diff --git a/projects/mmdet3d_plugin/core/bbox/assigners/__init__.py b/projects/mmdet3d_plugin/core/bbox/assigners/__init__.py
+old mode 100755
+new mode 100644
+diff --git a/projects/mmdet3d_plugin/core/bbox/assigners/hungarian_assigner_3d.py b/projects/mmdet3d_plugin/core/bbox/assigners/hungarian_assigner_3d.py
+old mode 100755
+new mode 100644
+index 583fcab..735761a
+--- a/projects/mmdet3d_plugin/core/bbox/assigners/hungarian_assigner_3d.py
++++ b/projects/mmdet3d_plugin/core/bbox/assigners/hungarian_assigner_3d.py
+@@ -13,7 +13,7 @@ except ImportError:
+     linear_sum_assignment = None
+ 
+ 
+-@BBOX_ASSIGNERS.register_module()
++@BBOX_ASSIGNERS.register_module(force=True)
+ class HungarianAssigner3D(BaseAssigner):
+     """Computes one-to-one matching between predictions and ground truth.
+     This class computes an assignment between the targets and the predictions
+@@ -107,7 +107,7 @@ class HungarianAssigner3D(BaseAssigner):
+         # classification and bboxcost.
+         cls_cost = self.cls_cost(cls_pred, gt_labels)
+         # regression L1 cost
+-       
++    
+         normalized_gt_bboxes = normalize_bbox(gt_bboxes, self.pc_range)
+     
+         reg_cost = self.reg_cost(bbox_pred[:, :8], normalized_gt_bboxes[:, :8])
+diff --git a/projects/mmdet3d_plugin/core/bbox/assigners/hungarian_assigner_3d_track.py b/projects/mmdet3d_plugin/core/bbox/assigners/hungarian_assigner_3d_track.py
+index 5067730..e70c573 100644
+--- a/projects/mmdet3d_plugin/core/bbox/assigners/hungarian_assigner_3d_track.py
++++ b/projects/mmdet3d_plugin/core/bbox/assigners/hungarian_assigner_3d_track.py
+@@ -10,7 +10,7 @@ except ImportError:
+     linear_sum_assignment = None
+ 
+ 
+-@BBOX_ASSIGNERS.register_module()
++@BBOX_ASSIGNERS.register_module(force=True)
+ class HungarianAssigner3DTrack(BaseAssigner):
+     """Computes one-to-one matching between predictions and ground truth.
+     This class computes an assignment between the targets and the predictions
+diff --git a/projects/mmdet3d_plugin/core/bbox/coders/__init__.py b/projects/mmdet3d_plugin/core/bbox/coders/__init__.py
+old mode 100755
+new mode 100644
+diff --git a/projects/mmdet3d_plugin/core/bbox/coders/detr3d_track_coder.py b/projects/mmdet3d_plugin/core/bbox/coders/detr3d_track_coder.py
+old mode 100755
+new mode 100644
+index 3b00003..80c2677
+--- a/projects/mmdet3d_plugin/core/bbox/coders/detr3d_track_coder.py
++++ b/projects/mmdet3d_plugin/core/bbox/coders/detr3d_track_coder.py
+@@ -3,10 +3,13 @@ import torch
+ from mmdet.core.bbox import BaseBBoxCoder
+ from mmdet.core.bbox.builder import BBOX_CODERS
+ from projects.mmdet3d_plugin.core.bbox.util import normalize_bbox, denormalize_bbox
+-from mmdet3d.core import xywhr2xyxyr
++import sys
++# sys.path.insert(1, '/path/to/UniAD_tensorrt')
++from third_party.uniad_mmdet3d.core.bbox import xywhr2xyxyr
++# from mmdet3d.core import xywhr2xyxyr
+ from mmcv.ops import nms_bev
+ 
+-@BBOX_CODERS.register_module()
++@BBOX_CODERS.register_module(force=True)
+ class DETRTrack3DCoder(BaseBBoxCoder):
+     """Bbox coder for DETR3D.
+     Args:
+diff --git a/projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py b/projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py
+old mode 100755
+new mode 100644
+index 614ee4c..bc836a0
+--- a/projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py
++++ b/projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py
+@@ -6,7 +6,7 @@ from projects.mmdet3d_plugin.core.bbox.util import denormalize_bbox
+ import numpy as np
+ 
+ 
+-@BBOX_CODERS.register_module()
++@BBOX_CODERS.register_module(force=True)
+ class NMSFreeCoder(BaseBBoxCoder):
+     """Bbox coder for NMS-free detector.
+     Args:
+diff --git a/projects/mmdet3d_plugin/core/bbox/match_costs/__init__.py b/projects/mmdet3d_plugin/core/bbox/match_costs/__init__.py
+old mode 100755
+new mode 100644
+diff --git a/projects/mmdet3d_plugin/core/bbox/match_costs/match_cost.py b/projects/mmdet3d_plugin/core/bbox/match_costs/match_cost.py
+old mode 100755
+new mode 100644
+index d73b7e0..8031308
+--- a/projects/mmdet3d_plugin/core/bbox/match_costs/match_cost.py
++++ b/projects/mmdet3d_plugin/core/bbox/match_costs/match_cost.py
+@@ -3,7 +3,7 @@ from mmdet.core.bbox.match_costs.builder import MATCH_COST
+ import torch.nn.functional as F
+ 
+ 
+-@MATCH_COST.register_module()
++@MATCH_COST.register_module(force=True)
+ class BBox3DL1Cost(object):
+     """BBox3DL1Cost.
+      Args:
+@@ -28,7 +28,7 @@ class BBox3DL1Cost(object):
+         return bbox_cost * self.weight
+ 
+ 
+-@MATCH_COST.register_module()
++@MATCH_COST.register_module(force=True)
+ class DiceCost(object):
+     """IoUCost.
+ 
+diff --git a/projects/mmdet3d_plugin/core/bbox/util.py b/projects/mmdet3d_plugin/core/bbox/util.py
+old mode 100755
+new mode 100644
+diff --git a/projects/mmdet3d_plugin/datasets/data_utils/trajectory_api.py b/projects/mmdet3d_plugin/datasets/data_utils/trajectory_api.py
+index c812282..99fbd3f 100644
+--- a/projects/mmdet3d_plugin/datasets/data_utils/trajectory_api.py
++++ b/projects/mmdet3d_plugin/datasets/data_utils/trajectory_api.py
+@@ -2,7 +2,10 @@ import numpy as np
+ from nuscenes.prediction import (PredictHelper,
+                                  convert_local_coords_to_global,
+                                  convert_global_coords_to_local)
+-from mmdet3d.core.bbox import Box3DMode, Coord3DMode, LiDARInstance3DBoxes
++import sys
++# sys.path.insert(1, '/path/to/UniAD_tensorrt')
++from third_party.uniad_mmdet3d.core.bbox import Box3DMode, Coord3DMode, LiDARInstance3DBoxes
++# from mmdet3d.core.bbox import Box3DMode, Coord3DMode, LiDARInstance3DBoxes
+ from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
+ from mmcv.parallel import DataContainer as DC
+ from mmdet.datasets.pipelines import to_tensor
+diff --git a/projects/mmdet3d_plugin/datasets/eval_utils/nuscenes_eval.py b/projects/mmdet3d_plugin/datasets/eval_utils/nuscenes_eval.py
+index 553e20b..44b35f6 100644
+--- a/projects/mmdet3d_plugin/datasets/eval_utils/nuscenes_eval.py
++++ b/projects/mmdet3d_plugin/datasets/eval_utils/nuscenes_eval.py
+@@ -665,7 +665,7 @@ if __name__ == "__main__":
+                         help='Folder to store result metrics, graphs and example visualizations.')
+     parser.add_argument('--eval_set', type=str, default='val',
+                         help='Which dataset split to evaluate on, train, val or test.')
+-    parser.add_argument('--dataroot', type=str, default='data/nuscenes',
++    parser.add_argument('--dataroot', type=str, default='./data/nuscenes',
+                         help='Default nuScenes data directory.')
+     parser.add_argument('--version', type=str, default='v1.0-trainval',
+                         help='Which version of the nuScenes dataset to evaluate on, e.g. v1.0-trainval.')
+diff --git a/projects/mmdet3d_plugin/datasets/eval_utils/nuscenes_eval_motion.py b/projects/mmdet3d_plugin/datasets/eval_utils/nuscenes_eval_motion.py
+index 3af54f4..18c6303 100644
+--- a/projects/mmdet3d_plugin/datasets/eval_utils/nuscenes_eval_motion.py
++++ b/projects/mmdet3d_plugin/datasets/eval_utils/nuscenes_eval_motion.py
+@@ -39,7 +39,7 @@ from nuscenes.eval.detection.data_classes import DetectionConfig, DetectionMetri
+     DetectionMetricDataList
+ from nuscenes.eval.detection.render import summary_plot, class_pr_curve, dist_pr_curve, visualize_sample
+ from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
+-from mmdet3d.core.bbox.iou_calculators import BboxOverlaps3D
++# from mmdet3d.core.bbox.iou_calculators import BboxOverlaps3D
+ from IPython import embed
+ import json
+ from typing import Any
+@@ -877,7 +877,7 @@ if __name__ == "__main__":
+         type=str,
+         default='val',
+         help='Which dataset split to evaluate on, train, val or test.')
+-    parser.add_argument('--dataroot', type=str, default='data/nuscenes',
++    parser.add_argument('--dataroot', type=str, default='./data/nuscenes',
+                         help='Default nuScenes data directory.')
+     parser.add_argument(
+         '--version',
+diff --git a/projects/mmdet3d_plugin/datasets/nuscenes_e2e_dataset.py b/projects/mmdet3d_plugin/datasets/nuscenes_e2e_dataset.py
+index c1b9392..a1570dd 100644
+--- a/projects/mmdet3d_plugin/datasets/nuscenes_e2e_dataset.py
++++ b/projects/mmdet3d_plugin/datasets/nuscenes_e2e_dataset.py
+@@ -10,8 +10,12 @@ import torch
+ import mmcv
+ from mmdet.datasets import DATASETS
+ from mmdet.datasets.pipelines import to_tensor
+-from mmdet3d.datasets import NuScenesDataset
+-from mmdet3d.core.bbox import LiDARInstance3DBoxes
++# from mmdet3d.datasets import NuScenesDataset
++import sys
++# sys.path.insert(1, '/path/to/UniAD_tensorrt')
++from third_party.uniad_mmdet3d.datasets import NuScenesDataset
++# from mmdet3d.core.bbox import LiDARInstance3DBoxes
++from third_party.uniad_mmdet3d.core.bbox import LiDARInstance3DBoxes
+ 
+ from os import path as osp
+ from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
+@@ -34,7 +38,7 @@ from .data_utils.data_utils import lidar_nusc_box_to_global, obtain_map_info, ou
+ from nuscenes.prediction import convert_local_coords_to_global
+ 
+ 
+-@DATASETS.register_module()
++@DATASETS.register_module(force=True)
+ class NuScenesE2EDataset(NuScenesDataset):
+     r"""NuScenes E2E Dataset.
+ 
+@@ -981,8 +985,7 @@ class NuScenesE2EDataset(NuScenesDataset):
+                  result_names=['pts_bbox'],
+                  show=False,
+                  out_dir=None,
+-                 pipeline=None,
+-                 planning_evaluation_strategy="uniad"):
++                 pipeline=None):
+         """Evaluation in nuScenes protocol.
+         Args:
+             results (list[dict]): Testing results of the dataset.
+@@ -1025,7 +1028,6 @@ class NuScenesE2EDataset(NuScenesDataset):
+             if 'planning_results_computed' in results.keys():
+                 planning_results_computed = results['planning_results_computed']
+                 planning_tab = PrettyTable()
+-                planning_tab.title = f"{planning_evaluation_strategy}'s definition planning metrics"
+                 planning_tab.field_names = [
+                     "metrics", "0.5s", "1.0s", "1.5s", "2.0s", "2.5s", "3.0s"]
+                 for key in planning_results_computed.keys():
+@@ -1033,14 +1035,7 @@ class NuScenesE2EDataset(NuScenesDataset):
+                     row_value = []
+                     row_value.append(key)
+                     for i in range(len(value)):
+-                        if planning_evaluation_strategy == "stp3":
+-                            row_value.append("%.4f" % float(value[: i + 1].mean()))
+-                        elif planning_evaluation_strategy == "uniad":
+-                            row_value.append("%.4f" % float(value[i]))
+-                        else:
+-                            raise ValueError(
+-                                "planning_evaluation_strategy should be uniad or spt3"
+-                            )
++                        row_value.append('%.4f' % float(value[i]))
+                     planning_tab.add_row(row_value)
+                 print(planning_tab)
+             results = results['bbox_results']  # get bbox_results
+diff --git a/projects/mmdet3d_plugin/datasets/pipelines/__init__.py b/projects/mmdet3d_plugin/datasets/pipelines/__init__.py
+old mode 100755
+new mode 100644
+diff --git a/projects/mmdet3d_plugin/datasets/pipelines/formating.py b/projects/mmdet3d_plugin/datasets/pipelines/formating.py
+index 5287852..13bf063 100644
+--- a/projects/mmdet3d_plugin/datasets/pipelines/formating.py
++++ b/projects/mmdet3d_plugin/datasets/pipelines/formating.py
+@@ -3,13 +3,18 @@
+ import numpy as np
+ from mmcv.parallel import DataContainer as DC
+ 
+-from mmdet3d.core.bbox import BaseInstance3DBoxes
+-from mmdet3d.core.points import BasePoints
++import sys
++# sys.path.insert(1, '/path/to/UniAD_tensorrt')
++from third_party.uniad_mmdet3d.core.bbox import BaseInstance3DBoxes
++from third_party.uniad_mmdet3d.core.points import BasePoints
++from third_party.uniad_mmdet3d.datasets.pipelines import DefaultFormatBundle3D
++# from mmdet3d.core.bbox import BaseInstance3DBoxes
++# from mmdet3d.core.points import BasePoints
+ from mmdet.datasets.builder import PIPELINES
+ from mmdet.datasets.pipelines import to_tensor
+-from mmdet3d.datasets.pipelines import DefaultFormatBundle3D
++# from mmdet3d.datasets.pipelines import DefaultFormatBundle3D
+ 
+-@PIPELINES.register_module()
++@PIPELINES.register_module(force=True)
+ class CustomDefaultFormatBundle3D(DefaultFormatBundle3D):
+     """Default formatting bundle.
+     It simplifies the pipeline of formatting common fields for voxels,
+diff --git a/projects/mmdet3d_plugin/datasets/pipelines/loading.py b/projects/mmdet3d_plugin/datasets/pipelines/loading.py
+index 73d7ba4..c7b828b 100644
+--- a/projects/mmdet3d_plugin/datasets/pipelines/loading.py
++++ b/projects/mmdet3d_plugin/datasets/pipelines/loading.py
+@@ -2,10 +2,13 @@ import numpy as np
+ import mmcv
+ from mmdet.datasets.builder import PIPELINES
+ from einops import rearrange
+-from mmdet3d.datasets.pipelines import LoadAnnotations3D
++import sys
++# sys.path.insert(1, '/path/to/UniAD_tensorrt')
++from third_party.uniad_mmdet3d.datasets.pipelines import LoadAnnotations3D
++# from mmdet3d.datasets.pipelines import LoadAnnotations3D
+ import os
+ 
+-@PIPELINES.register_module()
++@PIPELINES.register_module(force=True)
+ class LoadMultiViewImageFromFilesInCeph(object):
+     """Load multi channel images from a list of separate channel files.
+ 
+@@ -82,7 +85,7 @@ class LoadMultiViewImageFromFilesInCeph(object):
+         return repr_str
+ 
+ 
+-@PIPELINES.register_module()
++@PIPELINES.register_module(force=True)
+ class LoadAnnotations3D_E2E(LoadAnnotations3D):
+     """Load Annotations3D.
+ 
+diff --git a/projects/mmdet3d_plugin/datasets/pipelines/occflow_label.py b/projects/mmdet3d_plugin/datasets/pipelines/occflow_label.py
+index 06c658a..e301186 100644
+--- a/projects/mmdet3d_plugin/datasets/pipelines/occflow_label.py
++++ b/projects/mmdet3d_plugin/datasets/pipelines/occflow_label.py
+@@ -7,7 +7,7 @@ from projects.mmdet3d_plugin.uniad.dense_heads.occ_head_plugin import calculate_
+ from mmdet.datasets.builder import PIPELINES
+ import os
+ 
+-@PIPELINES.register_module()
++@PIPELINES.register_module(force=True)
+ class GenerateOccFlowLabels(object):
+     def __init__(self, grid_conf, ignore_index=255, only_vehicle=True, filter_invisible=True, deal_instance_255=False):
+         self.grid_conf = grid_conf
+diff --git a/projects/mmdet3d_plugin/datasets/pipelines/transform_3d.py b/projects/mmdet3d_plugin/datasets/pipelines/transform_3d.py
+old mode 100755
+new mode 100644
+index c4e7d01..030e8d5
+--- a/projects/mmdet3d_plugin/datasets/pipelines/transform_3d.py
++++ b/projects/mmdet3d_plugin/datasets/pipelines/transform_3d.py
+@@ -3,10 +3,14 @@ from numpy import random
+ import mmcv
+ from mmdet.datasets.builder import PIPELINES
+ from mmcv.parallel import DataContainer as DC
+-from mmdet3d.datasets.pipelines.transforms_3d import ObjectRangeFilter, ObjectNameFilter
+-from mmdet3d.core.bbox import CameraInstance3DBoxes, DepthInstance3DBoxes, LiDARInstance3DBoxes
+-
+-@PIPELINES.register_module()
++# from mmdet3d.datasets.pipelines.transforms_3d import ObjectRangeFilter, ObjectNameFilter
++import sys
++# sys.path.insert(1, '/path/to/UniAD_tensorrt')
++from third_party.uniad_mmdet3d.datasets.pipelines import ObjectRangeFilter, ObjectNameFilter
++# from mmdet3d.core.bbox import CameraInstance3DBoxes, DepthInstance3DBoxes, LiDARInstance3DBoxes
++from third_party.uniad_mmdet3d.core.bbox import CameraInstance3DBoxes, DepthInstance3DBoxes, LiDARInstance3DBoxes
++
++@PIPELINES.register_module(force=True)
+ class PadMultiViewImage(object):
+     """Pad the multi-view image.
+     There are two padding modes: (1) pad to a fixed size and (2) pad to the
+@@ -60,7 +64,7 @@ class PadMultiViewImage(object):
+         return repr_str
+ 
+ 
+-@PIPELINES.register_module()
++@PIPELINES.register_module(force=True)
+ class NormalizeMultiviewImage(object):
+     """Normalize the image.
+     Added key is "img_norm_cfg".
+@@ -97,7 +101,7 @@ class NormalizeMultiviewImage(object):
+         return repr_str
+ 
+ 
+-@PIPELINES.register_module()
++@PIPELINES.register_module(force=True)
+ class PhotoMetricDistortionMultiViewImage:
+     """Apply photometric distortion to image sequentially, every transformation
+     is applied with a probability of 0.5. The position of random contrast is in
+@@ -198,7 +202,7 @@ class PhotoMetricDistortionMultiViewImage:
+ 
+ 
+ 
+-@PIPELINES.register_module()
++@PIPELINES.register_module(force=True)
+ class CustomCollect3D(object):
+     """Collect data from the loader relevant to the specific task.
+     This is usually the last stage of the data loader pipeline. Typically keys
+@@ -286,7 +290,7 @@ class CustomCollect3D(object):
+ 
+ 
+ 
+-@PIPELINES.register_module()
++@PIPELINES.register_module(force=True)
+ class RandomScaleImageMultiViewImage(object):
+     """Random scale the image
+     Args:
+@@ -327,7 +331,7 @@ class RandomScaleImageMultiViewImage(object):
+         repr_str += f'(size={self.scales}, '
+         return repr_str
+ 
+-@PIPELINES.register_module()
++@PIPELINES.register_module(force=True)
+ class ObjectRangeFilterTrack(object):
+     """Filter objects by the range.
+     Args:
+@@ -407,7 +411,7 @@ class ObjectRangeFilterTrack(object):
+         repr_str += f'(point_cloud_range={self.pcd_range.tolist()})'
+         return repr_str
+ 
+-@PIPELINES.register_module()
++@PIPELINES.register_module(force=True)
+ class ObjectNameFilterTrack(object):
+     """Filter GT objects by their names.
+     Args:
+@@ -444,7 +448,7 @@ class ObjectNameFilterTrack(object):
+         repr_str += f'(classes={self.classes})'
+         return repr_str
+ 
+-@PIPELINES.register_module()
++@PIPELINES.register_module(force=True)
+ class CustomObjectRangeFilter(ObjectRangeFilter):
+     def __call__(self, results):
+         """Call function to filter objects by the range.
+@@ -479,7 +483,7 @@ class CustomObjectRangeFilter(ObjectRangeFilter):
+ 
+         return results
+ 
+-@PIPELINES.register_module()
++@PIPELINES.register_module(force=True)
+ class CustomObjectNameFilter(ObjectNameFilter):
+     def __call__(self, results):
+         """Call function to filter objects by their names.
+diff --git a/projects/mmdet3d_plugin/datasets/samplers/distributed_sampler.py b/projects/mmdet3d_plugin/datasets/samplers/distributed_sampler.py
+index 2913de9..d79cbc6 100644
+--- a/projects/mmdet3d_plugin/datasets/samplers/distributed_sampler.py
++++ b/projects/mmdet3d_plugin/datasets/samplers/distributed_sampler.py
+@@ -5,7 +5,7 @@ from torch.utils.data import DistributedSampler as _DistributedSampler
+ from .sampler import SAMPLER
+ 
+ 
+-@SAMPLER.register_module()
++@SAMPLER.register_module(force=True)
+ class DistributedSampler(_DistributedSampler):
+ 
+     def __init__(self,
+diff --git a/projects/mmdet3d_plugin/datasets/samplers/group_sampler.py b/projects/mmdet3d_plugin/datasets/samplers/group_sampler.py
+index 16c59e5..ce9ca83 100644
+--- a/projects/mmdet3d_plugin/datasets/samplers/group_sampler.py
++++ b/projects/mmdet3d_plugin/datasets/samplers/group_sampler.py
+@@ -11,7 +11,7 @@ import random
+ from IPython import embed
+ 
+ 
+-@SAMPLER.register_module()
++@SAMPLER.register_module(force=True)
+ class DistributedGroupSampler(Sampler):
+     """Sampler that restricts data loading to a subset of the dataset.
+     It is especially useful in conjunction with
+diff --git a/projects/mmdet3d_plugin/losses/dice_loss.py b/projects/mmdet3d_plugin/losses/dice_loss.py
+index 3cb635f..19761cb 100644
+--- a/projects/mmdet3d_plugin/losses/dice_loss.py
++++ b/projects/mmdet3d_plugin/losses/dice_loss.py
+@@ -21,7 +21,7 @@ def dice_loss(input, target,mask=None,eps=0.001):
+     d = (2 * a) / (b + c)
+     return 1 - d
+ 
+-@LOSSES.register_module()
++@LOSSES.register_module(force=True)
+ class DiceLoss(nn.Module):
+ 
+     def __init__(self, eps=1e-6, reduction='mean', loss_weight=1.0):
+diff --git a/projects/mmdet3d_plugin/losses/mtp_loss.py b/projects/mmdet3d_plugin/losses/mtp_loss.py
+index e6e5234..b0ad95f 100644
+--- a/projects/mmdet3d_plugin/losses/mtp_loss.py
++++ b/projects/mmdet3d_plugin/losses/mtp_loss.py
+@@ -12,7 +12,7 @@ import math
+ 
+ from mmdet.models import LOSSES
+ 
+-@LOSSES.register_module()
++@LOSSES.register_module(force=True)
+ class MTPLoss(nn.Module):
+     """
+     MTP loss modified to include variances. Uses MSE for mode selection.
+diff --git a/projects/mmdet3d_plugin/losses/occflow_loss.py b/projects/mmdet3d_plugin/losses/occflow_loss.py
+index d9ae64b..dda7253 100644
+--- a/projects/mmdet3d_plugin/losses/occflow_loss.py
++++ b/projects/mmdet3d_plugin/losses/occflow_loss.py
+@@ -11,7 +11,7 @@ from einops import rearrange
+ from mmdet.models.builder import LOSSES
+ from mmdet.models.losses.utils import weight_reduce_loss
+ 
+-@LOSSES.register_module()
++@LOSSES.register_module(force=True)
+ class FieryBinarySegmentationLoss(nn.Module):
+     def __init__(self, use_top_k=False, top_k_ratio=1.0, future_discount=1.0, loss_weight=1.0, ignore_index=255):
+         super().__init__()
+@@ -137,7 +137,7 @@ def dice_loss(pred,
+     loss = weight_reduce_loss(loss, weight, reduction, avg_factor)
+     return loss
+ 
+-@LOSSES.register_module()
++@LOSSES.register_module(force=True)
+ class DiceLossWithMasks(nn.Module):
+     def __init__(self,
+                  use_sigmoid=True,
+diff --git a/projects/mmdet3d_plugin/losses/planning_loss.py b/projects/mmdet3d_plugin/losses/planning_loss.py
+index 6d47070..dc13b01 100644
+--- a/projects/mmdet3d_plugin/losses/planning_loss.py
++++ b/projects/mmdet3d_plugin/losses/planning_loss.py
+@@ -12,7 +12,7 @@ import pickle
+ from mmdet.models import LOSSES
+ 
+ 
+-@LOSSES.register_module()
++@LOSSES.register_module(force=True)
+ class PlanningLoss(nn.Module):
+     def __init__(self, loss_type='L2'):
+         super(PlanningLoss, self).__init__()
+@@ -26,7 +26,7 @@ class PlanningLoss(nn.Module):
+         return torch.sum(err * mask)/(torch.sum(mask) + 1e-5)
+ 
+ 
+-@LOSSES.register_module()
++@LOSSES.register_module(force=True)
+ class CollisionLoss(nn.Module):
+     def __init__(self, delta=0.5, weight=1.0):
+         super(CollisionLoss, self).__init__()
+diff --git a/projects/mmdet3d_plugin/losses/track_loss.py b/projects/mmdet3d_plugin/losses/track_loss.py
+index 549c5ae..8f26b9b 100644
+--- a/projects/mmdet3d_plugin/losses/track_loss.py
++++ b/projects/mmdet3d_plugin/losses/track_loss.py
+@@ -20,8 +20,12 @@ from mmdet.core import build_assigner
+ from mmdet.models import build_loss
+ from mmdet.models.builder import LOSSES
+ from mmdet.core import reduce_mean
+-from mmdet3d.core.bbox.iou_calculators.iou3d_calculator import (
++import sys
++# sys.path.insert(1, '/path/to/UniAD_tensorrt')
++from third_party.uniad_mmdet3d.core.bbox.iou_calculators.iou3d_calculator import (
+     bbox_overlaps_nearest_3d as iou_3d, )
++# from mmdet3d.core.bbox.iou_calculators.iou3d_calculator import (
++#     bbox_overlaps_nearest_3d as iou_3d, )
+ from projects.mmdet3d_plugin.core.bbox.util import denormalize_bbox
+ 
+ 
+@@ -58,7 +62,7 @@ def accuracy(output, target, topk=(1, )):
+     return res
+ 
+ 
+-@LOSSES.register_module()
++@LOSSES.register_module(force=True)
+ class ClipMatcher(nn.Module):
+     def __init__(
+             self,
+diff --git a/projects/mmdet3d_plugin/losses/traj_loss.py b/projects/mmdet3d_plugin/losses/traj_loss.py
+index 87b26ca..95860f9 100644
+--- a/projects/mmdet3d_plugin/losses/traj_loss.py
++++ b/projects/mmdet3d_plugin/losses/traj_loss.py
+@@ -12,7 +12,7 @@ from typing import Tuple
+ 
+ from mmdet.models import LOSSES
+ 
+-@LOSSES.register_module()
++@LOSSES.register_module(force=True)
+ class TrajLoss(nn.Module):
+     """
+     MTP loss modified to include variances. Uses MSE for mode selection.
+diff --git a/projects/mmdet3d_plugin/models/backbones/__init__.py b/projects/mmdet3d_plugin/models/backbones/__init__.py
+old mode 100755
+new mode 100644
+diff --git a/projects/mmdet3d_plugin/models/backbones/vovnet.py b/projects/mmdet3d_plugin/models/backbones/vovnet.py
+old mode 100755
+new mode 100644
+index 879d186..093ad6f
+--- a/projects/mmdet3d_plugin/models/backbones/vovnet.py
++++ b/projects/mmdet3d_plugin/models/backbones/vovnet.py
+@@ -265,7 +265,7 @@ class _OSA_stage(nn.Sequential):
+             )
+ 
+ 
+-@BACKBONES.register_module()
++@BACKBONES.register_module(force=True)
+ class VoVNet(BaseModule):
+     def __init__(self, spec_name, input_ch=3, out_features=None, 
+                  frozen_stages=-1, norm_eval=True, pretrained=None, init_cfg=None):
+diff --git a/projects/mmdet3d_plugin/models/hooks/hooks.py b/projects/mmdet3d_plugin/models/hooks/hooks.py
+index 56ff7fd..32ed71a 100644
+--- a/projects/mmdet3d_plugin/models/hooks/hooks.py
++++ b/projects/mmdet3d_plugin/models/hooks/hooks.py
+@@ -2,7 +2,7 @@ from mmcv.runner.hooks.hook import HOOKS, Hook
+ from projects.mmdet3d_plugin.models.utils import run_time
+ 
+ 
+-@HOOKS.register_module()
++@HOOKS.register_module(force=True)
+ class GradChecker(Hook):
+ 
+     def after_train_iter(self, runner):
+diff --git a/projects/mmdet3d_plugin/models/opt/adamw.py b/projects/mmdet3d_plugin/models/opt/adamw.py
+index c890aea..64519d1 100644
+--- a/projects/mmdet3d_plugin/models/opt/adamw.py
++++ b/projects/mmdet3d_plugin/models/opt/adamw.py
+@@ -7,7 +7,7 @@ import torch
+ from torch.optim.optimizer import Optimizer
+ from mmcv.runner.optimizer.builder import OPTIMIZERS
+ 
+-@OPTIMIZERS.register_module()
++@OPTIMIZERS.register_module(force=True)
+ class AdamW2(Optimizer):
+     r"""Implements AdamW algorithm. Solve the bug of torch 1.8
+ 
+diff --git a/projects/mmdet3d_plugin/models/utils/__init__.py b/projects/mmdet3d_plugin/models/utils/__init__.py
+old mode 100755
+new mode 100644
+diff --git a/projects/mmdet3d_plugin/models/utils/grid_mask.py b/projects/mmdet3d_plugin/models/utils/grid_mask.py
+old mode 100755
+new mode 100644
+diff --git a/projects/mmdet3d_plugin/uniad/hooks/custom_hooks.py b/projects/mmdet3d_plugin/uniad/hooks/custom_hooks.py
+index 8238993..3d935b3 100644
+--- a/projects/mmdet3d_plugin/uniad/hooks/custom_hooks.py
++++ b/projects/mmdet3d_plugin/uniad/hooks/custom_hooks.py
+@@ -1,7 +1,7 @@
+ from mmcv.runner.hooks.hook import HOOKS, Hook
+ 
+ 
+-@HOOKS.register_module()
++@HOOKS.register_module(force=True)
+ class TransferWeight(Hook):
+     
+     def __init__(self, every_n_inters=1):
+diff --git a/projects/mmdet3d_plugin/uniad/modules/custom_base_transformer_layer.py b/projects/mmdet3d_plugin/uniad/modules/custom_base_transformer_layer.py
+index 8b7e614..3bb5bfb 100644
+--- a/projects/mmdet3d_plugin/uniad/modules/custom_base_transformer_layer.py
++++ b/projects/mmdet3d_plugin/uniad/modules/custom_base_transformer_layer.py
+@@ -17,7 +17,7 @@ from mmcv.cnn.bricks.registry import TRANSFORMER_LAYER
+ from mmcv.cnn.bricks.transformer import build_feedforward_network, build_attention
+ 
+ 
+-@TRANSFORMER_LAYER.register_module()
++@TRANSFORMER_LAYER.register_module(force=True)
+ class MyCustomBaseTransformerLayer(BaseModule):
+     """Base `TransformerLayer` for vision transformer.
+     It can be built from `mmcv.ConfigDict` and support more flexible
+-- 
+2.39.3 (Apple Git-146)
+
