@@ -1,5 +1,5 @@
 
-## UniAD_tiny Training
+## UniAD Tiny Training
 Follow [training instructions](https://github.com/OpenDriveLab/UniAD/blob/main/docs/TRAIN_EVAL.md) from official UniAD
 
 Necessary files: 
