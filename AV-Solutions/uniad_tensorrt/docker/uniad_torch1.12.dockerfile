@@ -122,12 +122,12 @@ RUN cd / && \
 RUN pip install mmsegmentation>=0.20.0
 
 RUN python3 -m pip install --upgrade pip
-RUN pip3 install google-cloud-bigquery motmetrics==1.1.3 einops==0.4.1 casadi==3.5.6rc2 pytorch-lightning==1.2.5
+RUN pip3 install google-cloud-bigquery==3.25.0 motmetrics==1.1.3 einops==0.4.1 casadi==3.5.6rc2 pytorch-lightning==1.2.5
 
 RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
 
-RUN pip3 install ipython
-RUN pip3 install scikit-image
+RUN pip3 install ipython==8.12.3
+RUN pip3 install scikit-image==0.21.0
 RUN pip3 install yapf==0.40.1
 
 ENV TRT_LIBPATH /usr/lib/x86_64-linux-gnu
@@ -138,4 +138,4 @@ WORKDIR /workspace
 COPY ./nuscenes /usr/local/lib/python3.8/dist-packages/nuscenes
 RUN pip install torchmetrics==0.11.4
 RUN pip install pandas==1.4.4
-RUN pip install onnx onnx_graphsurgeon
+RUN pip install onnx==1.16.2 onnx_graphsurgeon==0.5.2

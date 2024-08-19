@@ -53,13 +53,13 @@ Here are some examples for the inference output:
 5) In the BEV view, the lines starting from the center of the BBOXs are illustrating the velocities of the objects.
 
 ### Latency reports <a name="latency"></a>
-When running the inference application, a runtime analysis will also be provided. Here is an example on Orin DriveOS Linux 6.0.8.1, TensorRT 8.6.13.3 in FP32 mode:
+When running the inference application, a runtime analysis will also be provided. Here is an example on Orin DriveOS Linux 6.0.8.1, TensorRT-8.6.13.3 in FP32 mode:
 ```
 [timer:  Inference]: 	115.24742 ms
 ```
 
 ## Reference <a name="ref"></a>
-1. [UniAD Papaer: Planning-oriented Autonomous Driving](https://arxiv.org/abs/2212.10156)
+1. [UniAD Paper: Planning-oriented Autonomous Driving](https://arxiv.org/abs/2212.10156)
 2. [UniAD Repository](https://github.com/OpenDriveLab/UniAD/tree/main)
 3. [BEVFormer_tensorrt Repository](https://github.com/DerryHub/BEVFormer_tensorrt/tree/main)
 4. [STB Repository](https://github.com/nothings/stb/tree/master)
