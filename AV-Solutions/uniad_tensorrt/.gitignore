@@ -1,1 +1,13 @@
 docker/nuscenes
+build/
+data/
+onnx/
+engine/
+
+.vscode
+*.ignore
+*.onnx
+*.nsys-rep
+*.tmp
+*.log
+*.ttf
