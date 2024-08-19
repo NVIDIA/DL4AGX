@@ -17,9 +17,11 @@ This project is running with TensorRT 8.6.13.3 and has been tested on Orin DOS L
 
 ## Table of Contents:
 1. [Getting Started](#start)
-   - [Environment Installation](./documents/envs.md)
-   - [UniAD Training](./documents/training.md)
-   - [Export ONNX and Build Engine](./documents/onnx_engine.md)
+   - [Project Installation](./documents/proj_installation.md)
+   - [Environment Preparation](./documents/env_prep.md)
+   - [Data Preparation](./documents/data_prep.md)
+   - [UniAD Tiny Training](./documents/tiny_training.md)
+   - [Export ONNX and Build Engine](./documents/onnx_engine_build.md)
    - [Inference Application](./inference_app/README.md)
 2. [Results demonstration](#results)
    - [Video examples](#video)
@@ -29,10 +31,12 @@ This project is running with TensorRT 8.6.13.3 and has been tested on Orin DOS L
 ## Getting Started <a name="start"></a>
 
 Please see the following documents for environment installation, UniAD training, ONNX exporting and engine building, and inference application in C++.
-- [Environment Installation](./documents/envs.md)
-- [UniAD Training](./documents/training.md)
-- [Export ONNX and Build Engine](./documents/onnx_engine.md)
-- [Inference Application](./inference_app/README.md)
+   - [Project Installation](./documents/proj_installation.md)
+   - [Environment Preparation](./documents/env_prep.md)
+   - [Data Preparation](./documents/data_prep.md)
+   - [UniAD Tiny Training](./documents/tiny_training.md)
+   - [Export ONNX and Build Engine](./documents/onnx_engine_build.md)
+   - [Inference Application](./inference_app/README.md)
 
 ## Results demonstration <a name="results"></a>
 The inference application will read raw images as input and generate output visualizations to showcase the planning trajectory and dynamic object detection. Notice that there is no collusion correction or BBOX NMS in the post-process. The visuaizer is visualizing the raw planning trajectory and BBOX pridiction outputs.
@@ -63,3 +67,4 @@ When running the inference application, a runtime analysis will also be provided
 6. [cuOSD Repository](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD)
 7. [CUDA-FastBEV Repository](https://github.com/Mandylove1993/CUDA-FastBEV/tree/main)
 8. [NuScenes DEveloper Kit](https://github.com/nutonomy/nuscenes-devkit.git)
+9. [MMdetection3d](https://github.com/open-mmlab/mmdetection3d)

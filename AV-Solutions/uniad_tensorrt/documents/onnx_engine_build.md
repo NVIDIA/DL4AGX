@@ -44,4 +44,4 @@ cd /workspace/UniAD
 
 <- Last Page: [Tiny Traning](tiny_training.md)
 
--> Next Page: [C++ Inference and Visualization](inference.md)
+-> Next Page: [C++ Inference and Visualization](../installation.md)
