@@ -66,11 +66,7 @@ cp -r ./inference_app ./UniAD/
 
 Step 11: 
 
-1. download prepare nuscenes dataset as UniAD [instructed](https://github.com/OpenDriveLab/UniAD/blob/main/docs/DATA_PREP.md) to `./UniAD/data`
-
-2. download [pretrained weights](https://nvidia-my.sharepoint.com/:u:/r/personal/joshp_nvidia_com/Documents/Internal/onnx/UniAD_weights/tiny_imgx0.25_e2e_ep20.pth?csf=1&web=1&e=C8khhs) of UniAD_tiny to `./UniAD/ckpts`
-
-3. download `TensorRT-8.6.13.3`(CUDA 11.4) to `./UniAD/TensorRT-8.6.13.3`
+Download prepare nuscenes dataset following UniAD's [instruction](https://github.com/OpenDriveLab/UniAD/blob/main/docs/DATA_PREP.md) to `./UniAD/data` and download pretrained weights of UniAD_tiny to `./UniAD/ckpts`
 
 
 ### Steps for Preparing Environments
@@ -121,7 +117,6 @@ UniAD
 │   ├── uniad_trt_input/
 ├── projects/
 ├── tools/
-├── TensorRT-8.6.13.3/
 ├── ckpts/
 │   ├── tiny_imgx0.25_e2e_ep20.pth
 ├── data/
@@ -138,7 +133,7 @@ UniAD
 │   │   ├── motion_anchor_infos_mode6.pkl
 ```
 
-## UniAD_tiny Deployment
+## UniAD_tiny Engine Build
 ### Pytorch to ONNX
 ```
 cd /workspace/UniAD
@@ -147,8 +142,6 @@ CUDA_VISIBLE_DEVICES=0 ./tools/uniad_export_onnx.sh ./projects/configs/stage2_e2
 
 
 ### ONNX to TensorRT
-
-Engine has been verified on `TensorRT-8.6.13.3`
 
 #### TensorRT Plugin Compilation:
 
@@ -161,8 +154,8 @@ set(TENSORRT_LIBRARY_DIRS /usr/lib/x86_64-linux-gnu/)
 ```
 to
 ```
-set(TENSORRT_INCLUDE_DIRS /workspace/UniAD/TensorRT-8.6.13.3/include/)
-set(TENSORRT_LIBRARY_DIRS /workspace/UniAD/TensorRT-8.6.13.3/lib/)
+set(TENSORRT_INCLUDE_DIRS <path_to_TensorRT>/include/)
+set(TENSORRT_LIBRARY_DIRS <path_to_TensorRT>/lib/)
 ```
 
 
@@ -172,99 +165,19 @@ Then complie by
 cd /workspace/UniAD/tools/tensorrt_plugin
 mkdir build
 cd build
-cmake .. -DCMAKE_TENSORRT_PATH=/workspace/UniAD/TensorRT-8.6.13.3
-make -j$(nproc)
-make install
+cmake .. -DCMAKE_TENSORRT_PATH=<path_to_TensorRT>
+make -j$(nproc) && make install
 ```
 
 
 #### Engine Build
-TensorRT FP32 engine build and latency measurement (modify TensorRT version inside `run_trtexec.sh` if needed)
+TensorRT FP32 engine build and latency measurement (modify TensorRT version (`TRT_VERSION`) and TensorRT path (`TRT_PATH`) inside `run_trtexec.sh` if needed)
 ```
 cd /workspace/UniAD
 ./run_trtexec.sh
 ```
 
-## C++ Inference App and Visualization
-### How to build
-The inference application is using ```TensorRT 8.6.13.3``` on Orin DOS Linux and X86 Linux platforms. (A docker file is provided at [DockerFile](./inference_app/uniad_trt.dockerfile) for X86 platforms.)
-### Submodules
-The inference application will use [cuOSD](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and [STB](https://github.com/nothings/stb) as submodules, please make sure to clone the latest masters under [dependencies folder](./inference_app/dependencies/). The folder should looks like:
-```
-dependencies/
-|-- stb/
-|-- cuOSD/
-```
-### Build inference application
-Modify the [CMakeLists.txt](./inference_app/CMakeLists.txt) to set the TensorRT root path (Line 14 & 15), compute capability for cuOSD (Line 20), and the path to the ```lib``` folder containing TensorRT plugin (Line 42).
-```
-set(TENSORRT_INCLUDE_DIRS <path_to_TRT>/include/)
-set(TENSORRT_LIBRARY_DIRS <path_to_TRT>/lib/)
-...
-set(TARGET_GPU_SM <GPU_arch>)
-...
-set(TENSORRT_PLUGIN_LIB_PTH <path_to_TRT_plugin_lib>)
-```
-Then compile the inference application.
-```
-mkdir ./build/ && cd ./build/
-cmake .. -DCMAKE_TENSORRT_PATH=<path_to_TRT> && make -j$(nproc)
-```
-Then the ```uniad``` should be generated under the ```./build``` folder
-## How to run inference
-### Prepare data
-Please download the nuScenes data directly from the [nuScenes website](https://www.nuscenes.org/download).
-
-The inference application will read images directly from jpg files, while it does need metadata to be prepared.
-
-Run metadata preprocess scripts:
-```
-python3 ./tools/process_metadata.py --config <path_to_config> --dump_meta_pth <input_path> --num_frame <num_of_frames_to_inference>
-```
-
-The script will generate the following metadata:
-timestamp    | l2g_r_mat | l2g_t | command | img_metas_can_bus | img_metas_lidar2img | img_metas_scene_token | info.txt
---------------------- | ---- | -------- | --- | --------------------------------| ------- | ---- | -------
-the timestamp of the current frame | lidar2global rotation matrix | lidar2global translation | navigation command | image can bus | lidar2image matrixs | scene ids | image file paths 
-
-Organize the data files so that is follows the file pattern:
-```
-uniad-trt/
-|--data/
-|----timestamp/
-|----l2g_r_mat/
-|----l2g_t/
-|----command/
-|----img_metas_can_bus/
-|----img_metas_lidar2img/
-|----img_metas_scene_token/
-|----info.txt
-```
-
-The ```./data/``` folder is used as ```<input_path>```.
-
-Please also download the [SimHei font](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/blob/master/libraries/cuOSD/data/simhei.ttf) and locate it in the [```tools```](./inference_app/tools/) folder for correct font in the visulization.
-
-
-### Run inference
-Run the following command to run inference on the input data and generate output results.
-```
-cd ./build/
-LD_LIBRARY_PATH=<path_to_TRT>/lib/:$LD_LIBRARY_PATH LD_PRELOAD=<path_to_TRT_plugin_so_file> ./uniad <TRT_engine_path> <input_path> <output_path> <number_of_frames_to_inference>
-```
-This command will read the raw images and the dumped metadata as input, run infernece using the engine and generate visualization results.
-
-
 ## Appendix: UniAD_tiny Training
-
-| model | bev size | img size | with bevslicer? | pretrained weights |
-| :---: | :---: | :---: | :---:|:---:| 
-| UniAD Base  | 200x200  | 1600x928 | Y | [link](https://github.com/OpenDriveLab/UniAD/releases/download/v1.0.1/uniad_base_e2e.pth) |
-| UniAD_tiny | 50x50 | 400x256 | N  | [link](https://nvidia-my.sharepoint.com/:u:/r/personal/joshp_nvidia_com/Documents/Internal/onnx/UniAD_weights/tiny_imgx0.25_e2e_ep20.pth?csf=1&web=1&e=C8khhs) |
-
-Download [pretrained weights](https://nvidia-my.sharepoint.com/:u:/r/personal/joshp_nvidia_com/Documents/Internal/onnx/UniAD_weights/tiny_imgx0.25_e2e_ep20.pth?csf=1&web=1&e=C8khhs) of `UniAD_tiny` to `./UniAD/ckpts` to skip re-train.
-
-### Steps to re-train
 Follow [training instructions](https://github.com/OpenDriveLab/UniAD/blob/main/docs/TRAIN_EVAL.md) from official UniAD
 
 Necessary files: 
