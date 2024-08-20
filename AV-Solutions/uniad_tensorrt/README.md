@@ -13,7 +13,6 @@ This repo demonstrate how to deploy UniAD on NVIDIA Drive Orin platform using Te
    - [Environment Preparation](#env_setup)
    - [Data Preparation](#data_prepare)
    - [Model Training and Exportation](#uniad_tiny_train_export)
-   - [Export ONNX and Build Engine](#onnx_engine)
    - [Inference Application](#inference_app)
 2. [Results](#results)
 3. [Reference](#ref)
