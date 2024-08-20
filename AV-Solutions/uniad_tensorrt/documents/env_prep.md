@@ -2,7 +2,7 @@
 Step 1: apply a patch to `nuscenes-devkit` for env support
 ```
 cd dependencies/nuscenes-devkit
-git apply --exclude='*.DS_Store' ../../patch/0001-update-nuscenes_python-sdk-for-torch1.12.patch
+git apply --exclude='*.DS_Store' ../../patch/nuscenes-devkit.patch
 cp -r ./python-sdk/nuscenes ../../docker
 ```
 Step 2: build docker image

@@ -9,27 +9,42 @@ This repo demonstrate how to deploy UniAD on NVIDIA Drive Orin platform using Te
 
 ## Table of Contents:
 1. [Getting Started](#start)
-   - [Project Installation](./documents/proj_installation.md)
-   - [Environment Preparation](./documents/env_prep.md)
-   - [Data Preparation](./documents/data_prep.md)
-   - [UniAD Tiny Training](./documents/tiny_training.md)
-   - [Export ONNX and Build Engine](./documents/onnx_engine_build.md)
-   - [Inference Application](./inference_app/README.md)
-2. [Results demonstration](#results)
+   - [Project Setup](#proj_setup)
+   - [Environment Preparation](#env_setup)
+   - [Data Preparation](#data_prepare)
+   - [UniAD Tiny Training](#uniad_tiny_train)
+   - [Export ONNX and Build Engine](#onnx_engine)
+   - [Inference Application](#inference_app)
+2. [Results](#results)
 3. [Reference](#ref)
 
 ## Getting Started <a name="start"></a>
 
-Please see the following documents for environment installation, UniAD training, ONNX exporting and engine building, and inference application in C++.
-   - [Project Installation](./documents/proj_installation.md)
-   - [Environment Preparation](./documents/env_prep.md)
-   - [Data Preparation](./documents/data_prep.md)
-   - [UniAD Tiny Training](./documents/tiny_training.md)
-   - [Export ONNX and Build Engine](./documents/onnx_engine_build.md)
-   - [Inference Application](./inference_app/README.md)
+To deploy the UniAD on NVIDIA Drive Orin platform, we will need to train the UniAD, export ONNX from the trained model, build engine based on the ONNX and finally run an inference applictaion to inference the engine in C++. In this section, we will go through how to deploy the UniAD step by step.
 
-## Results demonstration <a name="results"></a>
-The inference application will read raw images as input and generate output visualizations to showcase the planning trajectory and dynamic object detection. Notice that there is no collusion correction or BBOX NMS in the post-process. The visuaizer is visualizing the raw planning trajectory and BBOX pridiction outputs.
+### Project Setup <a name="proj_setup"></a>
+Please follow the instructions at [Project Setup](./documents/proj_setup.md) to set up the project code base from multiple sources. 
+
+### Environment Preparation <a name="env_setup"></a>
+Please follow the instructions at [Environment Preparation](./documents/env_prep.md) to setup the environment needed in the following steps.
+
+### Data Preparation <a name="data_prepare"></a>
+Please follow the instructions at [Data Preparation](./documents/data_prep.md) to prepare the data for the project.
+
+### UniAD Tiny Training <a name="uniad_tiny_train"></a>
+We have included instructions to train the tiny UniAD, please see [UniAD Tiny Training](./documents/tiny_training.md) for details.
+
+### Export ONNX and Build Engine <a name="onnx_engine"></a>
+Please follow the instructions at [Export ONNX and Build Engine](./documents/onnx_engine_build.md) to export the ONNXs and build engines.
+
+### Inference Application <a name="inference_app"></a>
+The inference application is a C++ sample application that runs inference with the TensorRT engine, it will take the raw images and dumped metadata as input, run TensorRT engine inference, and visualize the UniAD's output. 
+
+Please follow the instructions at [Inference Application](./inference_app/README.md) to build the inference application and run inference.
+
+
+## Results <a name="results"></a>
+The inference application will generate output visualizations to showcase the planning trajectory and dynamic object detection. Notice that there is no collusion correction or BBOX NMS in the post-process. The visuaizer is visualizing the raw planning trajectory and BBOX pridiction outputs.
 
 Here are some examples for the inference output:
 

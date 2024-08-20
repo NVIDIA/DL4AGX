@@ -6,7 +6,7 @@ In this README file, we will cover the following topics:
 4) How to run inference application.
 
 ## Environments and platforms
-The inference application is using ```TensorRT 8.6.13.3``` and has been tested on Orin DOS Linux and X86 Linux platforms. (A docker file is provided at [DockerFile](./uniad_trt.dockerfile) for X86 platforms.)
+The inference application is using ```TensorRT 8.6.13.3``` and has been tested on Orin DOS Linux platforms.
 ## Submodules
 The inference application will use [cuOSD](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and [STB](https://github.com/nothings/stb) as submodules, please make sure to clone the latest masters under [dependencies folder](./dependencies/). The folder should looks like:
 ```
@@ -54,11 +54,11 @@ uniad_trt_input/
 
 The ```uniad_trt_input``` folder is used as ```<input_path>```.
 
-Please also download the [SimHei font](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/blob/master/libraries/cuOSD/data/simhei.ttf) and locate it in the ```tools``` folder for correct font in the visulization.
+Please also download the [SimHei font](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/blob/master/libraries/cuOSD/data/simhei.ttf) and locate it in the [```tools```](../tools/) folder in the root directory of the repository for correct font in the visulization.
 ```
 inference_app/
-|── tools/
-|   |── simhei.ttf
+tools/
+|── simhei.ttf
 ```
 
 
