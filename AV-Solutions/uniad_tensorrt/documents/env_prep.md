@@ -11,6 +11,6 @@ cd ../../docker
 docker build -t uniad_torch1.12 -f uniad_torch1.12.dockerfile .
 ```
 
-<- Last Page: [Project Installation](proj_installation.md)
+<- Last Page: [Project Installation](proj_setup.md)
 
 -> Next Page: [Data Preparation](data_prep.md)

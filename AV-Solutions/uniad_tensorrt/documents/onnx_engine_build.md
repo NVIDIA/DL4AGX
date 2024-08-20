@@ -1,12 +1,5 @@
 
 ## UniAD_tiny ONNX and Engine Build
-### Pytorch to ONNX
-```
-cd /workspace/UniAD
-CUDA_VISIBLE_DEVICES=0 ./tools/uniad_export_onnx.sh ./projects/configs/stage2_e2e/tiny_imgx0.25_e2e_trt_p.py ./ckpts/tiny_imgx0.25_e2e_ep20.pth 1
-```
-
-Due to legal reasons, we provide an [ONNX](../onnx/uniad_tiny_dummy.onnx) model of UniAD-tiny with random weights. Please follow instructions on training to obtain model with trained weights.
 
 ### ONNX to TensorRT
 

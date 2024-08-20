@@ -289,15 +289,15 @@ def main():
     output_shapes = dict(
         prev_track_intances0_out=[-1, 512],
         prev_track_intances1_out=[-1, 3],
-        # prev_track_intances2_out=[-1, 256],
+        # prev_track_intances2_out=[-1, 256], will not be used in ONNX graph
         prev_track_intances3_out=[-1],
         prev_track_intances4_out=[-1],
         prev_track_intances5_out=[-1],
         prev_track_intances6_out=[-1],
-        # prev_track_intances7_out=[-1],
+        # prev_track_intances7_out=[-1], will not be used in ONNX graph
         prev_track_intances8_out=[-1],
         prev_track_intances9_out=[-1, 10],
-        # prev_track_intances10_out=[-1, 10],
+        # prev_track_intances10_out=[-1, 10], will not be used in ONNX graph
         prev_track_intances11_out=[-1, 4, 256],
         prev_track_intances12_out=[-1, 4],
         prev_track_intances13_out=[-1],
@@ -334,15 +334,15 @@ def main():
 
     'prev_track_intances0_out':[0],
     'prev_track_intances1_out':[0],
-    # 'prev_track_intances2_out':[0],
+    # 'prev_track_intances2_out':[0], will not be used in ONNX graph
     'prev_track_intances3_out':[0],
     'prev_track_intances4_out':[0],
     'prev_track_intances5_out':[0],
     'prev_track_intances6_out':[0],
-    # 'prev_track_intances7_out':[0],
+    # 'prev_track_intances7_out':[0], will not be used in ONNX graph
     'prev_track_intances8_out':[0],
     'prev_track_intances9_out':[0],
-    # 'prev_track_intances10_out':[0],
+    # 'prev_track_intances10_out':[0], will not be used in ONNX graph
     'prev_track_intances11_out':[0],
     'prev_track_intances12_out':[0],
     'prev_track_intances13_out':[0],
@@ -454,10 +454,11 @@ def main():
                     if iid==0:
                         inputs[key] = test_track_instances[int(key[19:])].cuda()
                     else:
-                        if int(key[19:]) in (2,7,10):
+                        if int(key[19:]) in (2,7,10): # 2,7,10 will not be used in ONNX graph
                             # update shape0
                             shape = copy.deepcopy(input_shapes[key])
                             shape[0] = inputs['prev_track_intances0'].shape[0]
+                            # put dummy inputs for pytorch
                             inputs[key] = torch.zeros(shape).float().cuda()
                         else:
                             inputs[key]= np.load(DUMPED_OUTPUTS+key+'_out/'+str(iid-1)+'.npy')

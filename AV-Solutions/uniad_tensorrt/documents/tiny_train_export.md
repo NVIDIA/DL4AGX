@@ -18,7 +18,7 @@ To train this variant, the following files are needed:
 
 ### File Structure
 
-After training, please put `tiny_imgx0.25_e2e_ep20.pth` into `./ckpts` and make sure the structure of `UniAD` is as follows:
+After training, please put `tiny_imgx0.25_e2e_ep20.pth` into `UniAD/ckpts` and make sure the structure of `UniAD` is as follows:
 ```
 UniAD
 ├── ckpts/
@@ -46,7 +46,15 @@ UniAD
 ├── tools/
 ```
 
+## Pytorch to ONNX
+```
+cd /workspace/UniAD
+CUDA_VISIBLE_DEVICES=0 ./tools/uniad_export_onnx.sh ./projects/configs/stage2_e2e/tiny_imgx0.25_e2e_trt_p.py ./ckpts/tiny_imgx0.25_e2e_ep20.pth 1
+```
+
+Due to legal reasons, we provide an [ONNX](../onnx/uniad_tiny_dummy.onnx) model of UniAD-tiny with random weights. Please follow instructions on training to obtain model with trained weights.
+
 <- Last Page: [Data Preparation](data_prep.md)
 
--> Next Page: [ONNX and Engine Build](onnx_engine_build.md)
+-> Next Page: [Engine Build, C++ Inference and Visualization](../inference_app/README.md)
 
