@@ -6,6 +6,8 @@ cd /workspace/UniAD
 CUDA_VISIBLE_DEVICES=0 ./tools/uniad_export_onnx.sh ./projects/configs/stage2_e2e/tiny_imgx0.25_e2e_trt_p.py ./ckpts/tiny_imgx0.25_e2e_ep20.pth 1
 ```
 
+We provide an [example ONNX](../onnx/uniad_tiny_dummy.onnx) with same structure but dummy weights for your reference.
+
 ### ONNX to TensorRT
 
 #### TensorRT Plugin Compilation:
