@@ -5,14 +5,14 @@
 
 (Image taken from the [UniAD repo](https://github.com/OpenDriveLab/UniAD/tree/main))
 
-This repo demonstrate how to deploy UniAD on NVIDIA Drive Orin platform using TensorRT. To make it more practical, we trained a tiny version UniAD (refered as ```UniAD-tiny```) with smaller backbone and build engines based on that model.
+This repo demonstrate how to deploy UniAD on NVIDIA Drive Orin platform using TensorRT. Specifically, we trained a tiny version of UniAD (`UniAD-tiny`) and provide step by step workflow including model training, ONNX model export, and inference with a sample C++ application.
 
 ## Table of Contents
 1. [Getting Started](#start)
    - [Project Setup](#proj_setup)
    - [Environment Preparation](#env_setup)
    - [Data Preparation](#data_prepare)
-   - [UniAD Tiny Training](#uniad_tiny_train)
+   - [Model Training and Exportation](#uniad_tiny_train_export)
    - [Export ONNX and Build Engine](#onnx_engine)
    - [Inference Application](#inference_app)
 2. [Results](#results)
@@ -37,15 +37,10 @@ Except preparing dataset for training like [UniAD](https://github.com/OpenDriveL
 
 Please follow the instructions at [Data Preparation](./documents/data_prep.md) to prepare the data for the project.
 
-### UniAD Tiny Training <a name="uniad_tiny_train"></a>
-For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny version of UniAD, with a smaller ResNet backbone and reduced image size & bev size.
+### Model Training and Exportation <a name="uniad_tiny_train_export"></a>
+For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny version of UniAD(`UniAD-tiny`), with a smaller ResNet backbone and reduced image size & bev size. To deploy UniAD Tiny, we provide steps for Pytorch to ONNX conversion.
 
-We have included instructions to train UniAD tiny, please see [UniAD Tiny Training](./documents/tiny_training.md) for details.
-
-### Export ONNX and Build Engine <a name="onnx_engine"></a>
-To deploy UniAD Tiny, we provide steps for Pytorch to ONNX, Plugins Compilation, and ONNX to TensorRT.
-
-Please follow the instructions at [Export ONNX and Build Engine](./documents/onnx_engine_build.md) to export the ONNXs and build engines.
+We have included instructions to train and export UniAD tiny, please see [UniAD Tiny Traning and Exportation](./documents/tiny_train_export.md) for details.
 
 ### Inference Application <a name="inference_app"></a>
 The inference application is a C++ sample application that runs inference with the TensorRT engine, it will take the raw images and dumped metadata as input, run TensorRT engine inference, and visualize the UniAD's output. 
