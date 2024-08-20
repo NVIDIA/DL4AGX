@@ -441,7 +441,6 @@ test_pipeline = [
     dict(type='LoadMultiViewImageFromFilesInCeph', to_float32=True,
             file_client_args=file_client_args, img_root=data_root),
     dict(type="NormalizeMultiviewImage", **img_norm_cfg),
-    # dict(type="PadMultiViewImage", size_divisor=32),
     dict(type='LoadAnnotations3D_E2E', 
          with_bbox_3d=False,
          with_label_3d=False, 

@@ -24,7 +24,6 @@ plugin_dir = "projects/mmdet3d_plugin/"
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size = [0.2, 0.2, 8]
 patch_size = [102.4, 102.4]
-# img_norm_cfg = dict(mean=[103.530, 116.280, 123.675], std=[1.0, 1.0, 1.0], to_rgb=False)
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True
 )
@@ -74,11 +73,6 @@ planning_steps = 6
 use_col_optim = True
 
 ### Occ args ### 
-# occflow_grid_conf = {
-#     'xbound': [-50.0, 50.0, 2],#0.5
-#     'ybound': [-50.0, 50.0, 2],#0.5
-#     'zbound': [-10.0, 10.0, 20.0],
-# }
 occflow_grid_conf = {
     'xbound': [-12.5, 12.5, 0.5],
     'ybound': [-12.5, 12.5, 0.5],
@@ -115,7 +109,7 @@ model = dict(
     ),
     img_neck=dict(
         type="FPN",
-        in_channels=[2048],#[512, 1024, 2048],
+        in_channels=[2048],
         out_channels=_dim_,
         start_level=0,
         add_extra_convs="on_output",
@@ -381,7 +375,7 @@ model = dict(
                     batch_first=False),
                 ffn_cfgs=dict(
                     embed_dims=256,
-                    feedforward_channels=2048,  # change to 512
+                    feedforward_channels=2048,  
                     num_fcs=2,
                     act_cfg=dict(type='ReLU', inplace=True),
                     ffn_drop=0.0,
@@ -573,7 +567,6 @@ test_pipeline = [
     dict(type='LoadMultiViewImageFromFilesInCeph', to_float32=True,
             file_client_args=file_client_args, img_root=data_root),
     dict(type="NormalizeMultiviewImage", **img_norm_cfg),
-    # dict(type="PadMultiViewImage", size_divisor=32),
     dict(type='LoadAnnotations3D_E2E', 
          with_bbox_3d=False,
          with_label_3d=False, 

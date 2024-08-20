@@ -7,7 +7,7 @@
 
 This repo demonstrate how to deploy UniAD on NVIDIA Drive Orin platform using TensorRT. To make it more practical, we trained a tiny version UniAD (refered as ```UniAD-tiny```) with smaller backbone and build engines based on that model.
 
-## Table of Contents:
+## Table of Contents
 1. [Getting Started](#start)
    - [Project Setup](#proj_setup)
    - [Environment Preparation](#env_setup)
@@ -23,18 +23,28 @@ This repo demonstrate how to deploy UniAD on NVIDIA Drive Orin platform using Te
 To deploy the UniAD on NVIDIA Drive Orin platform, we will need to train the UniAD, export ONNX from the trained model, build engine based on the ONNX and finally run an inference applictaion to inference the engine in C++. In this section, we will go through how to deploy the UniAD step by step.
 
 ### Project Setup <a name="proj_setup"></a>
+To setup and re-create the deployment project, based on the [UniAD repo](https://github.com/OpenDriveLab/UniAD) and [BEVFormer_tensorrt repo](https://github.com/DerryHub/BEVFormer_tensorrt/tree/main), you will need to copy our prepared tool/config/helper files and apply several patches to make the project environment compatible and deployable.
+
 Please follow the instructions at [Project Setup](./documents/proj_setup.md) to set up the project code base from multiple sources. 
 
 ### Environment Preparation <a name="env_setup"></a>
+We provide a dockfile for your convenience to prepare the environment for both deployment and training under pytorch-1.12 with corresponding mmcv/mmdet/mmseg/mmdet3d.
+
 Please follow the instructions at [Environment Preparation](./documents/env_prep.md) to setup the environment needed in the following steps.
 
 ### Data Preparation <a name="data_prepare"></a>
+Except preparing dataset for training like [UniAD](https://github.com/OpenDriveLab/UniAD/blob/main/docs/DATA_PREP.md), we also provide guidance to generate ready-to-use data for ONNX exportation and C++ inference with TensorRT engine.
+
 Please follow the instructions at [Data Preparation](./documents/data_prep.md) to prepare the data for the project.
 
 ### UniAD Tiny Training <a name="uniad_tiny_train"></a>
-We have included instructions to train the tiny UniAD, please see [UniAD Tiny Training](./documents/tiny_training.md) for details.
+For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny version of UniAD, with a smaller ResNet backbone and reduced image size & bev size.
+
+We have included instructions to train UniAD tiny, please see [UniAD Tiny Training](./documents/tiny_training.md) for details.
 
 ### Export ONNX and Build Engine <a name="onnx_engine"></a>
+To deploy UniAD Tiny, we provide steps for Pytorch to ONNX, Plugins Compilation, and ONNX to TensorRT.
+
 Please follow the instructions at [Export ONNX and Build Engine](./documents/onnx_engine_build.md) to export the ONNXs and build engines.
 
 ### Inference Application <a name="inference_app"></a>

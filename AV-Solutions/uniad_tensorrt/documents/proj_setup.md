@@ -35,8 +35,8 @@ git apply --exclude='*.DS_Store' ../patch/mmdet3d.patch
 Step 7: copy part of `BEVFormer_tensorrt` util functions to `UniAD` & apply a small patch for onnx export support
 ```
 cd ..
-chmod +x ./tools/step7.sh
-./tools/step7.sh
+chmod +x ./tools/add_bevformer_tensorrt_support.sh
+./tools/add_bevformer_tensorrt_support.sh
 cd UniAD
 git apply --exclude='*.DS_Store' ../patch/bevformer_tensorrt.patch
 ```
@@ -51,8 +51,8 @@ cp ./tools/CMakeLists.txt ./UniAD/tools/tensorrt_plugin/
 
 Step 9: copy our prepared tool/config/helper files for `UniAD` onnx export
 ```
-chmod +x ./tools/step9.sh
-./tools/step9.sh
+chmod +x ./tools/add_onnx_export_support.sh
+./tools/add_onnx_export_support.sh
 chmod +x ./UniAD/tools/*.sh
 ```
 

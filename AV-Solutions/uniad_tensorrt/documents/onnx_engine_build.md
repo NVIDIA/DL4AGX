@@ -6,13 +6,14 @@ cd /workspace/UniAD
 CUDA_VISIBLE_DEVICES=0 ./tools/uniad_export_onnx.sh ./projects/configs/stage2_e2e/tiny_imgx0.25_e2e_trt_p.py ./ckpts/tiny_imgx0.25_e2e_ep20.pth 1
 ```
 
-We provide an [example ONNX](../onnx/uniad_tiny_dummy.onnx) with same structure but dummy weights for your reference.
+Due to legal reasons, we provide an [ONNX](../onnx/uniad_tiny_dummy.onnx) model of UniAD-tiny with random weights. Please follow instructions on training to obtain model with trained weights.
 
 ### ONNX to TensorRT
 
 #### TensorRT Plugin Compilation:
 
-Change line 16&17 of `/workspace/UniAD/tools/tensorrt_plugin/CMakeList.txt`
+To deploy UniAD-tiny with TensorRT, we first need to compile TensorRT plugins for `MultiScaleDeformableAttnTRT`, `InverseTRT` and `RotateTRT` operators that are not supported by Native TensorRT. To do this, change line 31&32 of `/workspace/UniAD/tools/tensorrt_plugin/CMakeList.txt`
+
 
 from
 ```
@@ -32,13 +33,13 @@ Then complie by
 cd /workspace/UniAD/tools/tensorrt_plugin
 mkdir build
 cd build
-cmake .. -DCMAKE_TENSORRT_PATH=<path_to_TensorRT>
+cmake .. 
 make -j$(nproc) && make install
 ```
 
 
 #### Engine Build
-TensorRT FP32 engine build and latency measurement (modify TensorRT version (`TRT_VERSION`) and TensorRT path (`TRT_PATH`) inside `run_trtexec.sh` if needed)
+TensorRT engine build and latency measurement (modify TensorRT version (`TRT_VERSION`) and TensorRT path (`TRT_PATH`) inside `run_trtexec.sh` if needed)
 ```
 cd /workspace/UniAD
 ./run_trtexec.sh

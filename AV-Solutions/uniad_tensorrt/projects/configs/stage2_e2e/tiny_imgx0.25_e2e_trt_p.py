@@ -74,11 +74,6 @@ planning_steps = 6
 use_col_optim = True
 
 ### Occ args ### 
-# occflow_grid_conf = {
-#     'xbound': [-50.0, 50.0, 2],#0.5
-#     'ybound': [-50.0, 50.0, 2],#0.5
-#     'zbound': [-10.0, 10.0, 20.0],
-# }
 occflow_grid_conf = {
     'xbound': [-12.5, 12.5, 0.5],
     'ybound': [-12.5, 12.5, 0.5],
@@ -114,7 +109,7 @@ model = dict(
     ),
     img_neck=dict(
         type="FPN",
-        in_channels=[2048],#[512, 1024, 2048],
+        in_channels=[2048],
         out_channels=_dim_,
         start_level=0,
         add_extra_convs="on_output",
@@ -175,7 +170,7 @@ model = dict(
             embed_dims=_dim_,
             encoder=dict(
                 type="BEVFormerEncoderTRTP",
-                num_layers=3,#6,
+                num_layers=3,
                 pc_range=point_cloud_range,
                 num_points_in_pillar=4,
                 return_intermediate=False,
@@ -378,7 +373,7 @@ model = dict(
                     batch_first=False),
                 ffn_cfgs=dict(
                     embed_dims=256,
-                    feedforward_channels=2048,  # change to 512
+                    feedforward_channels=2048,  
                     num_fcs=2,
                     act_cfg=dict(type='ReLU', inplace=True),
                     ffn_drop=0.0,
@@ -718,6 +713,5 @@ log_config = dict(
     interval=10, hooks=[dict(type="TextLoggerHook"), dict(type="TensorboardLoggerHook")]
 )
 checkpoint_config = dict(interval=1)
-# load_from = "ckpts/uniad_base_track_map.pth"
 
 find_unused_parameters = True

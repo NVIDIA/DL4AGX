@@ -108,18 +108,12 @@ execute_process(COMMAND /tmp/cudaComputeVersion
         OUTPUT_VARIABLE ARCH)
 execute_process(COMMAND rm /tmp/cudaComputeVersion)
 
-if(NOT CMAKE_TENSORRT_PATH)
-    message( "Need: -DCMAKE_TENSORRT_PATH=/path/to/TensorRT")
-
-endif()
-
 include_directories(common)
 include_directories(/usr/local/cuda/include)
 include_directories(/usr/local/include)
 
-message(STATUS "Linking TensorRT directory: ${CMAKE_TENSORRT_PATH}")
-link_directories(${CMAKE_TENSORRT_PATH}/lib)
-include_directories(${CMAKE_TENSORRT_PATH}/include)
+link_directories(${TENSORRT_LIBRARY_DIRS})
+include_directories(${TENSORRT_INCLUDE_DIRS})
 
 file(GLOB_RECURSE TENSORRT_OPS_SRCS common/*.cpp common/*.cu plugin/*/*.cu plugin/*/*.cpp)
 
