@@ -7,7 +7,7 @@ In this README file, we will cover the following topics:
 5) How to run inference application
 
 ## Environments and platforms
-The inference application is tested on NVIDIA DRIVE Orin platform with ```TensorRT 8.6.13.3``.
+The inference application is tested on NVIDIA DRIVE Orin platform with `TensorRT 8.6.13.3`.
 ## Dependencies
 The inference application will use [cuOSD](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and [STB](https://github.com/nothings/stb) as submodules. Notice that since cuOSD do not have separate repo, we need to manually download it from the [link](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and put it under [dependencies folder](./dependencies/), i.e.,
 ```
