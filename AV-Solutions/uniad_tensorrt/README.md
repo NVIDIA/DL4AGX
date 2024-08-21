@@ -42,23 +42,18 @@ For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny
 We have included instructions to train and export UniAD-tiny, please see [UniAD-tiny Traning and Exportation](./documents/tiny_train_export.md) for details.
 
 ### Inference Application <a name="inference_app"></a>
-The inference application is a C++ sample application that runs inference with the TensorRT engine, it will take the raw images and dumped metadata as input, run TensorRT engine inference, and visualize the UniAD's output. 
+The inference application is a C++ sample application that runs inference with the TensorRT engine, it will take the raw images and dumped metadata as input, run TensorRT engine inference, and visualize the tracking and planning outputs. 
 
 Please follow the instructions at [Inference Application](./inference_app/README.md) to build the TensorRT engine using the ONNX and to build the inference application to run inference.
 
 
 ## Results <a name="results"></a>
-The inference application will generate output visualizations to showcase the planning trajectory and dynamic object detection. Notice that there is no collusion correction or BBOX NMS in the post-process. The visuaizer is visualizing the raw planning trajectory and BBOX pridiction outputs.
+The inference application will generate output visualizations to showcase the planning trajectory and dynamic object detection. Notice that post-processing such as collusion correction is not implemented in the current sample. Raw planning trajectory and object detection results are visualized.
 
-Here are some examples for the inference output:
 
 ![](./assets/uniad-inference.gif)
 
-1) The numbers draw on the BBOXs are the confidence scores;
-2) In the BEV view, the light green BBOX is indicating the ego car;
-3) The light green lines in the BEV view and images are indicating the planning trajectory.
-4) In the BEV view, the white lines in the BBOXs are indicating the heading of the objects
-5) In the BEV view, the lines starting from the center of the BBOXs are illustrating the velocities of the objects.
+In the visualization, green lines depict planning trajectories of the ego car in green bounding box. Detection of other objects are visualized in bounding boxes with different colors, and with white heading and confidence scores marked. The lines starting from the center of those bounding boxes indicate the velocities of the objects. 
 
 ## Reference <a name="ref"></a>
 1. [UniAD Paper: Planning-oriented Autonomous Driving](https://arxiv.org/abs/2212.10156)
