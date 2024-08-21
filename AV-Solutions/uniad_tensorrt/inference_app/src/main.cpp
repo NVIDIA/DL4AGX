@@ -16,6 +16,7 @@
  */
 
 #include <cuda_runtime.h>
+#include <dlfcn.h>
 #include <string.h>
 #include <vector>
 #include <fstream>
@@ -293,12 +294,15 @@ void temporal_info_assign(UniAD::KernelInput& input_t, const UniAD::KernelOutput
 }
 
 int main(int argc, char** argv) {
-    assert (argc > 4);
+    assert (argc > 5);
     const std::string engine_pth = argv[1];
-    const std::string input_pth = argv[2];
-    const std::string output_pth = argv[3];
-    const int num_frames = std::stoi(argv[4]);
+    const std::string plugin_pth = argv[2];
+    const std::string input_pth = argv[3];
+    const std::string output_pth = argv[4];
+    const int num_frames = std::stoi(argv[5]);
     int num_warmup_iter=10;
+
+    void* so_handle = dlopen(plugin_pth.c_str(), RTLD_NOW);
     // create the inference kernel
     std::shared_ptr<UniAD::Kernel> kernel = create_kernel(engine_pth);
     if (kernel == nullptr) {
@@ -391,6 +395,6 @@ int main(int argc, char** argv) {
     printf("[INFO] Visualization results have been dumped to %s.\n", img_dump_path.c_str());
     cudaStreamSynchronize(stream);
     cudaStreamDestroy(stream);
-
+    // dlclose(so_handle);
     return 0;
 }

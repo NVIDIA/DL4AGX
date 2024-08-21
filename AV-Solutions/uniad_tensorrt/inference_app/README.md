@@ -1,35 +1,38 @@
 # C++ Inference Application
 In this README file, we will cover the following topics:
 1) Inference application environments and platforms;
-2) How to build the inference application;
-3) How to prepare the data for inference;
-4) How to run inference application.
+2) How to build the plugins and the inference application;
+3) How to build the engines;
+4) How to prepare the data for inference;
+5) How to run inference application.
 
 ## Environments and platforms
 The inference application is using ```TensorRT 8.6.13.3``` and has been tested on Orin DOS Linux platforms.
 ## Submodules
-The inference application will use [cuOSD](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and [STB](https://github.com/nothings/stb) as submodules, please make sure to clone the latest masters under [dependencies folder](./dependencies/). The folder should looks like:
+The inference application will use [cuOSD](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and [STB](https://github.com/nothings/stb) as submodules. Notice that since cuOSD do not have separate repo, we need to manually download it from the [link](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD). Please make sure to clone the latest masters under [dependencies folder](./dependencies/). The folder should looks like:
 ```
 dependencies/
 |── stb/
 |── cuOSD/
 ```
-## Build inference application
-Modify the [CMakeLists.txt](./CMakeLists.txt) to set the TensorRT root path, compute capability for cuOSD, and the path to the ```lib``` folder containing TensorRT plugin.
+## Build TensorRT plugins and the inference application
+
+To deploy UniAD-tiny with TensorRT, we first need to compile TensorRT plugins for `MultiScaleDeformableAttnTRT`, `InverseTRT` and `RotateTRT` operators that are not supported by Native TensorRT, and then we need to build the C++ inference application. To achieve that, we will use the [CMakeLists.txt](./CMakeLists.txt) to compile the plugin library and the inference app:
 ```
-set(TENSORRT_INCLUDE_DIRS <path_to_TRT>/include/)
-set(TENSORRT_LIBRARY_DIRS <path_to_TRT>/lib/)
-...
-set(TARGET_GPU_SM <GPU_arch>)
-...
-set(TENSORRT_PLUGIN_LIB_PTH <path_to_TRT_plugin_lib>)
+mkdir ./build && cd ./build/
+cmake .. -DTENSORRT_PATH=<path_to_TensorRT> -DCUDA_ARCH=<GPU_arch> && make -j$(nproc)
 ```
-Then compile the inference application.
+
+Then the ```uniad``` and ```libuniad_plugin.so``` should be generated under the ```./build``` folder
+
+
+#### Engine Build
+To build TensorRT engine, please see the instructions at [run_trtexec.sh](../tools/run_trtexec.sh). Please modify TensorRT version (`TRT_VERSION`), TensorRT path (`TRT_PATH`), and other information like ONNX file path inside `run_trtexec.sh` if needed.
 ```
-mkdir ./build/ && cd ./build/
-cmake .. -DCMAKE_TENSORRT_PATH=<path_to_TRT> && make -j$(nproc)
+cd ../tools/
+./run_trtexec.sh
 ```
-Then the ```uniad``` should be generated under the ```./build``` folder
+
 ## How to run inference
 ### Prepare data
 The inference application will read images directly from jpg files, while it does need metadata generated in the ```Generate Preprocessed Data``` step. 
@@ -54,19 +57,12 @@ uniad_trt_input/
 
 The ```uniad_trt_input``` folder is used as ```<input_path>```.
 
-Please also download the [SimHei font](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/blob/master/libraries/cuOSD/data/simhei.ttf) and locate it in the [```tools```](../tools/) folder in the root directory of the repository for correct font in the visulization.
-```
-inference_app/
-tools/
-|── simhei.ttf
-```
-
 
 ### Run inference
-Run the following command to run inference on the input data and generate output results.
+Run the following command to run inference on the input data and generate output results. Notice that for the application to correctly locate and use the data, you need to call the application at the [root dir](../) of this repo.
 ```
 cd ..
-LD_LIBRARY_PATH=<path_to_TRT>/lib/:$LD_LIBRARY_PATH LD_PRELOAD=<path_to_TRT_plugin_so_file> ./inference_app/build/uniad <TRT_engine_path> <input_path> <output_path> <number_of_frames_to_inference>
+LD_LIBRARY_PATH=<path_to_TensorRT>/lib/:$LD_LIBRARY_PATH ./inference_app/build/uniad <engine_path> ./inference_app/build/libuniad_plugin.so <input_path> <output_path> <number_frame>
 ```
 This command will read the raw images and the dumped metadata as input, run infernece using the engine and generate visualization results under the ```<output_path>``` folder.
 

@@ -44,7 +44,7 @@ We have included instructions to train and export UniAD tiny, please see [UniAD 
 ### Inference Application <a name="inference_app"></a>
 The inference application is a C++ sample application that runs inference with the TensorRT engine, it will take the raw images and dumped metadata as input, run TensorRT engine inference, and visualize the UniAD's output. 
 
-Please follow the instructions at [Inference Application](./inference_app/README.md) to build the inference application and run inference.
+Please follow the instructions at [Inference Application](./inference_app/README.md) to build the TensorRT engine using the ONNX and to build the inference application to run inference.
 
 
 ## Results <a name="results"></a>
