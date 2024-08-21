@@ -31,5 +31,5 @@ PYTHONPATH=$(pwd) python3  ./tools/process_metadata.py --num_frame NUM_FRAME
 
 <- Last Page: [Environment Preparation](env_prep.md)
 
--> Next Page: [UniAD Tiny Traning and Exportation](tiny_train_export.md)
+-> Next Page: [UniAD-tiny Traning and Exportation](tiny_train_export.md)
 

@@ -66,4 +66,4 @@ LD_LIBRARY_PATH=<path_to_TensorRT>/lib/:$LD_LIBRARY_PATH ./inference_app/build/u
 ```
 This command will read the raw images and the dumped metadata as input, run infernece using the engine and generate visualization results under the ```<output_path>``` folder.
 
-<- Last Page: [UniAD Tiny Traning and Exportation](../documents/tiny_train_export.md)
+<- Last Page: [UniAD-tiny Traning and Exportation](../documents/tiny_train_export.md)

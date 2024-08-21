@@ -1,22 +1,23 @@
 
-## UniAD Tiny Training
+## Model Training and Exportation
+### Model Traning: UniAD-tiny
 For efficiency when deploying a UniAD model on DRIVE platform, we train a tiny version of UniAD, with a smaller ResNet backbone and reduced image size & bev size.
 
 | model | img backbone | bev size | img size | with bevslicer? | with bev upsample? |
 | :---: | :---: | :---: | :---: | :---:|:---:| 
-| UniAD Base  | ResNet-101| 200x200  | 1600x928 | Y | Y |
-| UniAD Tiny | ResNet-50 | 50x50 | 400x256 | N  | N |
+| UniAD  | ResNet-101| 200x200  | 1600x928 | Y | Y |
+| UniAD-tiny | ResNet-50 | 50x50 | 400x256 | N  | N |
 
 
 Please follow [training instructions](https://github.com/OpenDriveLab/UniAD/blob/main/docs/TRAIN_EVAL.md) from official UniAD for details on UniAD model training.
 
 To train this variant, the following files are needed:
 
-1. Configs: [stage1](projects/configs/stage1_track_map/tiny_imgx0.25_track_map.py) and [stage2](projects/configs/stage2_e2e/tiny_imgx0.25_e2e.py) for `UniAD_tiny` training.
+1. Configs: [stage1](projects/configs/stage1_track_map/tiny_imgx0.25_track_map.py) and [stage2](projects/configs/stage2_e2e/tiny_imgx0.25_e2e.py) for `UniAD-tiny` training.
 
-2. [BEVFormer_tiny weights](https://github.com/zhiqi-li/storage/releases/download/v1.0/bevformer_tiny_epoch_24.pth) for stage1 initialization.
+2. [BEVFormer-tiny weights](https://github.com/zhiqi-li/storage/releases/download/v1.0/bevformer_tiny_epoch_24.pth) for stage1 initialization.
 
-### File Structure
+#### File Structure
 
 After training, please put `tiny_imgx0.25_e2e_ep20.pth` into `UniAD/ckpts` and make sure the structure of `UniAD` is as follows:
 ```
@@ -46,7 +47,7 @@ UniAD
 ├── tools/
 ```
 
-## Pytorch to ONNX
+### Model Exportation: Pytorch to ONNX
 ```
 cd /workspace/UniAD
 CUDA_VISIBLE_DEVICES=0 ./tools/uniad_export_onnx.sh ./projects/configs/stage2_e2e/tiny_imgx0.25_e2e_trt_p.py ./ckpts/tiny_imgx0.25_e2e_ep20.pth 1

@@ -37,9 +37,9 @@ Except preparing dataset for training like [UniAD](https://github.com/OpenDriveL
 Please follow the instructions at [Data Preparation](./documents/data_prep.md) to prepare the data for the project.
 
 ### Model Training and Exportation <a name="uniad_tiny_train_export"></a>
-For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny version of UniAD(`UniAD-tiny`), with a smaller ResNet backbone and reduced image size & bev size. To deploy UniAD Tiny, we provide steps for Pytorch to ONNX conversion.
+For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny version of UniAD(`UniAD-tiny`), with a smaller ResNet backbone and reduced image size & bev size. To deploy UniAD-tiny, we provide steps for Pytorch to ONNX conversion.
 
-We have included instructions to train and export UniAD tiny, please see [UniAD Tiny Traning and Exportation](./documents/tiny_train_export.md) for details.
+We have included instructions to train and export UniAD-tiny, please see [UniAD-tiny Traning and Exportation](./documents/tiny_train_export.md) for details.
 
 ### Inference Application <a name="inference_app"></a>
 The inference application is a C++ sample application that runs inference with the TensorRT engine, it will take the raw images and dumped metadata as input, run TensorRT engine inference, and visualize the UniAD's output. 
