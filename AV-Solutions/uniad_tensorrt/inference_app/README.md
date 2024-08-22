@@ -79,6 +79,10 @@ The ```uniad_trt_input``` folder is used as ```<input_path>```.
 
 
 ### Run inference
+Overview of the engine inference pipeline.
+<img src="../assets/engine_infer.png" width="1024">
+
+
 Run the following command to run inference on the input data and generate output results. Notice that for the application to correctly locate and use the data, you need to call the application at the [root dir](../) of this repo.
 ```
 cd ..
