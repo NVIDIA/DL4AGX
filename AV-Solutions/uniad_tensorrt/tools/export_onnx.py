@@ -22,17 +22,16 @@ import os
 import warnings
 from mmcv import Config, DictAction
 from mmcv.cnn import fuse_conv_bn
-from mmcv.parallel import MMDistributedDataParallel
-from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
+from mmcv.runner import (init_dist, load_checkpoint,
                          wrap_fp16_model)
 from third_party.uniad_mmdet3d.models.builder import build_model
 from mmdet.apis import set_random_seed
 from mmdet.datasets import replace_ImageToTensor
-import time
-import os.path as osp
 from torch.onnx import OperatorExportTypes
 from tqdm import tqdm
 import random
+import onnx
+import onnx_graphsurgeon as gs
 
 warnings.filterwarnings("ignore")
 
@@ -203,10 +202,7 @@ def main():
                 ds_cfg.pipeline = replace_ImageToTensor(ds_cfg.pipeline)
 
     # init distributed env first, since logger depends on the dist info.
-    if args.launcher == 'none':
-        distributed = False
-    else:
-        distributed = True
+    if args.launcher != 'none':
         init_dist(args.launcher, **cfg.dist_params)
 
     # set random seeds
@@ -231,19 +227,21 @@ def main():
     if 'PALETTE' in checkpoint.get('meta', {}):
         model.PALETTE = checkpoint['meta']['PALETTE']
 
-    onnx_file_name = "./onnx/uniad_tiny_imgx0.25_cp.onnx"
-    dynamic_axes = None
+    # ########## ONNX Export Starts###############
+    onnx_folder = "./onnx/"
+    folder_dat = './dumped_inputs/'
+    onnx_file_name = onnx_folder+"uniad_tiny_imgx0.25_cp.onnx"
+    onnx_export_input = './nuscenes_np/uniad_onnx_input/'
+    onnx_export_output = './nuscenes_np/uniad_pth_trtp_out/'
     if 'tiny' in onnx_file_name:
         bevh=50
         img_h = 480
         img_w = 800
-        GT = 29
         print('bevh=', bevh)
         if 'x0.25' in onnx_file_name:
             img_h = 256
             img_w = 416
     else:
-        GT = 29
         bevh=200
         img_h = 928
         img_w = 1600
@@ -251,7 +249,7 @@ def main():
     torch.random.manual_seed(0)
     model=model.cuda()
     model=model.eval()
-    # ########## ONNX Export Starts###############
+    
     input_shapes = dict(
         prev_track_intances0=[-1, 512],  #901-1149
         prev_track_intances1=[-1, 3],
@@ -426,12 +424,10 @@ def main():
     l2g_r_mat0 = torch.zeros(1, 3, 3)
     l2g_t0 = torch.zeros(1,3)
     for iid in tqdm(range(6)):
-        DUMPED_INPUTS = './nuscenes_np/uniad_onnx_input/'
-        DUMPED_OUTPUTS = './nuscenes_np/uniad_pth_trtp_out/'
         inputs = {}
         for key in input_shapes.keys():
-            if os.path.isfile(DUMPED_INPUTS+key+'/'+str(iid)+'.npy'):
-                inputs[key]= np.load(DUMPED_INPUTS+key+'/'+str(iid)+'.npy')
+            if os.path.isfile(onnx_export_input+key+'/'+str(iid)+'.npy'):
+                inputs[key]= np.load(onnx_export_input+key+'/'+str(iid)+'.npy')
                 inputs[key] = torch.from_numpy(inputs[key]).cuda()
                 if key=='timestamp':
                     if iid==0:
@@ -446,7 +442,7 @@ def main():
                     if iid==0:
                         inputs[key] = np.zeros([bevh**2, 1, 256]).astype(np.float32)
                     else:
-                        inputs[key]= np.load(DUMPED_OUTPUTS+'bev_embed'+'/'+str(iid-1)+'.npy').astype(np.float32)
+                        inputs[key]= np.load(onnx_export_output+'bev_embed'+'/'+str(iid-1)+'.npy').astype(np.float32)
                     inputs[key] = torch.from_numpy(inputs[key]).cuda()
                 elif key=='max_obj_id':
                     inputs[key] = torch.Tensor([0]).int().cuda() if iid==0 else max_obj_id
@@ -461,7 +457,7 @@ def main():
                             # put dummy inputs for pytorch
                             inputs[key] = torch.zeros(shape).float().cuda()
                         else:
-                            inputs[key]= np.load(DUMPED_OUTPUTS+key+'_out/'+str(iid-1)+'.npy')
+                            inputs[key]= np.load(onnx_export_output+key+'_out/'+str(iid-1)+'.npy')
                             inputs[key] = torch.from_numpy(inputs[key]).cuda()
                             if inputs[key].dtype == torch.int64:
                                 inputs[key] = inputs[key].int()
@@ -472,7 +468,7 @@ def main():
                 elif key=='prev_timestamp':
                     inputs[key] = torch.zeros([1]).float().cuda() if iid==0 else prev_timestamp_out
                 elif key=='use_prev_bev':
-                    cur_img_metas_scene_token = torch.from_numpy(np.load(DUMPED_INPUTS+'img_metas_scene_token'+'/'+str(iid)+'.npy')).cuda()
+                    cur_img_metas_scene_token = torch.from_numpy(np.load(onnx_export_input+'img_metas_scene_token'+'/'+str(iid)+'.npy')).cuda()
                     if not torch.equal(cur_img_metas_scene_token,img_metas_scene_token):
                         inputs[key] = np.array([0]).astype(np.int32)
                     else:
@@ -487,23 +483,20 @@ def main():
         prev_l2g_t_out = dummy_outputs[-10]
         prev_timestamp_out = dummy_outputs[-11]
         output_name = list(output_shapes.keys())
-        if not os.path.exists(DUMPED_OUTPUTS):
-            os.mkdir(DUMPED_OUTPUTS)
+        if not os.path.exists(onnx_export_output):
+            os.mkdir(onnx_export_output)
         for i, out in enumerate(dummy_outputs):
-            if not os.path.exists(DUMPED_OUTPUTS+output_name[i]):
-                os.mkdir(DUMPED_OUTPUTS+output_name[i])
-            np.save(DUMPED_OUTPUTS+output_name[i]+'/'+str(iid)+'.npy', out.detach().cpu().numpy())
+            if not os.path.exists(onnx_export_output+output_name[i]):
+                os.mkdir(onnx_export_output+output_name[i])
+            np.save(onnx_export_output+output_name[i]+'/'+str(iid)+'.npy', out.detach().cpu().numpy())
 
         if iid==5:
             print('start deploying iid: ', iid)
             model.forward = model.forward_uniad_trt
             input_name = list(input_shapes.keys())
             output_name = list(output_shapes.keys())
-            if not os.path.exists('./dumped_inputs'):
-                os.mkdir('./dumped_inputs')
-            if not os.path.exists('./onnx'):
-                os.mkdir('./onnx')
-            folder_dat = './dumped_inputs/uniad_trtexec_fp64/'
+            if not os.path.exists(onnx_folder):
+                os.mkdir(onnx_folder)
             if not os.path.exists(folder_dat):
                 os.mkdir(folder_dat)
             for i in range(len(inputs)):
@@ -521,8 +514,7 @@ def main():
                     opset_version=16,
                     operator_export_type=OperatorExportTypes.ONNX_FALLTHROUGH,
                     dynamic_axes=dynamic_axes)
-            import onnx
-            import onnx_graphsurgeon as gs
+            
             graph = gs.import_onnx(onnx.load(onnx_file_name))
             for node in graph.nodes:
                 if node.op == "Reshape":

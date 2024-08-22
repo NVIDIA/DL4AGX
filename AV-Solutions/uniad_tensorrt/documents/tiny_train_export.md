@@ -36,8 +36,6 @@ UniAD
 │   │   ├── nuscenes_infos_temporal_val.pkl
 │   ├── others/
 │   │   ├── motion_anchor_infos_mode6.pkl
-├── dumped_inputs/
-│   ├── uniad_trtexec_fp64/
 ├── nuscenes_np/
 │   ├── uniad_onnx_input/
 │   ├── uniad_trt_input/
