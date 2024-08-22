@@ -41,15 +41,7 @@ cd UniAD
 git apply --exclude='*.DS_Store' ../patch/bevformer_tensorrt.patch
 ```
 
-Step 8: copy `BEVFormer_tensorrt` plugin & rename & replace the `CMakeLists.txt` with ours
-```
-cd ..
-cp -r ./dependencies/BEVFormer_tensorrt/TensorRT ./UniAD/tools/
-mv ./UniAD/tools/TensorRT ./UniAD/tools/tensorrt_plugin
-cp ./tools/CMakeLists.txt ./UniAD/tools/tensorrt_plugin/
-```
-
-Step 9: copy our prepared tool/config/helper files for `UniAD` onnx export
+Step 8: copy our prepared tool/config/helper files for `UniAD` onnx export
 ```
 chmod +x ./tools/add_onnx_export_support.sh
 ./tools/add_onnx_export_support.sh

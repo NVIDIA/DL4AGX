@@ -15,7 +15,7 @@ To train this variant, the following files are needed:
 
 1. Configs: [stage1](projects/configs/stage1_track_map/tiny_imgx0.25_track_map.py) and [stage2](projects/configs/stage2_e2e/tiny_imgx0.25_e2e.py) for `UniAD-tiny` training.
 
-2. [BEVFormer-tiny weights](https://github.com/zhiqi-li/storage/releases/download/v1.0/bevformer_tiny_epoch_24.pth) for stage1 initialization.
+2. Download BEVFormer-tiny weights from [BEVFormer Model Zoo](https://github.com/fundamentalvision/BEVFormer?tab=readme-ov-file#model-zoo) for stage1 initialization.
 
 #### File Structure
 
