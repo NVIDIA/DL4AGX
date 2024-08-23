@@ -1,8 +1,7 @@
 
 ## Model Training and Exportation
-### Model Traning: UniAD-tiny
-For efficiency when deploying a UniAD model on DRIVE platform, we train a tiny version of UniAD, with a smaller ResNet backbone and reduced image size & bev size.
-
+### Training
+We trained a UniAD-tiny model for deployment, the differences compared to the original model are summarized in the following table:
 | model | img backbone | bev size | img size | with bevslicer? | with bev upsample? |
 | :---: | :---: | :---: | :---: | :---:|:---:| 
 | UniAD  | ResNet-101| 200x200  | 1600x928 | Y | Y |
@@ -45,13 +44,14 @@ UniAD
 ├── tools/
 ```
 
-### Model Exportation: Pytorch to ONNX
+### Pytorch to ONNX
+To export an ONNX model, please run the following commands
 ```
 cd /workspace/UniAD
 CUDA_VISIBLE_DEVICES=0 ./tools/uniad_export_onnx.sh ./projects/configs/stage2_e2e/tiny_imgx0.25_e2e_trt_p.py ./ckpts/tiny_imgx0.25_e2e_ep20.pth 1
 ```
 
-Due to legal reasons, we provide an [ONNX](../onnx/uniad_tiny_dummy.onnx) model of UniAD-tiny with random weights. Please follow instructions on training to obtain model with trained weights.
+Due to legal reasons, we can only provid an [ONNX](../onnx/uniad_tiny_dummy.onnx) model of UniAD-tiny with random weights. Please follow instructions on training to obtain a model with real weights.
 
 <- Last Page: [Data Preparation](data_prep.md)
 

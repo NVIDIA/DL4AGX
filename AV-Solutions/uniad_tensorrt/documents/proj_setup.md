@@ -1,4 +1,4 @@
-## Re-create UniAD deployment project
+## Project setup for deployment
 Step 1: clone `uniad_tensorrt`
 ```
 git clone uniad_tensorrt
@@ -26,7 +26,7 @@ Step 5: rename `bev_mmdet3d` as `uniad_mmdet3d`
 mv ./UniAD/third_party/bev_mmdet3d ./UniAD/third_party/uniad_mmdet3d
 ```
 
-Step 6: apply a patch to borrow more modules and functions from `mmdet3d` official source code
+Step 6: apply a patch to borrow more modules and functions from `mmdet3d`
 ```
 cd UniAD
 git apply --exclude='*.DS_Store' ../patch/mmdet3d.patch
@@ -41,7 +41,7 @@ cd UniAD
 git apply --exclude='*.DS_Store' ../patch/bevformer_tensorrt.patch
 ```
 
-Step 8: copy our prepared tool/config/helper files for `UniAD` onnx export
+Step 8: copy `tool/config/helper` files for `UniAD` onnx export
 ```
 chmod +x ./tools/add_onnx_export_support.sh
 ./tools/add_onnx_export_support.sh

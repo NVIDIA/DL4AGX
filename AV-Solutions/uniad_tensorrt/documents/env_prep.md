@@ -1,4 +1,4 @@
-## Environments Preparation using Docker
+## Environments Preparation
 Step 1: apply a patch to `nuscenes-devkit` for env support
 ```
 cd dependencies/nuscenes-devkit
