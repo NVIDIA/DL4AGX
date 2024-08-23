@@ -1,5 +1,5 @@
 # UniAD-TensorRT
-[UniAD](https://arxiv.org/abs/2212.10156) is a Unified Autonomous Driving algorithm framework which follows end-to-end manners, taking multi-view vision input and could output planning results directly. UniAD achieves SOTA performance in many autonomous driving tasks especially on planning task. The code for UniAD can be found [here](https://github.com/OpenDriveLab/UniAD).
+[UniAD](https://arxiv.org/abs/2212.10156) is a Unified Autonomous Driving algorithm framework which follows end-to-end manners, taking multi-view vision input and could output planning results directly. UniAD achieves SOTA performance in many autonomous driving tasks especially on planning task. 
 
 <img src="./assets/pipeline.png" width="1024">
 
@@ -29,7 +29,7 @@ We provide a dockfile for your convenience to prepare the environment for both t
 In order to prepare data used for exporting to ONNX and inference with TensorRT, please follow the instructions at [Data Preparation](./documents/data_prep.md) to prepare the data for the project. For preparing training data, please refer to the instructions from [UniAD](https://github.com/OpenDriveLab/UniAD/blob/main/docs/DATA_PREP.md).
 
 ### Model Training and Exportation <a name="uniad_tiny_train_export"></a>
-For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny version of UniAD(`UniAD-tiny`), with a smaller ResNet backbone and reduced image size & bev size. After training, the model needs to be exported from Pytorch to ONNX format. Please see [UniAD-tiny Traning and Exportation](./documents/train_export.md) for details.
+For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny version of UniAD(`UniAD-tiny`), with a smaller ResNet backbone and reduced image size & bev size. After training, the model needs to be exported from Pytorch to ONNX format. Please see [Model Training and Exportation](./documents/train_export.md) for details.
 
 ### Inference Application <a name="inference_app"></a>
 

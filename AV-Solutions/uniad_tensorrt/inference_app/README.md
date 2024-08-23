@@ -12,7 +12,9 @@ dependencies/
 ## Build TensorRT plugins and the inference application
 
 ### Plugins and Application Compilation
-To deploy UniAD-tiny with TensorRT, we first need to compile TensorRT plugins for `MultiScaleDeformableAttnTRT`, `InverseTRT` and `RotateTRT` operators which are not supported by Native TensorRT, and then we need to build the C++ inference application. To achieve that, we will use the [CMakeLists.txt](./CMakeLists.txt) to compile the plugin library and the inference app. The source code for those plugins are from the submodule [BEVFormer_tensorrt](https://github.com/DerryHub/BEVFormer_tensorrt/tree/main).
+To deploy UniAD-tiny with TensorRT, we first need to compile TensorRT plugins for `MultiScaleDeformableAttnTRT`, `InverseTRT` and `RotateTRT` operators which are not supported by Native TensorRT, and then we need to build the C++ inference application. 
+
+Please run the following commands to compile:
 ```
 mkdir ./build && cd ./build/
 cmake .. -DTENSORRT_PATH=<path_to_TensorRT> && make -j$(nproc)
