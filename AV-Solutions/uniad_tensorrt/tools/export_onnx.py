@@ -500,8 +500,7 @@ def main():
             if not os.path.exists(folder_dat):
                 os.mkdir(folder_dat)
             for i in range(len(inputs)):
-                inputs[i].cpu().numpy().astype(
-                    np.float64).tofile(folder_dat+input_name[i]+'.dat')
+                inputs[i].cpu().numpy().tofile(folder_dat+input_name[i]+'.dat')
             torch.onnx.export(model, 
                     inputs, 
                     onnx_file_name,

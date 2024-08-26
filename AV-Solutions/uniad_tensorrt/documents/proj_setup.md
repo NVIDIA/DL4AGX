@@ -1,8 +1,8 @@
 ## Project setup for deployment
 Step 1: clone `uniad_tensorrt`
 ```
-git clone uniad_tensorrt
-cd uniad_tensorrt
+git clone https://github.com/NVIDIA/DL4AGX.git
+cd DL4AGX/AV-Solutions/uniad_tensorrt
 git submodule update --init --recursive
 ```
 
