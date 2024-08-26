@@ -20,7 +20,6 @@ ARG OS_VERSION=20.04
 FROM nvidia/cuda:${CUDA_VERSION}-cudnn8-devel-ubuntu${OS_VERSION}
 LABEL maintainer="NVIDIA CORPORATION"
 
-ENV TRT_VERSION 8.5.3.1
 SHELL ["/bin/bash", "-c"]
 
 # Setup user account
@@ -57,7 +56,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential
 
 # Install python3
-# RUN add-apt-repository ppa:deadsnakes/ppa
 RUN apt-get install -y --no-install-recommends \
       python3 \
       python3-pip \
@@ -66,23 +64,6 @@ RUN apt-get install -y --no-install-recommends \
     cd /usr/local/bin &&\
     ln -s /usr/bin/python3 python &&\
     ln -s /usr/bin/pip3 pip;
-
-# Install TensorRT
-RUN if [ "${CUDA_VERSION}" = "10.2" ] ; then \
-    v="${TRT_VERSION%.*}-1+cuda${CUDA_VERSION}" &&\
-    apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub &&\
-    apt-get update &&\
-    sudo apt-get install libnvinfer8=${v} libnvonnxparsers8=${v} libnvparsers8=${v} libnvinfer-plugin8=${v} \
-        libnvinfer-dev=${v} libnvonnxparsers-dev=${v} libnvparsers-dev=${v} libnvinfer-plugin-dev=${v} \
-        python3-libnvinfer=${v}; \
-else \
-    v="${TRT_VERSION%.*}-1+cuda${CUDA_VERSION%.*}" &&\
-    apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub &&\
-    apt-get update &&\
-    sudo apt-get install libnvinfer8=${v} libnvonnxparsers8=${v} libnvparsers8=${v} libnvinfer-plugin8=${v} \
-        libnvinfer-dev=${v} libnvonnxparsers-dev=${v} libnvparsers-dev=${v} libnvinfer-plugin-dev=${v} \
-        python3-libnvinfer=${v}; \
-fi
 
 # Install PyPI packages
 RUN pip3 install --upgrade pip
@@ -95,12 +76,10 @@ RUN cd /tmp && \
     ./cmake-3.14.4-Linux-x86_64.sh --prefix=/usr/local --exclude-subdir --skip-license && \
     rm ./cmake-3.14.4-Linux-x86_64.sh
 
-# Download NGC client
-RUN cd /usr/local/bin && wget https://ngc.nvidia.com/downloads/ngccli_cat_linux.zip && unzip ngccli_cat_linux.zip && chmod u+x ngc-cli/ngc && rm ngccli_cat_linux.zip ngc-cli.md5 && echo "no-apikey\nascii\n" | ngc-cli/ngc config set
-
 # Install PyTorch
 RUN pip3 install torch==1.12.1+cu116 torchvision==0.13.1+cu116 --extra-index-url https://download.pytorch.org/whl/cu116
 
+# Install BEVFormer_tensorrt required
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install -r /tmp/requirements.txt
 
@@ -121,18 +100,16 @@ RUN cd / && \
 
 RUN pip install mmsegmentation>=0.20.0
 
+# Install UniAD required
 RUN python3 -m pip install --upgrade pip
 RUN pip3 install google-cloud-bigquery==3.25.0 motmetrics==1.1.3 einops==0.4.1 casadi==3.5.6rc2 pytorch-lightning==1.2.5
 
 RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
 
+# Install misc
 RUN pip3 install ipython==8.12.3
 RUN pip3 install scikit-image==0.21.0
 RUN pip3 install yapf==0.40.1
-
-ENV TRT_LIBPATH /usr/lib/x86_64-linux-gnu
-ENV PATH="${PATH}:/usr/local/bin/ngc-cli"
-ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${TRT_OSSPATH}/build/out:${TRT_LIBPATH}"
 
 WORKDIR /workspace
 COPY ./nuscenes /usr/local/lib/python3.8/dist-packages/nuscenes
