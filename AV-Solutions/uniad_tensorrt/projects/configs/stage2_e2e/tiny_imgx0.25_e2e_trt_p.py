@@ -1,3 +1,4 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024 OpenMMLab. All rights reserved.
 # SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -13,7 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+# Modified from https://github.com/OpenDriveLab/UniAD/blob/main/projects/configs/stage2_e2e/base_e2e.py
+# Added ONNX exportation config support for UniAD-tiny model
 
 _base_ = ["../_base_/datasets/nus-3d.py",
           "../_base_/default_runtime.py"]

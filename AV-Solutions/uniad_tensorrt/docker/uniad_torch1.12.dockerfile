@@ -1,3 +1,4 @@
+# SPDX-FileCopyrightText: Copyright (c) 2022-2023 DerryHub
 # SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -12,6 +13,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# Modified from https://github.com/DerryHub/BEVFormer_tensorrt/blob/main/docker/Dockerfile
+# Removed TensorRT, NGC client, and mmdeploy installation related code
+# Added UniAD environment support and updated TORCH_CUDA_ARCH_LIST
 
 
 ARG CUDA_VERSION=11.8.0

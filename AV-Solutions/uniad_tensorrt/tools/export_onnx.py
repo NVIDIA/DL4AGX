@@ -1,3 +1,4 @@
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024 OpenMMLab. All rights reserved.
 # SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -13,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Modified from https://github.com/OpenDriveLab/UniAD/blob/main/tools/test.py
+# Added support for launching ONNX exportation for UniAD-tiny model
 
 import argparse
 import torch
