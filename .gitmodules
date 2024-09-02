@@ -1,0 +1,3 @@
+[submodule "AV-Solutions/dcnv4-trt/3rd_party/stb"]
+	path = AV-Solutions/dcnv4-trt/3rd_party/stb
+	url = https://github.com/nothings/stb.git
