@@ -1,0 +1,7 @@
+.vscode
+build
+scratch
+*.ncu-rep
+tests
+*py*/
+internal/
