@@ -1,15 +1,15 @@
-[submodule "AV-Solutions/uniad_tensorrt/inference_app/dependencies/stb"]
-	path = AV-Solutions/uniad_tensorrt/inference_app/dependencies/stb
+[submodule "AV-Solutions/uniad-trt/inference_app/dependencies/stb"]
+	path = AV-Solutions/uniad-trt/inference_app/dependencies/stb
 	url = https://github.com/nothings/stb.git
-[submodule "AV-Solutions/uniad_tensorrt/UniAD"]
-	path = AV-Solutions/uniad_tensorrt/UniAD
+[submodule "AV-Solutions/uniad-trt/UniAD"]
+	path = AV-Solutions/uniad-trt/UniAD
 	url = https://github.com/OpenDriveLab/UniAD.git
 	ignore = dirty
-[submodule "AV-Solutions/uniad_tensorrt/dependencies/BEVFormer_tensorrt"]
-	path = AV-Solutions/uniad_tensorrt/dependencies/BEVFormer_tensorrt
+[submodule "AV-Solutions/uniad-trt/dependencies/BEVFormer_tensorrt"]
+	path = AV-Solutions/uniad-trt/dependencies/BEVFormer_tensorrt
 	url = https://github.com/DerryHub/BEVFormer_tensorrt.git
 	ignore = dirty
-[submodule "AV-Solutions/uniad_tensorrt/dependencies/nuscenes-devkit"]
-	path = AV-Solutions/uniad_tensorrt/dependencies/nuscenes-devkit
+[submodule "AV-Solutions/uniad-trt/dependencies/nuscenes-devkit"]
+	path = AV-Solutions/uniad-trt/dependencies/nuscenes-devkit
 	url = https://github.com/nutonomy/nuscenes-devkit.git
 	ignore = dirty
