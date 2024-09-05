@@ -6,3 +6,6 @@ This folder contains samples for autonomous vehicle on NVIDIA DRIVE platform, in
 
 ## StreamPETR-TensorRT
 [StreamPETR-TensorRT](./streampetr-trt/) is a sample application to demostrate the deployment of [StreamPETR](https://github.com/exiawsh/StreamPETR/tree/main) on NVIDIA Drive Orin platform using TensorRT. 
+
+## DCNv4-TensorRT
+[DCNv4-TensorRT](./dcnv4-trt/) is a sample application to demostrate the deployment and optimization of [Deformable Convolution v4 (DCNv4)](https://github.com/OpenGVLab/DCNv4) on NVIDIA Drive Orin platform using TensorRT.
