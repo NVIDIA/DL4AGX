@@ -13,7 +13,6 @@ FILES=(
     "README.md"
     "tools/export_onnx.py"
     "tools/process_metadata.py"
-    "tools/run_trtexec.sh"
     "tools/uniad_export_onnx.sh"
 )
 

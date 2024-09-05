@@ -8,12 +8,12 @@ git submodule update --init --recursive
 
 Step 2: apply a patch to make `UniAD` compatible with `torch1.12` and corresponding `mmcv/mmdet/mmdet3d` version
 ```
-cd UniAD && git apply --exclude='*.DS_Store' ../patch/uniad-torch1.12.patch
+cd UniAD && git apply --reject --whitespace=fix --exclude='*.DS_Store' ../patch/uniad-torch1.12.patch
 ```
 
 Step 3: apply a patch related to modification of original `UniAD` code for onnx export
 ```
-git apply --exclude='*.DS_Store' ../patch/uniad-onnx-export.patch && cd ..
+git apply --reject --whitespace=fix --exclude='*.DS_Store' ../patch/uniad-onnx-export.patch && cd ..
 ```
 
 Step 4: copy `bev_mmdet3d` to `UniAD`
@@ -43,6 +43,7 @@ git apply --exclude='*.DS_Store' ../patch/bevformer_tensorrt.patch
 
 Step 8: copy `tool/config/helper` files for `UniAD` onnx export
 ```
+cd ..
 chmod +x ./tools/add_onnx_export_support.sh
 ./tools/add_onnx_export_support.sh
 chmod +x ./UniAD/tools/*.sh
