@@ -2,11 +2,14 @@
 [Deformable Convolution v4 (DCNv4)](https://github.com/OpenGVLab/DCNv4) is a highly efficient operator for a wide range of vision tasks. It introduces dynamic property to convolution operator by gathering features based on learnable offsets. Compared with attention based method, DCNv4 maintains global context with less compute complexity.
 
 We provide three TensorRT plugin implementations for DCNv4 on NVIDIA Drive Orin Platform in `plugins/`.
-- `plugins/dcnv4Plugin` contains a normal DCNv4 plugin implementation.
-- `plugins/dcnv4FusePlugin` contains a modified DCNv4 plugin to handle fused input.
-- `plugins/dcnv4PtxPlugin` contains a tuned PTX kernel. It will be called in `dcnv4Plugin` if inputs satisfy certain conditions.
+- `plugins/dcnv4Plugin` contains the DCNv4 plugin based on original implementation **Figure 1 (a)**. TensorRT will will perform graph optimization (e.g., layer fusion) for better latency performance as **Figure 1 (b)** shows.
+- `plugins/dcnv4PtxPlugin` contains a tuned PTX kernel. It will takeover the original kernel calls in `dcnv4Plugin` if inputs satisfy certain shape and datatype constrains. **Figure 1 (c)**
+- `plugins/dcnv4FusePlugin` contains a modified DCNv4 plugin to handle un-sliced input from fused linear layer. **Figure 1 (d)**
 
-Contents:
+<img src="assets/fused_offset.png" alt="assets/fused_offset.png" style="width:1200px;"/> 
+<div align="center"> Figure 1, how to optimize DCNv4 on NVIDIA Drive Orin Platform </div>
+
+### Contents:
 - [Benchmark](./README.md#benchmark)
 - [Export DCNv4 Model from PyTorch to Onnx](./README.md#export-dcnv4-model-from-pytorch-to-onnx)
 - [Optimized TensorRT Plugins](./README.md#optimized-tensorrt-plugins)
@@ -27,13 +30,13 @@ Environment for the benchmark:
 - PyTorch: 1.14.0-aarch64
 - TensorRT: 8.6.15.17
 
-| Framework | Precision | Resolution | acc@1   | Runtime(ms/frame)  |
-| :-------: | :-------: | :--------: | :---:   | :-----:            |
-|  PyTorch  |    Fp32   |   224x224  |  83.6%  | 40.3152            |
-|  TensorRT |    Fp32   |   224x224  |  83.6%  | 6.64844            |
-|  TensorRT |    Fp16   |   224x224  |  83.3%  | 2.48438 (no fuse)  |
-|  TensorRT |    Fp16   |   224x224  |  83.3%  | 2.38281 (with fuse)|
-|  TensorRT |    Fp16   |   224x224  |  83.3%  | 2.35394 (with ptx) |
+| Framework | Precision | Resolution | acc@1   | Runtime(ms/frame)  | Notes   |
+| :-------: | :-------: | :--------: | :---:   | :-----:            | :-----: |
+|  PyTorch  |    Fp32   |   224x224  |  83.6%  | 40.3152            | |
+|  TensorRT |    Fp32   |   224x224  |  83.6%  | 6.64844            | |
+|  TensorRT |    Fp16   |   224x224  |  83.3%  | 2.48438 | original implementation, Figure 1, (b)        |
+|  TensorRT |    Fp16   |   224x224  |  83.3%  | 2.35394 | using optimized ptx kernels, Figure 1, (c)    |
+|  TensorRT |    Fp16   |   224x224  |  83.3%  | 2.38281 | using un-sliced input directly, Figure 1, (d) |
 
 ## Export DCNv4 Model from PyTorch to Onnx
 ### Environment Setup
@@ -84,15 +87,11 @@ Now you should have `sim_flash_intern_image_t_1k_224.onnx`. It will be used to c
 
 ### Optimized TensorRT Plugins
 #### Fusing inputs for less memory traffic
-We speed up the inference by fusing parallel linear layers. Here we use input image size [B,3,224,224] as example. In Stage0, DCNv4 block 0, there are two `torch.nn.Linear` layers, `value_proj` and `offset_proj`. `value_proj` takes a `[B,3136,64]` input feature and projects it into a `[B,3136,64]` value feature. And `offset_proj` also takes the `[B,3136,64]` input feature and produces the `[B,3136,112]` offset values accordingly. This is `(a) Normal` in the figure below.
+We speed up the inference by fusing parallel linear layers. Here we use input image size [B,3,224,224] as example. In Stage0, DCNv4 block 0, there are two `torch.nn.Linear` layers, `value_proj` and `offset_proj`. `value_proj` takes a `[B,3136,64]` input feature and projects it into a `[B,3136,64]` value feature. And `offset_proj` also takes the `[B,3136,64]` input feature and produces the `[B,3136,112]` offset values accordingly.
 
-Since they are running in parallel sharing the `N` dimension and consume the same input tensor, we can fuse them as one single Linear layer for better performance. After the layer fusion, we can save the kernel launch overhead and eliminate the redundant memory traffic. This is `(b) Fuse Linear then slice` in the figure below. Since originally, DCNv4 operator requires values and offset as separate input tensors. So we need a extra slice operator to slice the fused tensor. The slice operator introduce [B,3136,(64+112)] memory read and write.
+Since they are running in parallel sharing the `N` dimension and consume the same input tensor, we can fuse them as one single Linear layer for better performance. After the layer fusion, we can save the kernel launch overhead and eliminate the redundant memory traffic. In original implementation, DCNv4 operator requires values and offset as separate input tensors. So we need a extra slice operator to slice the fused tensor. The slice operator introduce [B,3136,(64+112)] memory read and write.
 
-Then we slightly adjust the internal logic inside DCNv4 plugin to avoid the slice operator. This is `(c) Fuse Linear and use fused input tensor` in the figure below.
-
-<img src="assets/fused_offset.png" alt="assets/fused_offset.png" style="width:1200px;"/>
-
-An optimized plugin was implemented to comsume the fused output. You can try the following commands to fuse the ops inside original onnx file.
+To eliminate above memory traffic, we adjusted the internal logic inside DCNv4 plugin and use the un-sliced tensor directly. This makes the plugin able to consume the output from the fused linear layer. You can try the following commands to fuse the ops inside original onnx file.
 ```bash
 # fuse value_proj and offset_proj in onnx file
 python tools/fuse_value_and_offset.py onnxfiles/sim_flash_intern_image_t_1k_224.onnx
@@ -155,6 +154,8 @@ DCNv4_app
 
 ### Build TensorRT engine
 To build a TensorRT engine, you can run the following command lines with trtexec.
+> NOTE: We provide these onnx files with random weights to profile the inference performance.
+
 ```bash
 # copy the exported onnx file to NVIDIA Drive Orin Platform and put it in onnxfiles/.
 # build the engine
