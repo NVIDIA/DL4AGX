@@ -1,5 +1,5 @@
 # About
-This repository contains an end-to-end example of how to quantize an ONNX model (BEVFormer) containing a custom TRT plugin with [NVIDIA's ModelOpt Toolkit](https://github.com/NVIDIA/TensorRT-Model-Optimizer).
+This repository contains an end-to-end example of deploying BEVFormer with explicit quantization with [NVIDIA's ModelOpt Toolkit](https://github.com/NVIDIA/TensorRT-Model-Optimizer).
  At the end, we show TensorRT deployment results in terms of runtime and accuracy.
 
 # Requirements
