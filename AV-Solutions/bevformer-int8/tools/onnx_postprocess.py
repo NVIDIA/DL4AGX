@@ -1,38 +1,42 @@
+import argparse
 import os
 import numpy as np
-from argparse import ArgumentParser
 from collections import OrderedDict
-
 import onnx
 from onnxsim import simplify
 import onnxruntime as ort
 import onnx_graphsurgeon as gs
 
-argparser = ArgumentParser("Simplifies an ONNX model with custom TRT plugin via ORT and onnxsim.\n"
-                           "1. Ensures that the custom op is supported as a TRT plugin in ORT (`trt.plugins` domain).\n"
-                           "2. If the precisions of the plugin inputs are given, ensure them by adding Cast nodes.\n"
-                           "3. Infer tensor shapes with ORT and update the graph accordingly with onnx-graphsurgeon.\n"
-                           "4. Apply onnxsim to simplify model with inferred shapes.")
-argparser.add_argument("--onnx", type=str, required=True, help="Input ONNX model path.")
-argparser.add_argument("--plugins", type=str, nargs="+", default=None,
-                       help="A space-separated list with paths to .so plugins.")
-argparser.add_argument("--custom_ops", type=str, nargs="+", default=None,
-                       help="A space-separated list with custom ops to ensure ORT support.")
-argparser.add_argument(
-    "--plugins_precision", type=str, nargs="+", default=None,
-    help="A space-separated list indicating the precision for each custom op. If the precision is something other"
-         " than fp32, a Cast node will be added.\n"
-         "Each item should have the format <op_type>:<precision> (assumes all inputs and outputs and that precision)"
-         " or <op_type>:[<inp1_precision>,<inp2_precision>]:[<out1_precision>] (specifies all inputs and outputs"
-         " individually), where precision can be fp32 (default), fp16, or int32.\n"
-         "   Example 1: op_type_1:fp16 op_type_2:fp32.\n"
-         "   Example 2: op_type_1:[fp16,int32,fp16]:[fp16] op_type_2:fp32.")
-argparser.add_argument(
-    "--keep_intermediate_files",
-    action="store_true",
-    help="Indicates whether to keep or delete intermediate ONNX files."
-)
-args = argparser.parse_args()
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        "Simplifies an ONNX model with custom TRT plugin via ORT and onnxsim.\n"
+        "  1. Ensures that the custom op is supported as a TRT plugin in ORT (`trt.plugins` domain).\n"
+        "  2. If the precisions of the plugin inputs are given, ensure them by adding Cast nodes.\n"
+        "  3. Infer tensor shapes with ORT and update the graph accordingly with onnx-graphsurgeon.\n"
+        "  4. Apply onnxsim to simplify model with inferred shapes."
+    )
+    parser.add_argument("--onnx", type=str, required=True, help="Input ONNX model path.")
+    parser.add_argument("--plugins", type=str, nargs="+", default=None,
+                        help="A space-separated list with paths to .so plugins.")
+    parser.add_argument("--custom_ops", type=str, nargs="+", default=None,
+                        help="A space-separated list with custom ops to ensure ORT support.")
+    parser.add_argument(
+        "--plugins_precision", type=str, nargs="+", default=None,
+        help="A space-separated list indicating the precision for each custom op. If the precision is something other"
+             " than fp32, a Cast node will be added.\n"
+             "Each item should have the format <op_type>:<precision> (assumes all inputs and outputs and that precision)"
+             " or <op_type>:[<inp1_precision>,<inp2_precision>]:[<out1_precision>] (specifies all inputs and outputs"
+             " individually), where precision can be fp32 (default), fp16, or int32.\n"
+             "   Example 1: op_type_1:fp16 op_type_2:fp32.\n"
+             "   Example 2: op_type_1:[fp16,int32,fp16]:[fp16] op_type_2:fp32.")
+    parser.add_argument(
+        "--keep_intermediate_files",
+        action="store_true",
+        help="Indicates whether to keep or delete intermediate ONNX files."
+    )
+    args = parser.parse_args()
+    return args
 
 intermediate_generated_files = []
 
@@ -147,6 +151,8 @@ def add_fp16_fp32_cast(onnx_path, custom_ops_to_cast):
             if inp_precision != "fp32":
                 cast_out = _add_cast_node_inp(inp, precision=inp_precision)
                 node.inputs[inp_idx] = cast_out
+            else:
+                node.inputs[inp_idx].dtype = "float32"
 
         # Cast all outputs back to FP32
         out_precisions = custom_ops_to_cast[node.op]["out_precisions"]
@@ -156,6 +162,8 @@ def add_fp16_fp32_cast(onnx_path, custom_ops_to_cast):
             if out_precision != "fp32":
                 cast_inp = _add_cast_node_out(out, inp_precision=out_precision)
                 node.outputs[out_idx] = cast_inp
+            else:
+                node.outputs[out_idx].dtype = "float32"
 
     graph.cleanup().toposort()
 
@@ -269,7 +277,8 @@ def get_ort_tensor_shapes(onnx_path, plugin_paths=[]):
     return ort_outs
 
 
-if __name__ == '__main__':
+def main():
+    args = parse_args()
     onnx_path = args.onnx
 
     # ======== Ensure that custom ops are supported by ORT as TRT plugins ========
@@ -297,12 +306,12 @@ if __name__ == '__main__':
                 out.dtype = ort_tensors[out.name].dtype
     graph.cleanup().toposort()
     model = gs.export_onnx(graph)
-    onnx_path = onnx_path.replace(".onnx", "_infer_shapes.onnx")
+    onnx_path = args.onnx.replace(".onnx", "_post.onnx")
     intermediate_generated_files.append(onnx_path)
     onnx.save(model, onnx_path)
 
     # ======== Simplify ONNX model with inferred shapes =========
-    output_path = args.onnx.replace(".onnx", "_post.onnx")
+    output_path = onnx_path.replace(".onnx", "_simp.onnx")
     print(f"Simplifying ONNX model with inferred shapes! Saving in {output_path}.")
     model_simp, check = simplify(model)
     onnx.save(model_simp, output_path)
@@ -311,3 +320,7 @@ if __name__ == '__main__':
     if not args.keep_intermediate_files:
         for file in intermediate_generated_files:
             os.remove(file)
+
+
+if __name__ == '__main__':
+    main()

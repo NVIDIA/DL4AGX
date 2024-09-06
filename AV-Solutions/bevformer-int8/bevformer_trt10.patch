@@ -209,3 +209,127 @@ index 978e544..0cd9282 100644
          verbose=verbose,
          opset_version=opset_version,
          dynamic_axes=dynamic_axes,
+diff --git a/det2trt/quantization/calibrator_trt.py b/det2trt/quantization/calibrator_trt.py
+index af58840..59b9b30 100644
+--- a/det2trt/quantization/calibrator_trt.py
++++ b/det2trt/quantization/calibrator_trt.py
+@@ -60,7 +60,7 @@ def get_calibrator(calibrator):
+                     return None
+                 assert set(names) == self.names
+                 # Assume self.batches is a generator that provides batch data.
+-                data = self.iter.next()
++                data = next(self.iter)
+                 self.decode_data(data)
+                 # Assume that self.device_input is a device buffer allocated by the constructor.
+                 [
+diff --git a/det2trt/utils/tensorrt.py b/det2trt/utils/tensorrt.py
+index 36198fc..44ffe5e 100644
+--- a/det2trt/utils/tensorrt.py
++++ b/det2trt/utils/tensorrt.py
+@@ -43,35 +43,42 @@ def allocate_buffers(engine, context, input_shapes, output_shapes):
+     inputs = []
+     outputs = []
+     bindings = []
+-    for binding_id, binding in enumerate(engine):
+-        if engine.binding_is_input(binding):
++    tensor_names = [
++        engine.get_tensor_name(i) for i in range(engine.num_io_tensors)
++    ]
++    for binding in tensor_names:
++        tensor_mode = engine.get_tensor_mode(binding)
++        if tensor_mode == trt.TensorIOMode.INPUT:
+             dims = input_shapes[binding]
+-            context.set_binding_shape(binding_id, dims)
++            context.set_input_shape(binding, dims)
+         else:
+             dims = output_shapes[binding]
+ 
+         size = trt.volume(dims)
+         # The maximum batch size which can be used for inference.
+-        dtype = trt.nptype(engine.get_binding_dtype(binding))
++        dtype = trt.nptype(engine.get_tensor_dtype(binding))
+         assert dtype == np.float32, "Engine's inputs/outputs only support FP32."
+         # Allocate host and device buffers
+         host_mem = cuda.pagelocked_empty(size, dtype)
+         device_mem = cuda.mem_alloc(host_mem.nbytes)
+         # Append the device buffer to device bindings.
+         bindings.append(int(device_mem))
+-        if engine.binding_is_input(binding):
++        if tensor_mode == trt.TensorIOMode.INPUT:
+             inputs.append(HostDeviceMem(binding, host_mem, device_mem))
+         else:
+             outputs.append(HostDeviceMem(binding, host_mem, device_mem))
++        # Setup context tensor address.
++        context.set_tensor_address(binding, int(device_mem))
++
+     return inputs, outputs, bindings
+ 
+ 
+-def do_inference(context, bindings, inputs, outputs, stream, batch_size=1):
++def do_inference(context, inputs, outputs, stream):
+     [cuda.memcpy_htod_async(inp.device, inp.host, stream) for inp in inputs]
+ 
+     stream.synchronize()
+     t1 = time.time()
+-    context.execute_async_v2(bindings=bindings, stream_handle=stream.handle)
++    context.execute_async_v3(stream_handle=stream.handle)
+     stream.synchronize()
+     t2 = time.time()
+     [cuda.memcpy_dtoh_async(out.host, out.device, stream) for out in outputs]
+diff --git a/tools/bevformer/evaluate_trt.py b/tools/bevformer/evaluate_trt.py
+index 2648ecb..c572f0b 100644
+--- a/tools/bevformer/evaluate_trt.py
++++ b/tools/bevformer/evaluate_trt.py
+@@ -7,8 +7,9 @@ import mmcv
+ import copy
+ import numpy as np
+ from mmcv import Config
+-from mmdeploy.backend.tensorrt import load_tensorrt_plugin
+ 
++import os
++import ctypes
+ import sys
+ 
+ sys.path.append(".")
+@@ -26,13 +27,31 @@ def parse_args():
+     parser = argparse.ArgumentParser(description="MMDet test (and eval) a model")
+     parser.add_argument("config", help="test config file path")
+     parser.add_argument("trt_model", help="checkpoint file")
++    parser.add_argument("--trt_plugins", default="/workspace/BEVFormer_tensorrt/TensorRT/lib/libtensorrt_ops.so")
+     args = parser.parse_args()
+     return args
+ 
+ 
++def load_tensorrt_plugin(lib_path) -> bool:
++    """Load TensorRT plugins library.
++
++    Returns:
++        bool: True if TensorRT plugin library is successfully loaded.
++    """
++    success = False
++    if os.path.exists(lib_path):
++        ctypes.CDLL(lib_path)
++        print(f'Successfully loaded tensorrt plugins from {lib_path}')
++        success = True
++    else:
++        print(f'Could not load the library of tensorrt plugins. \
++            Because the file does not exist: {lib_path}')
++    return success
++
++
+ def main():
+     args = parse_args()
+-    load_tensorrt_plugin()
++    load_tensorrt_plugin(args.trt_plugins)
+ 
+     trt_model = args.trt_model
+     config_file = args.config
+@@ -134,7 +153,7 @@ def main():
+                 raise RuntimeError(f"Cannot find input name {inp.name}.")
+ 
+         trt_outputs, t = do_inference(
+-            context, bindings=bindings, inputs=inputs, outputs=outputs, stream=stream
++            context, inputs=inputs, outputs=outputs, stream=stream
+         )
+ 
+         trt_outputs = {

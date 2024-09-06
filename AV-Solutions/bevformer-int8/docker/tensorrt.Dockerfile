@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/tensorrt:24.05-py3
+FROM nvcr.io/nvidia/tensorrt:24.08-py3
 
 ARG CMAKE_VERSION=3.29.3
 ARG NUM_JOBS=8
@@ -59,7 +59,7 @@ RUN pip install nvidia-modelopt[onnx]>=0.15.0 --extra-index-url https://aiinfra.
 ENV LD_LIBRARY_PATH=/usr/local/lib/python3.10/dist-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
 
 # ======== Prepare repo to convert BEVFormer model from PyTorch to ONNX ========
-ARG TORCH_CUDA_ARCH_LIST="7.5;6.1;8.6"
+ARG TORCH_CUDA_ARCH_LIST="7.5;6.1;8.0;8.6"
 ENV FORCE_CUDA="1"
 ENV TRT_LIBPATH="/usr/lib/x86_64-linux-gnu"
 
