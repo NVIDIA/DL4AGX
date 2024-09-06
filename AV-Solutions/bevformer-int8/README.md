@@ -87,9 +87,14 @@ $ python /mnt/tools/quantize_model.py --onnx_path=/mnt/models/bevformer_tiny_epo
       --op_types_to_exclude MatMul \
       --calibration_data_path=/workspace/BEVFormer_tensorrt/data/nuscenes/calib_data.npz
 ```
-> This generates an ONNX model with suffix `.quant.onnx` with Q/DQ nodes.
+> This generates an ONNX model with suffix `.quant.onnx` with Q/DQ nodes around relevant layers.
 
-**Note**: If you're running out of memory, you may need to add `CUDA_MODULE_LOADING=LAZY` to the beginning of that
+**Notes**:
+- MatMul ops are not being quantized (`--op_types_to_exclude MatMul`). The reasoning for this is that MHA blocks, 
+  present in Transformer-based models, are currently recommended to run in FP16. Keep in mind that optimal Q/DQ node
+  placement can vary for different models, so there may be cases where quantizing MatMul ops may be more advantageous.
+  This is up to the user to decide.
+- If you're running out of memory, you may need to add `CUDA_MODULE_LOADING=LAZY` to the beginning of that
  quantization command. This is only valid for CUDA 12.x. No such variable is needed with CUDA 11.8.
 
 ## 4. Deploy TensorRT engine
@@ -116,13 +121,13 @@ $ python tools/bevformer/evaluate_trt.py \
 # Results
 **Model**: BEVFormer tiny with FP16 plugins with nv_half2 (`bevformer_tiny_epoch_24_cp2_post_simp.onnx`)
 
-**System**: A40, TRT 10.3.0.26
+**System**: A40, TRT 10.3.0.28 -> **ONGOING**: Requested PBR with TRT 10.3.0.26 to match TRT version on public container!
 
-| Precision                   | GPU Compute Time (median, ms) | Accuracy (NDS / mAP)   |
-|-----------------------------|-------------------------------|------------------------|
-| FP32                        |                               | NDS: 0.354, mAP: 0.252 |
-| FP16                        |                               | NDS: 0.354, mAP: 0.252 |
-| BEST (TensorRT PTQ)         |                               | NDS: 0.353, mAP: 0.250 |
-| **QDQ_BEST** (ModelOpt PTQ) |                               | NDS: 0.352, mAP: 0.251 |
+| Precision                   | GPU Compute Time (median, ms) | Accuracy (NDS / mAP)       |
+|-----------------------------|-------------------------------|----------------------------|
+| FP32                        | 19.37                         | NDS: 0.354, mAP: 0.252     |
+| FP16                        | 9.98                          | NDS: 0.354, mAP: 0.252     |
+| BEST (TensorRT PTQ)         | 7.39                          | NDS: 0.353, mAP: 0.250     |
+| **QDQ_BEST** (ModelOpt PTQ) | **6.91**                      | **NDS: 0.352, mAP: 0.251** |
 
-> See [results/README.md](results/README.md) for how to reproduce the results.
+> See [results/README.md](results/README.md) to reproduce the results.
