@@ -58,7 +58,7 @@ $ export PLUGIN_PATH=/workspace/BEVFormer_tensorrt/TensorRT/lib/libtensorrt_ops.
 $ python /mnt/tools/onnx_postprocess.py --onnx=/mnt/models/bevformer_tiny_epoch_24_cp2_op13.onnx \
   --plugins $PLUGIN_PATH \
   --custom_ops RotateTRT2 MultiScaleDeformableAttnTRT2 \
-  --plugins_precision MultiScaleDeformableAttnTRT2:[fp16,int32,fp16,fp16,fp16]:[fp16]
+  --plugins_precision MultiScaleDeformableAttnTRT2:[fp32,int64,fp32,fp32,fp32]:[fp32]
 ```
 > This will generate an ONNX file of same name as the input ONNX file with the suffix `*_post_simp.onnx`.
 >  May need to use `CUDA_MODULE_LOADING=LAZY` if using CUDA 12.x. No such variable is needed with CUDA 11.8.
