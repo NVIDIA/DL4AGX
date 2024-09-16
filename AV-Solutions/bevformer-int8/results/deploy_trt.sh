@@ -6,7 +6,11 @@ DEVICE="A40"
 LOGS_DIR="${MODEL_DIR}/logs_${DEVICE}_trt${TRT_VERSION}"
 mkdir -p $LOGS_DIR
 
+BEVFORMER_REPO=/workspace/BEVFormer_tensorrt
+ROOT_DIR=$(pwd)
+
 MODEL_NAMES=(
+  bevformer_tiny_epoch_24_cp_op13_post_simp
   bevformer_tiny_epoch_24_cp2_op13_post_simp
 )
 
@@ -34,7 +38,7 @@ for (( i=0; i<$len; i++ )); do
     wait
   done
 
-  echo "Quantize model:"
+  echo "Quantize model - ModelOpt PTQ (Explicit Quantization):"
   python /mnt/tools/quantize_model.py \
     --onnx_path=${MODEL_DIR}/${MODEL_NAME}.onnx \
     --output_path=${MODEL_DIR}/${MODEL_NAME}.quant.onnx \
@@ -50,6 +54,23 @@ for (( i=0; i<$len; i++ )); do
             --${PRECISION} &> ${LOGS_DIR}/${MODEL_NAME}_qat_${PRECISION}_trtexec.log
     wait
   done
+
+  echo "Quantize model - TensorRT PTQ (Implicit Quantization):"
+  cd $BEVFORMER_REPO
+  IQ_ENGINE_PATH=${LOGS_DIR}/${MODEL_NAME}_IQ_PTQ
+  python /mnt/results/onnx2trt_calib_npz.py configs/bevformer/plugin/bevformer_tiny_trt_p2.py \
+        --onnx_path=${MODEL_DIR}/${MODEL_NAME}.onnx \
+        --output=${IQ_ENGINE_PATH}.engine \
+        --int8 --fp16 \
+        --calibrator entropy \
+        --calibration_data_path=$CALIB_PATH \
+        --trt_plugins=$PLUGIN_PATH
+  wait
+  # Obtain engine's runtime
+  trtexec --loadEngine=${IQ_ENGINE_PATH}.engine \
+          --staticPlugins=$PLUGIN_PATH &> ${IQ_ENGINE_PATH}_trtexec.log
+  wait
+  cd $ROOT_DIR
 
 done
 

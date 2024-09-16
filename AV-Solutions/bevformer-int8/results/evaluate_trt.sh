@@ -5,6 +5,7 @@ LOGS_DIR="${MODEL_DIR}/logs_${DEVICE}_trt${TRT_VERSION}"
 BEVFORMER_REPO=/workspace/BEVFormer_tensorrt
 
 MODEL_NAMES=(
+  bevformer_tiny_epoch_24_cp_op13_post_simp
   bevformer_tiny_epoch_24_cp2_op13_post_simp
 )
 
@@ -22,17 +23,17 @@ for (( i=0; i<$len; i++ )); do
   echo "Baseline:"
   for PRECISION in fp16 fp32; do
     echo "  - ${PRECISION}"
-    ENGINE_PATH=${LOGS_DIR}/${MODEL_NAME}_${PRECISION}.engine
+    ENGINE_PATH=${LOGS_DIR}/${MODEL_NAME}_${PRECISION}
     python tools/bevformer/evaluate_trt.py \
            configs/bevformer/plugin/bevformer_tiny_trt_p2.py \
-           $ENGINE_PATH \
-           --trt_plugins=$PLUGIN_PATH | tee ${LOGS_DIR}/${MODEL_NAME}_${PRECISION}_acc.log
+           ${ENGINE_PATH}.engine \
+           --trt_plugins=$PLUGIN_PATH | tee ${ENGINE_PATH}_acc.log
     wait
   done
 
-  echo "Quantized:"
+  echo "Quantized - ModelOpt PTQ (Explicit Quantization):"
   for PRECISION in best; do
-    echo "    - ${PRECISION}"
+    echo "  - ${PRECISION}"
     ENGINE_PATH=${LOGS_DIR}/${MODEL_NAME}_qat_${PRECISION}
     python tools/bevformer/evaluate_trt.py \
             configs/bevformer/plugin/bevformer_tiny_trt_p2.py \
@@ -41,6 +42,14 @@ for (( i=0; i<$len; i++ )); do
     wait
   done
 
+  echo "Quantized - TensorRT PTQ (Implicit Quantization):"
+  ENGINE_PATH=${LOGS_DIR}/${MODEL_NAME}_IQ_PTQ
+  python tools/bevformer/evaluate_trt.py \
+          configs/bevformer/plugin/bevformer_tiny_trt_p2.py \
+          ${ENGINE_PATH}.engine \
+          --trt_plugins=$PLUGIN_PATH | tee ${ENGINE_PATH}_acc.log
+  wait
 done
 
+echo "\n======== SUMMARY ========"
 tail -n 4 $LOGS_DIR/*_acc.log

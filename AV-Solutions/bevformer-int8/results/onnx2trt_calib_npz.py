@@ -69,7 +69,7 @@ def parse_args():
             "are in the PATH or LD_LIBRARY_PATH variables."
         ),
     )
-    parser.add_argument("--output", default=None, help="Path to save calibration data.")
+    parser.add_argument("--output", default=None, help="Path to save calibrated TensorRT engine.")
     parser.add_argument("--verbose", action="store_true", help="If verbose, print all the debug info.")
     args = parser.parse_args()
     return args
@@ -142,7 +142,7 @@ def main():
             config.dynamic_input.reg,
             config.dynamic_input.max,
         ]
-    output = args.output or os.path.join(args.onnx_path.replace(".onnx", "_TRT_PTQ.engine"))
+    output = args.output or os.path.join(args.onnx_path.replace(".onnx", "_IQ_PTQ.engine"))
     build_engine(
         args.onnx_path,
         output,

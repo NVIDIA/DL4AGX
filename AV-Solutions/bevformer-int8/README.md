@@ -119,15 +119,27 @@ $ python tools/bevformer/evaluate_trt.py \
 ```
 
 # Results
-**Model**: BEVFormer tiny with FP16 plugins with nv_half2 (`bevformer_tiny_epoch_24_cp2_post_simp.onnx`)
+**System**: A40, TRT 10.3.0.26 (**INTERNAL NUMBERS**, Requested PBR - WIP)
 
-**System**: A40, TRT 10.3.0.28 -> **ONGOING**: Requested PBR with TRT 10.3.0.26 to match TRT version on public container!
+BEVFormer tiny with FP16 plugins with `nv_half2` (`bevformer_tiny_epoch_24_cp2_post_simp.onnx`):
 
-| Precision                   | GPU Compute Time (median, ms) | Accuracy (NDS / mAP)       |
-|-----------------------------|-------------------------------|----------------------------|
-| FP32                        | 19.37                         | NDS: 0.354, mAP: 0.252     |
-| FP16                        | 9.98                          | NDS: 0.354, mAP: 0.252     |
-| BEST (TensorRT PTQ)         | 7.39                          | NDS: 0.353, mAP: 0.250     |
-| **QDQ_BEST** (ModelOpt PTQ) | **6.91**                      | **NDS: 0.352, mAP: 0.251** |
+| Precision                                                                     | GPU Compute Time (median, ms) | Accuracy (NDS / mAP)   |
+|-------------------------------------------------------------------------------|-------------------------------|------------------------|
+| FP32                                                                          | 18.70                         | NDS: 0.354, mAP: 0.252 |
+| FP16                                                                          | 9.28                          | NDS: 0.354, mAP: 0.251 |
+| BEST (TensorRT PTQ - Implicit Quantization)                                   | 6.22                          | NDS: 0.353, mAP: 0.25  |
+| QDQ_BEST (ModelOpt PTQ - Explicit Quantization - default quantization)        | 7.32                          | NDS: 0.026, mAP: 0.0   |
+| QDQ_BEST (ModelOpt PTQ - Explicit Quantization - exclude MatMul quantization) | 6.06                          | NDS: 0.352, mAP: 0.251 |
+
+
+BEVFormer tiny with FP16 plugins with `nv_half` (`bevformer_tiny_epoch_24_cp_post_simp.onnx`):
+
+| Precision                                                                     | GPU Compute Time (median, ms) | Accuracy (NDS / mAP)   |
+|-------------------------------------------------------------------------------|-------------------------------|------------------------|
+| FP32                                                                          | 18.67                         | NDS: 0.354, mAP: 0.252 |
+| FP16                                                                          | 9.83                          | NDS: 0.354, mAP: 0.251 |
+| BEST (TensorRT PTQ - Implicit Quantization)                                   | 6.70                          | NDS: 0.353, mAP: 0.25  |
+| QDQ_BEST (ModelOpt PTQ - Explicit Quantization - default quantization)        | 7.83                          | NDS: 0.026, mAP: 0.0   |
+| QDQ_BEST (ModelOpt PTQ - Explicit Quantization - exclude MatMul quantization) | 6.50                          | NDS: 0.353, mAP: 0.251 |
 
 > See [results/README.md](results/README.md) to reproduce the results.
