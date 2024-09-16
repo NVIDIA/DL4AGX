@@ -105,6 +105,246 @@ index 0a913c1..321e167 100644
                        GridSamplerInterpolation interp,
                        GridSamplerPadding padding, bool align_corners,
                        cudaStream_t stream);
+diff --git a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.cu b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.cu
+index e1a70ac..3bd468a 100644
+--- a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.cu
++++ b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.cu
+@@ -610,7 +610,7 @@ __device__ void ms_deform_attn_im2col_bilinear_int8_h2_(
+ 
+ template <typename scalar_t>
+ __global__ void ms_deformable_im2col_gpu_kernel(
+-    const int n, const scalar_t *data_value, const int32_t *data_spatial_shapes,
++    const int n, const scalar_t *data_value, const TRT_INT *data_spatial_shapes,
+     const scalar_t *data_reference_points,
+     const scalar_t *data_sampling_offsets, const scalar_t *data_attn_weight,
+     const int spatial_size, const int num_heads, const int channels,
+@@ -689,7 +689,7 @@ __global__ void ms_deformable_im2col_gpu_kernel(
+ 
+ template <>
+ __global__ void ms_deformable_im2col_gpu_kernel(
+-    const int n, const __half *data_value, const int32_t *data_spatial_shapes,
++    const int n, const __half *data_value, const TRT_INT *data_spatial_shapes,
+     const __half *data_reference_points, const __half *data_sampling_offsets,
+     const __half *data_attn_weight, const int spatial_size, const int num_heads,
+     const int channels, const int num_levels, const int num_query,
+@@ -770,7 +770,7 @@ __global__ void ms_deformable_im2col_gpu_kernel(
+ }
+ 
+ __global__ void ms_deformable_im2col_gpu_kernel_h2(
+-    const int n, const __half2 *data_value, const int32_t *data_spatial_shapes,
++    const int n, const __half2 *data_value, const TRT_INT *data_spatial_shapes,
+     const __half2 *data_reference_points, const __half2 *data_sampling_offsets,
+     const __half *data_attn_weight, const int spatial_size, const int num_heads,
+     const int channels, const int num_levels, const int num_query,
+@@ -848,7 +848,7 @@ __global__ void ms_deformable_im2col_gpu_kernel_h2(
+ template <typename scalar_t>
+ __global__ void ms_deformable_im2col_gpu_kernel_int8(
+     const int n, const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const scalar_t *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const scalar_t *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int spatial_size,
+     const int num_heads, const int channels, const int num_levels,
+@@ -957,7 +957,7 @@ __global__ void ms_deformable_im2col_gpu_kernel_int8(
+ template <>
+ __global__ void ms_deformable_im2col_gpu_kernel_int8(
+     const int n, const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const __half2 *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const __half2 *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int spatial_size,
+     const int num_heads, const int channels, const int num_levels,
+@@ -1105,7 +1105,7 @@ __global__ void ms_deformable_im2col_gpu_kernel_int8(
+ 
+ template <typename scalar_t>
+ void ms_deformable_im2col_cuda(const scalar_t *data_value,
+-                               const int32_t *data_spatial_shapes,
++                               const TRT_INT *data_spatial_shapes,
+                                const scalar_t *data_reference_points,
+                                const scalar_t *data_sampling_offsets,
+                                const scalar_t *data_attn_weight,
+@@ -1129,7 +1129,7 @@ void ms_deformable_im2col_cuda(const scalar_t *data_value,
+ 
+ template <>
+ void ms_deformable_im2col_cuda(
+-    const __half *data_value, const int32_t *data_spatial_shapes,
++    const __half *data_value, const TRT_INT *data_spatial_shapes,
+     const __half *data_reference_points, const __half *data_sampling_offsets,
+     const __half *data_attn_weight, const int batch_size,
+     const int spatial_size, const int num_heads, const int channels,
+@@ -1149,7 +1149,7 @@ void ms_deformable_im2col_cuda(
+ }
+ 
+ void ms_deformable_im2col_cuda_h2(
+-    const __half2 *data_value, const int32_t *data_spatial_shapes,
++    const __half2 *data_value, const TRT_INT *data_spatial_shapes,
+     const __half2 *data_reference_points, const __half2 *data_sampling_offsets,
+     const __half *data_attn_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+@@ -1171,7 +1171,7 @@ void ms_deformable_im2col_cuda_h2(
+ template <typename scalar_t>
+ void ms_deformable_im2col_cuda_int8(
+     const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const scalar_t *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const scalar_t *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+@@ -1196,7 +1196,7 @@ void ms_deformable_im2col_cuda_int8(
+ template <>
+ void ms_deformable_im2col_cuda_int8(
+     const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const __half2 *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const __half2 *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+@@ -1218,7 +1218,7 @@ void ms_deformable_im2col_cuda_int8(
+ }
+ 
+ template void ms_deformable_im2col_cuda<float>(
+-    const float *data_value, const int32_t *data_spatial_shapes,
++    const float *data_value, const TRT_INT *data_spatial_shapes,
+     const float *data_reference_points, const float *data_sampling_offsets,
+     const float *data_attn_weight, const int batch_size, const int spatial_size,
+     const int num_heads, const int channels, const int num_levels,
+@@ -1226,7 +1226,7 @@ template void ms_deformable_im2col_cuda<float>(
+     float *data_col, cudaStream_t stream);
+ 
+ template void ms_deformable_im2col_cuda<__half>(
+-    const __half *data_value, const int32_t *data_spatial_shapes,
++    const __half *data_value, const TRT_INT *data_spatial_shapes,
+     const __half *data_reference_points, const __half *data_sampling_offsets,
+     const __half *data_attn_weight, const int batch_size,
+     const int spatial_size, const int num_heads, const int channels,
+@@ -1235,7 +1235,7 @@ template void ms_deformable_im2col_cuda<__half>(
+ 
+ template void ms_deformable_im2col_cuda_int8<float>(
+     const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const float *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const float *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+@@ -1245,7 +1245,7 @@ template void ms_deformable_im2col_cuda_int8<float>(
+ 
+ template void ms_deformable_im2col_cuda_int8<__half2>(
+     const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const __half2 *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const __half2 *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+diff --git a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.h b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.h
+index 78785d1..a9bdb1a 100644
+--- a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.h
++++ b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.h
+@@ -9,9 +9,12 @@
+ #include <cuda_fp16.h>
+ #include <cuda_runtime.h>
+ 
++#include <type_traits>
++typedef std::conditional<NV_TENSORRT_MAJOR<10, int32_t, int64_t>::type TRT_INT;
++
+ template <typename T>
+ void ms_deformable_im2col_cuda(
+-    const T *data_value, const int32_t *data_spatial_shapes,
++    const T *data_value, const TRT_INT *data_spatial_shapes,
+     const T *data_reference_points, const T *data_sampling_offsets,
+     const T *data_attn_weight, const int batch_size, const int spatial_size,
+     const int num_heads, const int channels, const int num_levels,
+@@ -19,7 +22,7 @@ void ms_deformable_im2col_cuda(
+     T *data_col, cudaStream_t stream);
+ 
+ void ms_deformable_im2col_cuda_h2(
+-    const __half2 *data_value, const int32_t *data_spatial_shapes,
++    const __half2 *data_value, const TRT_INT *data_spatial_shapes,
+     const __half2 *data_reference_points, const __half2 *data_sampling_offsets,
+     const __half *data_attn_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+@@ -29,7 +32,7 @@ void ms_deformable_im2col_cuda_h2(
+ template <typename T>
+ void ms_deformable_im2col_cuda_int8(
+     const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const T *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const T *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+diff --git a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.cpp b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.cpp
+index 67886e0..4b67dd1 100644
+--- a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.cpp
++++ b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.cpp
+@@ -96,7 +96,7 @@ int32_t MultiScaleDeformableAttnPlugin::enqueue(
+   switch (data_type) {
+   case DataType::kFLOAT:
+     ms_deformable_im2col_cuda<float>(
+-        (float *)inputs[0], (int32_t *)inputs[1], (float *)inputs[2],
++        (float *)inputs[0], (TRT_INT *)inputs[1], (float *)inputs[2],
+         (float *)inputs[3], (float *)inputs[4], batch, spatial_size, num_heads,
+         channels, num_levels, num_query, num_point, points_per_group,
+         (float *)outputs[0], stream);
+@@ -104,13 +104,13 @@ int32_t MultiScaleDeformableAttnPlugin::enqueue(
+   case DataType::kHALF:
+     if (use_h2) {
+       ms_deformable_im2col_cuda_h2(
+-          (__half2 *)inputs[0], (int32_t *)inputs[1], (__half2 *)inputs[2],
++          (__half2 *)inputs[0], (TRT_INT *)inputs[1], (__half2 *)inputs[2],
+           (__half2 *)inputs[3], (__half *)inputs[4], batch, spatial_size,
+           num_heads, channels, num_levels, num_query, num_point,
+           points_per_group, (__half2 *)outputs[0], stream);
+     } else {
+       ms_deformable_im2col_cuda<__half>(
+-          (__half *)inputs[0], (int32_t *)inputs[1], (__half *)inputs[2],
++          (__half *)inputs[0], (TRT_INT *)inputs[1], (__half *)inputs[2],
+           (__half *)inputs[3], (__half *)inputs[4], batch, spatial_size,
+           num_heads, channels, num_levels, num_query, num_point,
+           points_per_group, (__half *)outputs[0], stream);
+@@ -119,14 +119,14 @@ int32_t MultiScaleDeformableAttnPlugin::enqueue(
+   case DataType::kINT8:
+     if (data_type_rp == DataType::kHALF) {
+       ms_deformable_im2col_cuda_int8<__half2>(
+-          (int8_4 *)inputs[0], scale_value, (int32_t *)inputs[1],
++          (int8_4 *)inputs[0], scale_value, (TRT_INT *)inputs[1],
+           (__half2 *)inputs[2], (int8_4 *)inputs[3], scale_offset,
+           (int8_4 *)inputs[4], scale_weight, batch, spatial_size, num_heads,
+           channels, num_levels, num_query, num_point, points_per_group,
+           (int8_4 *)outputs[0], scale_out, stream);
+     } else {
+       ms_deformable_im2col_cuda_int8<float>(
+-          (int8_4 *)inputs[0], scale_value, (int32_t *)inputs[1],
++          (int8_4 *)inputs[0], scale_value, (TRT_INT *)inputs[1],
+           (float *)inputs[2], (int8_4 *)inputs[3], scale_offset,
+           (int8_4 *)inputs[4], scale_weight, batch, spatial_size, num_heads,
+           channels, num_levels, num_query, num_point, points_per_group,
+@@ -163,7 +163,7 @@ bool MultiScaleDeformableAttnPlugin::supportsFormatCombination(
+            (inOut[pos].type == nvinfer1::DataType::kINT8 &&
+             inOut[pos].format == nvinfer1::TensorFormat::kLINEAR && use_int8);
+   case 1:
+-    return inOut[pos].type == nvinfer1::DataType::kINT32 &&
++    return inOut[pos].type == TRT_kINT &&
+            inOut[pos].format == nvinfer1::TensorFormat::kLINEAR;
+   case 2:
+     if (inOut[0].type == nvinfer1::DataType::kFLOAT ||
+diff --git a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.h b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.h
+index c93610b..d52c2e3 100644
+--- a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.h
++++ b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.h
+@@ -11,6 +11,14 @@
+ #include <string>
+ #include <vector>
+ 
++#if NV_TENSORRT_MAJOR < 10
++  #define TRT_kINT nvinfer1::DataType::kINT32
++#else
++  #define TRT_kINT nvinfer1::DataType::kINT64
++#endif
++#include <type_traits>
++typedef std::conditional<NV_TENSORRT_MAJOR<10, int32_t, int64_t>::type TRT_INT;
++
+ namespace trt_plugin {
+ 
+ class MultiScaleDeformableAttnPlugin : public nvinfer1::IPluginV2DynamicExt {
 diff --git a/TensorRT/plugin/rotate/rotateKernel.cu b/TensorRT/plugin/rotate/rotateKernel.cu
 index 379b7cc..71e1f9f 100644
 --- a/TensorRT/plugin/rotate/rotateKernel.cu
