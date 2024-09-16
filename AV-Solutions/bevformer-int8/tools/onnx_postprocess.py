@@ -106,9 +106,14 @@ def add_fp16_fp32_cast(onnx_path, custom_ops_to_cast):
         elif precision == "fp32":
             onnx_precision = int(onnx.TensorProto.FLOAT)
             np_precision = "float32"
-        else:
+        elif precision == "int32":
             onnx_precision = int(onnx.TensorProto.INT32)
             np_precision = "int32"
+        elif precision == "int64":
+            onnx_precision = int(onnx.TensorProto.INT64)
+            np_precision = "int64"
+        else:
+            raise f"Precision {precision} not supported!"
 
         cast_out = gs.Variable(
             name=_get_unique_name(tensor.name + f"_{precision}{suffix}"),
@@ -143,9 +148,6 @@ def add_fp16_fp32_cast(onnx_path, custom_ops_to_cast):
         )
         graph.nodes.append(cast_node)
         return cast_inp
-
-    def _is_constant(tensor):
-        return isinstance(tensor, gs.Constant) or (tensor.inputs and tensor.inputs[0].op == "Constant")
 
     def _check_precision_list(precisions, num_tensors, node_name):
         if isinstance(precisions, list):
@@ -184,7 +186,7 @@ def add_fp16_fp32_cast(onnx_path, custom_ops_to_cast):
 
     graph.cleanup().toposort()
 
-    new_onnx_path = onnx_path.replace(".onnx", "_castFP16.onnx")
+    new_onnx_path = onnx_path.replace(".onnx", "_cast.onnx")
     onnx.save(gs.export_onnx(graph), new_onnx_path)
     return new_onnx_path
 
