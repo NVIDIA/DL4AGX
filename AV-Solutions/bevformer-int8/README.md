@@ -8,13 +8,13 @@ This repository contains an end-to-end example of deploying BEVFormer with expli
 - onnx-graphsurgeon
 - onnsim
 - [ModelOpt toolkit](https://github.com/NVIDIA/TensorRT-Model-Optimizer) >= 0.15.0
-- [DerryHub's BEVFormer](https://github.com/DerryHub/BEVFormer_tensorrt)
+- [BEVFormer_tensorrt](https://github.com/DerryHub/BEVFormer_tensorrt)
 
 ## Prepare dataset
-Follow the [Data Preparation steps](https://github.com/DerryHub/BEVFormer_tensorrt#nuscenes-and-can-bus-for-bevformer) for NuScenes and CAN bus in the DerryHub repo.
+Follow the [Data Preparation steps](https://github.com/DerryHub/BEVFormer_tensorrt#nuscenes-and-can-bus-for-bevformer) for NuScenes and CAN bus.
  This will prepare the full train / validation dataset.
 
-## Docker
+## Prepare docker image
 Build docker image:
 ```bash
 $ export TAG=tensorrt_bevformer:24.08
@@ -24,7 +24,7 @@ $ docker build -f docker/tensorrt.Dockerfile --no-cache --tag=$TAG .
 # How to Run
 
 ## 1. Export model to ONNX and compile plugins
-A. Download model weights from [DerryHub's repository](https://github.com/DerryHub/BEVFormer_tensorrt#bevformer-pytorch), 
+A. Download model weights from [here](https://github.com/DerryHub/BEVFormer_tensorrt#bevformer-pytorch) 
  and save it in `./models`:
 ```sh
 $ wget -P ./models https://github.com/zhiqi-li/storage/releases/download/v1.0/bevformer_tiny_epoch_24.pth
@@ -35,7 +35,7 @@ B. Run docker container:
 $ docker run -it --rm --gpus device=0 --network=host --shm-size 20g -v $(pwd):/mnt -v <path to data>:/workspace/BEVFormer_tensorrt/data $TAG
 ```
 
-C. In docker container, patch `BEVFormer_tensorrt` folder, compile plugins, and export ONNX model:
+C. In docker container, patch the `BEVFormer_tensorrt` folder and compile plugins:
 ```sh
 # 1. Apply patch to BEVFormer_tensorrt with changes necessary for TensorRT 10 support
 $ cd /workspace/BEVFormer_tensorrt
@@ -45,8 +45,11 @@ $ git apply /mnt/bevformer_trt10.patch
 $ cd TensorRT/build
 $ cmake .. -DCMAKE_TENSORRT_PATH=/usr/include/x86_64-linux-gnu
 $ make -j$(nproc) && make install
+```
+> The compiled plugin will be saved in `TensorRT/lib/libtensorrt_ops.so`, which will later be used by both ModelOpt and TensorRT.
 
-# 3. Export simplified ONNX model from torch
+D. Export simplified ONNX model from torch:
+```sh
 $ cd /workspace/BEVFormer_tensorrt
 $ python tools/pth2onnx.py configs/bevformer/plugin/bevformer_tiny_trt_p2.py /mnt/models/bevformer_tiny_epoch_24.pth --opset=13 --cuda --flag=cp2_op13
 $ cp checkpoints/onnx/bevformer_tiny_epoch_24_cp2_op13.onnx /mnt/models/
@@ -97,7 +100,7 @@ $ python /mnt/tools/quantize_model.py --onnx_path=/mnt/models/bevformer_tiny_epo
 - If you're running out of memory, you may need to add `CUDA_MODULE_LOADING=LAZY` to the beginning of that
  quantization command. This is only valid for CUDA 12.x. No such variable is needed with CUDA 11.8.
 
-## 4. Deploy TensorRT engine
+## 4. Build TensorRT engine
 ```sh
 $ trtexec --onnx=/mnt/models/bevformer_tiny_epoch_24_cp2_post_simp.quant.onnx \
 	      --saveEngine=/mnt/models/bevformer_tiny_epoch_24_cp2_post_simp.quant.engine \
@@ -119,7 +122,7 @@ $ python tools/bevformer/evaluate_trt.py \
 ```
 
 # Results
-**System**: A40, TRT 10.3.0.26
+**System**: NVIDIA A40 GPU, TensorRT 10.3.0.26.
 
 BEVFormer tiny with FP16 plugins with `nv_half2` (`bevformer_tiny_epoch_24_cp2_post_simp.onnx`):
 
@@ -140,4 +143,7 @@ BEVFormer tiny with FP16 plugins with `nv_half` (`bevformer_tiny_epoch_24_cp_pos
 | BEST (TensorRT PTQ - Implicit Quantization)     | 6.73                          | NDS: 0.353, mAP: 0.250 |
 | QDQ_BEST (ModelOpt PTQ - Explicit Quantization) | 6.54                          | NDS: 0.353, mAP: 0.251 |
 
-> See [results/README.md](results/README.md) to reproduce the results.
+## Steps to reproduce
+To reproduce the results, run:
+1. `./deploy_trt.sh` to build/save the TensorRT engine and obtain the runtime;
+2. `./evaluate_trt.sh` to evaluate the TensorRT engine's accuracy.
