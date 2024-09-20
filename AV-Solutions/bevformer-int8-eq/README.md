@@ -59,15 +59,14 @@ $ cp checkpoints/onnx/bevformer_tiny_epoch_24_cp2_op13.onnx /mnt/models/
 $ export PLUGIN_PATH=/workspace/BEVFormer_tensorrt/TensorRT/lib/libtensorrt_ops.so
 $ python /mnt/tools/onnx_postprocess.py --onnx=/mnt/models/bevformer_tiny_epoch_24_cp2_op13.onnx \
   --plugins $PLUGIN_PATH \
-  --custom_ops RotateTRT2 MultiScaleDeformableAttnTRT2 \
-  --plugins_precision MultiScaleDeformableAttnTRT2:[fp32,int64,fp32,fp32,fp32]:[fp32]
+  --custom_ops RotateTRT2 MultiScaleDeformableAttnTRT2
 ```
 > This will generate an ONNX file of same name as the input ONNX file with the suffix `*_post_simp.onnx`.
 >  May need to use `CUDA_MODULE_LOADING=LAZY` if using CUDA 12.x. No such variable is needed with CUDA 11.8.
 
 This script does the following post-processing actions:
 1. Add `trt.plugins` domain to the ONNX file to enable ORT to detect the custom ops as TRT custom ops. This step generates a new ONNX file with *_ort_support.onnx extension.
-2. If the precisions of the plugin inputs are given, ensure them by adding Cast nodes.
+2. Ensure that all nodes have I/O tensor types.
 3. Infer tensor shapes with `ORT` and modify the ONNX graph accordingly with `onnx-graphsurgeon`.
 4. Simplify model with `onnxsim`.
 
