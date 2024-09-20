@@ -43,8 +43,7 @@ $ git apply /mnt/bevformer_trt10.patch
 
 # 2. Compile plugins
 $ cd TensorRT/build
-$ cmake .. -DCMAKE_TENSORRT_PATH=/usr/include/x86_64-linux-gnu
-$ make -j$(nproc) && make install
+$ cmake .. && make -j$(nproc) && make install
 ```
 > The compiled plugin will be saved in `TensorRT/lib/libtensorrt_ops.so`, which will later be used by both ModelOpt and TensorRT.
 
