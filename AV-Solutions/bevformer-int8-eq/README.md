@@ -78,7 +78,7 @@ $ python /mnt/tools/calib_data_prep.py configs/bevformer/plugin/bevformer_tiny_t
     --onnx_path=/mnt/models/bevformer_tiny_epoch_24_cp2_op13_post_simp.onnx \
     --trt_plugins=$PLUGIN_PATH
 ```
-> The calibration data will be saved in `data/nuscenes/calib_data.npz`.
+> The calibration data will be saved in `data/nuscenes/calib_data.npz`. The script uses 600 calibration samples by default.
 >  See [instructions](https://github.com/NVIDIA/TensorRT-Model-Optimizer/tree/main/onnx_ptq#quantize-an-onnx-model) in the ModelOpt toolkit for more info on generating the calibration data.
 
 2. Quantize ONNX model with calibration data:  
