@@ -57,17 +57,15 @@ $ cp checkpoints/onnx/bevformer_tiny_epoch_24_cp2_op13.onnx /mnt/models/
 ## 2. Post-process ONNX model
 ```sh
 $ export PLUGIN_PATH=/workspace/BEVFormer_tensorrt/TensorRT/lib/libtensorrt_ops.so
-$ python /mnt/tools/onnx_postprocess.py --onnx=/mnt/models/bevformer_tiny_epoch_24_cp2_op13.onnx \
-  --plugins $PLUGIN_PATH \
-  --custom_ops RotateTRT2 MultiScaleDeformableAttnTRT2
+$ python /mnt/tools/onnx_postprocess.py --onnx=/mnt/models/bevformer_tiny_epoch_24_cp2_op13.onnx --trt_plugins=$PLUGIN_PATH
 ```
 > This will generate an ONNX file of same name as the input ONNX file with the suffix `*_post_simp.onnx`.
 >  May need to use `CUDA_MODULE_LOADING=LAZY` if using CUDA 12.x. No such variable is needed with CUDA 11.8.
 
 This script does the following post-processing actions:
-1. Add `trt.plugins` domain to the ONNX file to enable ORT to detect the custom ops as TRT custom ops. This step generates a new ONNX file with *_ort_support.onnx extension.
-2. Ensure that all nodes have I/O tensor types.
-3. Infer tensor shapes with `ORT` and modify the ONNX graph accordingly with `onnx-graphsurgeon`.
+1. Automatically detect custom TRT ops in the ONNX model.
+2. Ensure that the custom ops are supported as a TRT plugin in ONNX-Runtime (`trt.plugins` domain).
+3. Update all tensor types and shapes in the ONNX graph with `onnx-graphsurgeon`.
 4. Simplify model with `onnxsim`.
 
 ## 3. Quantize ONNX model
@@ -100,8 +98,8 @@ $ python /mnt/tools/quantize_model.py --onnx_path=/mnt/models/bevformer_tiny_epo
 
 ## 4. Build TensorRT engine
 ```sh
-$ trtexec --onnx=/mnt/models/bevformer_tiny_epoch_24_cp2_post_simp.quant.onnx \
-	      --saveEngine=/mnt/models/bevformer_tiny_epoch_24_cp2_post_simp.quant.engine \
+$ trtexec --onnx=/mnt/models/bevformer_tiny_epoch_24_cp2_op13_post_simp.quant.onnx \
+	      --saveEngine=/mnt/models/bevformer_tiny_epoch_24_cp2_op13_post_simp.quant.engine \
 	      --staticPlugins=$PLUGIN_PATH \
 	      --best
 ```
@@ -115,14 +113,14 @@ Run evaluation script:
 $ cd /workspace/BEVFormer_tensorrt
 $ python tools/bevformer/evaluate_trt.py \
          configs/bevformer/plugin/bevformer_tiny_trt_p2.py \
-         /mnt/models/bevformer_tiny_epoch_24_cp2_post_simp.quant.engine \
+         /mnt/models/bevformer_tiny_epoch_24_cp2_op13_post_simp.quant.engine \
          --trt_plugins=$PLUGIN_PATH
 ```
 
 # Results
 **System**: NVIDIA A40 GPU, TensorRT 10.3.0.26.
 
-BEVFormer tiny with FP16 plugins with `nv_half2` (`bevformer_tiny_epoch_24_cp2_post_simp.onnx`):
+BEVFormer tiny with FP16 plugins with `nv_half2` (`bevformer_tiny_epoch_24_cp2_op13_post_simp.onnx`):
 
 | Precision                                       | GPU Compute Time (median, ms) | Accuracy (NDS / mAP)   |
 |-------------------------------------------------|-------------------------------|------------------------|
@@ -132,7 +130,7 @@ BEVFormer tiny with FP16 plugins with `nv_half2` (`bevformer_tiny_epoch_24_cp2_p
 | QDQ_BEST (ModelOpt PTQ - Explicit Quantization) | 6.02                          | NDS: 0.352, mAP: 0.251 |
 
 
-BEVFormer tiny with FP16 plugins with `nv_half` (`bevformer_tiny_epoch_24_cp_post_simp.onnx`):
+BEVFormer tiny with FP16 plugins with `nv_half` (`bevformer_tiny_epoch_24_cp_op13_post_simp.onnx`):
 
 | Precision                                       | GPU Compute Time (median, ms) | Accuracy (NDS / mAP)   |
 |-------------------------------------------------|-------------------------------|------------------------|

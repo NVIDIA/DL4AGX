@@ -435,10 +435,10 @@ index d5808b9..e8f7030 100644
  
  #endif // TENSORRT_OPS_ROTATEKERNEL_H
 diff --git a/det2trt/convert/pytorch2onnx.py b/det2trt/convert/pytorch2onnx.py
-index 978e544..0cd9282 100644
+index 978e544..a01c8b4 100644
 --- a/det2trt/convert/pytorch2onnx.py
 +++ b/det2trt/convert/pytorch2onnx.py
-@@ -62,8 +62,8 @@ def pytorch2onnx(
+@@ -62,12 +62,13 @@ def pytorch2onnx(
          input_names=input_name,
          output_names=output_name,
          export_params=True,
@@ -449,6 +449,11 @@ index 978e544..0cd9282 100644
          verbose=verbose,
          opset_version=opset_version,
          dynamic_axes=dynamic_axes,
+         operator_export_type=OperatorExportTypes.ONNX_FALLTHROUGH,
++        autograd_inlining=False,
+     )
+ 
+     print(f"ONNX file has been saved in {output_file}")
 diff --git a/det2trt/quantization/calibrator_trt.py b/det2trt/quantization/calibrator_trt.py
 index af58840..59b9b30 100644
 --- a/det2trt/quantization/calibrator_trt.py

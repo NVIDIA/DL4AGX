@@ -15,205 +15,262 @@
 # limitations under the License.
 #
 
+import ctypes
+from typing import Dict, List, Tuple
+
 import argparse
-import os
 import numpy as np
-from collections import OrderedDict
 import onnx
 from onnxsim import simplify
-import onnxruntime as ort
 import onnx_graphsurgeon as gs
+import tensorrt as trt
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        "Simplifies an ONNX model with custom TRT plugin via ORT and onnxsim.\n"
-        "  1. Ensures that the custom op is supported as a TRT plugin in ORT (`trt.plugins` domain).\n"
-        "  2. Ensures that all nodes have I/O tensor types.\n"
-        "  3. Infer tensor shapes with ORT and update the graph accordingly with onnx-graphsurgeon.\n"
+        "Simplifies an ONNX model with custom TensorRT (TRT) plugins. Steps: \n"
+        "  1. Automatically detect custom TRT ops in the ONNX model.\n"
+        "  2. Ensure that the custom ops are supported as a TRT plugin in ONNX-Runtime (`trt.plugins` domain).\n"
+        "  3. Use ONNX-GraphSurgeon to update all tensor types and shapes in the ONNX graph.\n"
         "  4. Apply onnxsim to simplify model with inferred shapes."
     )
     parser.add_argument("--onnx", type=str, required=True, help="Input ONNX model path.")
-    parser.add_argument("--plugins", type=str, nargs="+", default=None,
-                        help="A space-separated list with paths to .so plugins.")
-    parser.add_argument("--custom_ops", type=str, nargs="+", default=None,
-                        help="A space-separated list with custom ops to ensure ORT support.")
-    parser.add_argument(
-        "--keep_intermediate_files",
-        action="store_true",
-        help="Indicates whether to keep or delete intermediate ONNX files."
-    )
+    parser.add_argument("--trt_plugins", type=str, default=None,
+                        help=("Specifies custom TensorRT plugin library paths in .so format (compiled shared library). "
+                              "For multiple paths, separate them with a semicolon, i.e.: 'lib_1.so;lib_2.so'."))
     args = parser.parse_args()
     return args
 
-intermediate_generated_files = []
+
+def get_custom_layers(onnx_path: str, trt_plugins: str = None) -> Tuple[List[str], Dict]:
+    """Gets custom layers in ONNX file.
+
+    Args:
+        onnx_path: Path to the input ONNX model.
+        trt_plugins: Paths to custom TensorRT plugins.
+
+    Returns:
+        List of custom layers.
+        Dict containing tensor names and shapes.
+    """
+    # Initialize TensorRT plugins
+    if trt_plugins is not None:
+        for plugin in trt_plugins.split(";"):
+            ctypes.CDLL(plugin)
+
+    # Create builder and network
+    trt_logger = trt.Logger(trt.Logger.WARNING)
+    builder = trt.Builder(trt_logger)
+    network = builder.create_network()
+
+    # Parse ONNX file
+    parser = trt.OnnxParser(network, trt_logger)
+    with open(onnx_path, "rb") as model:
+        if not parser.parse(model.read()):
+            error_str = [str(parser.get_error(error)) for error in range(parser.num_errors)]
+            raise Exception(f"Failed to parse ONNX file: {''.join(error_str)}")
+
+    # Obtain plugin layer names and all tensor shapes
+    custom_layers = []
+    all_tensor_shapes = {}
+    for layer_idx in range(network.num_layers):
+        layer = network.get_layer(layer_idx)
+        if "PLUGIN" in str(layer.type):
+            custom_layers.append(layer.name)
+
+        for i in range(layer.num_inputs):
+            input_tensor = layer.get_input(i)
+            if input_tensor:
+                inp_shape = ["unk" if (s == -1) else s for s in input_tensor.shape]
+                all_tensor_shapes[input_tensor.name] = inp_shape
+
+        for i in range(layer.num_outputs):
+            output_tensor = layer.get_output(i)
+            if output_tensor:
+                out_shape = ["unk" if (s == -1) else s for s in output_tensor.shape]
+                all_tensor_shapes[output_tensor.name] = out_shape
+
+    return custom_layers, all_tensor_shapes
 
 
-def ensure_ort_support(onnx_path, custom_ops_default=None):
-    trt_plugin_domain = "trt.plugins"
-    trt_plugin_version = 1
+def infer_types_in_graph(graph: gs.Graph, custom_ops: List[str]):
+    """Infers tensor types in ONNX GS graph."""
 
-    graph = gs.import_onnx(onnx.load(onnx_path))
-    has_custom_op = False
-    custom_ops = custom_ops_default or []
+    def _map_int_to_onnx_type(i: int):
+        """Returns the ONNX type equivalent to the given integer."""
+        int_onnx_type_to_string = {
+            1: "float32",  # onnx.TensorProto.FLOAT,
+            2: "uint8",  # onnx.TensorProto.UINT8,
+            3: "int8",  # onnx.TensorProto.INT8,
+            4: "uint16",  # onnx.TensorProto.UINT16,
+            5: "int16",  # onnx.TensorProto.INT16,
+            6: "int32",  # onnx.TensorProto.INT32,
+            7: "int64",  # onnx.TensorProto.INT64,
+            8: "string",  # onnx.TensorProto.STRING,
+            9: "bool",  # onnx.TensorProto.BOOL,
+            10: "float16",  # onnx.TensorProto.FLOAT16,
+            11: "float64",  # onnx.TensorProto.DOUBLE,
+            12: "uint32",  # onnx.TensorProto.UINT32,
+            13: "uint64",  # onnx.TensorProto.UINT64,
+            14: "complex64",  # onnx.TensorProto.COMPLEX64,
+            15: "complex128",  # onnx.TensorProto.COMPLEX128,
+            16: "bfloat16",  # onnx.TensorProto.BFLOAT16,
+        }
+        return int_onnx_type_to_string.get(i, None)
+
+    def _map_onnx_type_to_string(onnx_type: str):
+        """Returns the string equivalent of the given ONNX type."""
+        onnx_type_to_string = {
+            "tensor(float)": "float32",
+            "tensor(uint8)": "uint8",
+            "tensor(int8)": "int8",
+            "tensor(uint16)": "uint16",
+            "tensor(int16)": "int16",
+            "tensor(int32)": "int32",
+            "tensor(int64)": "int64",
+            "tensor(string)": "string",
+            "tensor(bool)": "bool",
+            "tensor(float16)": "float16",
+            "tensor(double)": "float64",
+            "tensor(uint32)": "uint32",
+            "tensor(uint64)": "uint64",
+            "tensor(complex64)": "complex64",
+            "tensor(complex128)": "complex128",
+            "tensor(bfloat16)": "bfloat16",
+        }
+        return onnx_type_to_string.get(onnx_type, None)
+
     for node in graph.nodes:
-        # Note: nodes with module="ai.onnx*" have domain=None. Sometimes, custom ops will have that domain, so
-        # the user would need to force those layers to be in the 'trt.plugins' domain by using the --custom_ops flag.
-        if node.op in custom_ops or node.domain:
-            has_custom_op = True
-            custom_ops.append(node.op)
-            node.domain = trt_plugin_domain
-    custom_ops = np.unique(custom_ops)
+        if node.op in custom_ops:
+            # Ensure all input tensors have a type
+            for inp in node.inputs:
+                if isinstance(inp, gs.Variable) and inp.dtype is None:
+                    inp.dtype = "float32"
 
-    if has_custom_op:
-        model = gs.export_onnx(graph)
-        model.opset_import.append(onnx.helper.make_opsetid(trt_plugin_domain, trt_plugin_version))
-        onnx_path = onnx_path.replace(".onnx", "_ort_support.onnx")
-        intermediate_generated_files.append(onnx_path)
-        onnx.save(model, onnx_path)
-        print(f"Custom ops detected: {custom_ops}!")
-    else:
-        print(
-            "Custom op not found in model! Model may already contain custom op with 'trt.plugins' domain."
-        )
-    return onnx_path
-
-
-def ensure_all_tensors_type(onnx_path):
-    model = onnx.load(onnx_path)
-    graph = gs.import_onnx(model)
-    for node in graph.nodes:
-        # Ensure all input tensors have a type
-        for inp in node.inputs:
-            if isinstance(inp, gs.Variable) and inp.dtype is None:
-                inp.dtype = "float32"
-
-        # Ensure all output tensors have a type
-        if node.op == "Identity":
-            node_inps = [inp for inp in node.inputs if isinstance(inp, gs.Constant)]
-            for out in node.outputs:
-                if out.dtype is None:
-                    out.dtype = node_inps[0].dtype if node_inps else "float32"
-        elif node.op in ["Constant", "ConstantOfShape"]:
-            for out in node.outputs:
-                if out.dtype is None:
-                    out.dtype = node.attrs['value'].dtype or "float32"
-        elif node.op == "Shape":
-            for out in node.outputs:
-                if out.dtype is None:
-                    out.dtype = "int64"
-        elif node.op in ["Greater", "GreaterOrEqual", "Less", "LessOrEqual", "Equal", "Not"]:
-            for out in node.outputs:
-                if out.dtype is None:
-                    out.dtype = "bool"
-        elif node.op == "Where":
-            for out in node.outputs:
-                if out.dtype is None:
-                    out.dtype = node.inputs[1].dtype
-        else:
+            # Ensure all output tensors have a type
             for out in node.outputs:
                 if out.dtype is None:
                     out.dtype = node.inputs[0].dtype or "float32"
+        else:
+            schema = onnx.defs.get_schema(node.op)
 
-    model = gs.export_onnx(graph)
-    onnx_path = onnx_path.replace(".onnx", "_dtype_fix.onnx")
-    intermediate_generated_files.append(onnx_path)
-    onnx.save(model, onnx_path)
-    return onnx_path
+            # Ensure all input tensors have a type
+            for inp, inp_schema in zip(node.inputs, schema.inputs):
+                if inp.dtype is None:
+                    inp.dtype = (
+                        "float32"
+                        if "tensor(float)" in list(inp_schema.types)
+                        else _map_onnx_type_to_string(list(inp_schema.types)[0])
+                    )
+
+            # Ensure all output tensors have a type
+            if node.op in ["Constant", "ConstantOfShape"]:
+                for out in node.outputs:
+                    if out.dtype is None:
+                        out.dtype = node.attrs["value"].dtype or "float32"
+            elif node.op == "Where":
+                for out in node.outputs:
+                    if out.dtype is None:
+                        out.dtype = node.inputs[1].dtype
+            elif node.op == "Cast":
+                for out in node.outputs:
+                    if out.dtype is None:
+                        out.dtype = _map_int_to_onnx_type(node.attrs["to"])
+            else:
+                # Check if the node has more than 1 output schema. If so, then replicate it N times to match the
+                #   actual number of node outputs.
+                schema_outputs = (
+                    schema.outputs
+                    if len(schema.outputs) > 1
+                    else schema.outputs * len(node.outputs)
+                )
+                for out, out_schema in zip(node.outputs, schema_outputs):
+                    if out.dtype is None:
+                        out.dtype = (
+                            node.inputs[0].dtype or "float32"
+                            if "tensor(float)" in list(out_schema.types)
+                            else _map_onnx_type_to_string(list(out_schema.types)[0])
+                        )
 
 
-def get_ort_tensor_shapes(onnx_path, plugin_paths=[]):
-    """Returns ORT tensor shapes for all tensors in the graph."""
-    model = onnx.load(onnx_path)
+def infer_shapes(graph: gs.Graph, all_tensor_shapes: Dict) -> None:
+    """Updates tensor shapes in ORT graph."""
+    for node in graph.nodes:
+        for out in node.outputs:
+            if out.name in all_tensor_shapes:
+                out.shape = all_tensor_shapes[out.name]
+    graph.cleanup().toposort()
 
-    # Load dummy inputs
-    def _load_dummy_data(input_info, data_size=5):
-        data = []
-        for _ in range(data_size):
-            data_sample = {}
-            for inp in input_info:
-                inp_shape = inp.shape
-                # If ONNX model has dynamic batch size, fix it to 1.
-                if isinstance(inp_shape[0], str) and not inp_shape[0].isdigit():
-                    inp_shape[0] = 1
-                data_sample[inp.name] = np.random.rand(*inp_shape).astype(np.float32)
-            data.append(data_sample)
-        return data
 
-    graph = gs.import_onnx(model)
-    input_info = [inp for inp in graph.inputs]
-    inp_dict = _load_dummy_data(input_info)[0]
+def load_ort_supported_model(
+    onnx_path: str, trt_plugins: str = None, use_external_data_format: bool = False
+) -> Tuple[onnx.onnx_pb.ModelProto, bool, List[str]]:
+    """Ensures that ONNX model is supported by ORT if it contains custom ops.
 
-    # Get output names
-    onnx_outputs_names = [out.name for out in model.graph.output]
+    Args:
+        onnx_path: Path to the input ONNX model.
+        trt_plugins: Paths to custom TensorRT plugins.
+        use_external_data_format: If True, separate data path will be used to store the weights of the quantized model.
 
-    # Expose all ONNX tensors as outputs
-    for node in model.graph.node:
-        for output in node.output:
-            if output not in onnx_outputs_names:
-                model.graph.output.extend([onnx.ValueInfoProto(name=output)])
-    onnx_path = onnx_path.replace(".onnx", "_infer_shapes_tmp.onnx")
-    intermediate_generated_files.append(onnx_path)
-    onnx.save(model, onnx_path)
+    Returns:
+        Loaded ONNX model supported by ORT.
+        Boolean indicating whether the model has custom ops or not.
+        List of custom ops in the ONNX model.
+    """
+    trt_plugin_domain = "trt.plugins"
+    trt_plugin_version = 1
 
-    # ======== Initialize and run ORT session ========
-    sess_options = ort.SessionOptions()
+    custom_layers, all_tensor_shapes = get_custom_layers(onnx_path, trt_plugins) or []
+    has_custom_op = True if custom_layers else False
 
-    # Set graph optimization level
-    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
-    sess_options.log_severity_level = 1
-    EP = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-    if plugin_paths:
-        trt_ep_options = {"trt_extra_plugin_lib_paths": ";".join(plugin_paths)}
-        EP.insert(0, ("TensorrtExecutionProvider", trt_ep_options))
+    onnx_model = onnx.load(onnx_path, load_external_data=use_external_data_format)
 
-    session = ort.InferenceSession(onnx_path, sess_options, providers=EP)
-    onnx_outputs_names = [x.name for x in session.get_outputs()]
-    onnx_out = session.run(onnx_outputs_names, inp_dict)
-    ort_outs = OrderedDict(zip(onnx_outputs_names, onnx_out))
+    custom_ops = []
+    if has_custom_op:
+        graph = gs.import_onnx(onnx_model)
+        for node in graph.nodes:
+            if node.name in custom_layers:
+                custom_ops.append(node.op)
+                node.domain = trt_plugin_domain
+        custom_ops = np.unique(custom_ops)
 
-    return ort_outs
+        # Ensure that all nodes have I/O tensor types
+        infer_types_in_graph(graph, custom_ops)
+
+        # Ensure that all tensors in the graph have a shape
+        infer_shapes(graph, all_tensor_shapes)
+
+        onnx_model = gs.export_onnx(graph)
+        onnx_model.opset_import.append(
+            onnx.helper.make_opsetid(trt_plugin_domain, trt_plugin_version)
+        )
+
+    return onnx_model, has_custom_op, custom_ops
 
 
 def main():
     args = parse_args()
     onnx_path = args.onnx
 
-    # ======== Ensure that custom ops are supported by ORT as TRT plugins ========
-    onnx_path = ensure_ort_support(onnx_path, args.custom_ops)
+    model, has_custom_op, custom_ops = load_ort_supported_model(onnx_path, args.trt_plugins)
 
-    # ======== Ensure that all nodes have I/O tensor types ========
-    onnx_path = ensure_all_tensors_type(onnx_path)
+    if has_custom_op:
+        # Save model with types and shapes in a new file
+        print(f"Found {len(custom_ops)} custom ops: {custom_ops}")
+        onnx_path = onnx_path.replace(".onnx", "_post.onnx")
+        onnx.save(model, onnx_path)
 
-    # ======== Infer shapes in ONNX model with custom TRT op =========
-    # Obtain shapes with ORT
-    print("Getting tensor shapes!")
-    ort_tensors = get_ort_tensor_shapes(onnx_path, args.plugins)
-
-    # Update shapes in ONNX model
-    print("Updating shapes in ONNX model.")
-    graph = gs.import_onnx(onnx.load(onnx_path))
-    for node in graph.nodes:
-        for out in node.outputs:
-            if out.name in ort_tensors:
-                out.shape = ort_tensors[out.name].shape
-                out.dtype = ort_tensors[out.name].dtype
-    graph.cleanup().toposort()
-    model = gs.export_onnx(graph)
-    onnx_path = args.onnx.replace(".onnx", "_post.onnx")
-    intermediate_generated_files.append(onnx_path)
-    onnx.save(model, onnx_path)
-
-    # ======== Simplify ONNX model with inferred shapes =========
-    output_path = onnx_path.replace(".onnx", "_simp.onnx")
-    print(f"Simplifying ONNX model with inferred shapes! Saving in {output_path}.")
-    model_simp, check = simplify(model)
-    onnx.save(model_simp, output_path)
-
-    # ======== Check if intermediate files should be deleted ========
-    if not args.keep_intermediate_files:
-        for file in intermediate_generated_files:
-            os.remove(file)
+        # Simplify ONNX model with inferred shapes
+        print(f"Simplifying ONNX model with inferred shapes...")
+        model_simp, check = simplify(model)
+        if check:
+            output_path = onnx_path.replace(".onnx", "_simp.onnx")
+            onnx.save(model_simp, output_path)
+            print(f"Simplified model was validated and saved in {output_path}")
+        else:
+            print(f"Simplified ONNX model could not be validated.")
+    else:
+        print("No custom ops found!")
 
 
 if __name__ == '__main__':
