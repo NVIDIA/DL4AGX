@@ -255,16 +255,13 @@ def main():
     model, has_custom_op, custom_ops = load_ort_supported_model(onnx_path, args.trt_plugins)
 
     if has_custom_op:
-        # Save model with types and shapes in a new file
         print(f"Found {len(custom_ops)} custom ops: {custom_ops}")
-        onnx_path = onnx_path.replace(".onnx", "_post.onnx")
-        onnx.save(model, onnx_path)
 
         # Simplify ONNX model with inferred shapes
         print(f"Simplifying ONNX model with inferred shapes...")
         model_simp, check = simplify(model)
         if check:
-            output_path = onnx_path.replace(".onnx", "_simp.onnx")
+            output_path = onnx_path.replace(".onnx", "_post_simp.onnx")
             onnx.save(model_simp, output_path)
             print(f"Simplified model was validated and saved in {output_path}")
         else:
