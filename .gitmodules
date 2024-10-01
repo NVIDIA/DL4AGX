@@ -1,3 +1,18 @@
+[submodule "AV-Solutions/uniad-trt/inference_app/dependencies/stb"]
+	path = AV-Solutions/uniad-trt/inference_app/dependencies/stb
+	url = https://github.com/nothings/stb.git
+[submodule "AV-Solutions/uniad-trt/UniAD"]
+	path = AV-Solutions/uniad-trt/UniAD
+	url = https://github.com/OpenDriveLab/UniAD.git
+	ignore = dirty
+[submodule "AV-Solutions/uniad-trt/dependencies/BEVFormer_tensorrt"]
+	path = AV-Solutions/uniad-trt/dependencies/BEVFormer_tensorrt
+	url = https://github.com/DerryHub/BEVFormer_tensorrt.git
+	ignore = dirty
+[submodule "AV-Solutions/uniad-trt/dependencies/nuscenes-devkit"]
+	path = AV-Solutions/uniad-trt/dependencies/nuscenes-devkit
+	url = https://github.com/nutonomy/nuscenes-devkit.git
+	ignore = dirty
 [submodule "AV-Solutions/dcnv4-trt/3rd_party/stb"]
 	path = AV-Solutions/dcnv4-trt/3rd_party/stb
 	url = https://github.com/nothings/stb.git

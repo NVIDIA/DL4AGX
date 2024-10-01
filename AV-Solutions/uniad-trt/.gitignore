@@ -1,0 +1,11 @@
+docker/nuscenes
+build/
+data/
+engine/
+
+.vscode
+*.ignore
+*.nsys-rep
+*.tmp
+*.log
+*.ttf

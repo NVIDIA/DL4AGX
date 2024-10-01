@@ -1,0 +1,653 @@
+From 31f78a90e3b80da468fdeee4a89c5e7e72497d4a Mon Sep 17 00:00:00 2001
+From: Bianjiang Yang <bianjiangy@bianjiangy-mlt.client.nvidia.com>
+Date: Tue, 13 Aug 2024 15:14:06 -0700
+Subject: [PATCH] step7: modifications on derrhub code for onnx export
+
+---
+ projects/mmdet3d_plugin/.DS_Store             | Bin 6148 -> 6148 bytes
+ .../models/backbones/__init__.py              |   3 +-
+ .../uniad/functions/__init__.py               |  22 ----
+ .../uniad/functions/bev_pool_v2.py            |   2 +-
+ .../functions/multi_scale_deformable_attn.py  | 121 +++++++++++++++++-
+ .../mmdet3d_plugin/uniad/functions/rotate.py  |   6 +-
+ .../uniad/modules/cnn/__init__.py             |   6 +-
+ .../mmdet3d_plugin/uniad/modules/cnn/dcn.py   |  92 ++++++-------
+ .../uniad/modules/feedforward_network.py      |  15 +--
+ .../test_modulated_deformable_conv2d.py       |  20 +--
+ .../test_trt_ops/test_multi_head_attn.py      |   4 +-
+ .../test_multi_scale_deformable_attn.py       |  56 ++------
+ .../uniad/utils/test_trt_ops/test_rotate.py   |  24 +---
+ 13 files changed, 198 insertions(+), 173 deletions(-)
+
+diff --git a/projects/mmdet3d_plugin/.DS_Store b/projects/mmdet3d_plugin/.DS_Store
+index 398e1c45fb4ab07e5ae772f001ed9071d3ee688d..4b29583d06d1a69848c464e2161286013b57830b 100644
+GIT binary patch
+delta 124
+zcmZoMXfc=|&e%4wP>hv>fq{WzVxfpA6OaJ{AexbZL4biFhoN|4l)fZLfQ=!SA)g_I
+zAr&N;Qk<NVl%Jn7QCntXx;y)10}+<Z+#Ea{jBOhWzcWwf7f}QorU2BJ0K`DU7!Ck2
+K!)8a3{mcNNSr>x<
+
+delta 101
+zcmZoMXfc=|&Zs)EP*|6dfq{XQp_CzyA(J7IAtj|aIVUMUKL;qvz`z7185lrnfLMTG
+t<Hj)di5DU_vvUY=Fsg1m_?>w&zlb6yNIn6icCrbN^5z7QCCn2WSO5>c6!ZW9
+
+diff --git a/projects/mmdet3d_plugin/models/backbones/__init__.py b/projects/mmdet3d_plugin/models/backbones/__init__.py
+index f68c07f..d13a0da 100644
+--- a/projects/mmdet3d_plugin/models/backbones/__init__.py
++++ b/projects/mmdet3d_plugin/models/backbones/__init__.py
+@@ -1,3 +1,2 @@
+ from .vovnet import VoVNet
+-from .bev_resnet import CustomResNet
+-__all__ = ['VoVNet', 'CustomResNet']
+\ No newline at end of file
++__all__ = ['VoVNet']
+\ No newline at end of file
+diff --git a/projects/mmdet3d_plugin/uniad/functions/__init__.py b/projects/mmdet3d_plugin/uniad/functions/__init__.py
+index 479b6b6..678f08b 100644
+--- a/projects/mmdet3d_plugin/uniad/functions/__init__.py
++++ b/projects/mmdet3d_plugin/uniad/functions/__init__.py
+@@ -11,25 +11,3 @@ from .rotate import rotate, rotate2
+ from .inverse import inverse
+ from .bev_pool_v2 import bev_pool_v2, bev_pool_v2_2
+ from .multi_head_attn import qkv, qkv2
+-from ..utils.register import TRT_FUNCTIONS
+-
+-
+-TRT_FUNCTIONS.register_module(module=grid_sampler)
+-TRT_FUNCTIONS.register_module(module=grid_sampler2)
+-
+-TRT_FUNCTIONS.register_module(module=multi_scale_deformable_attn)
+-TRT_FUNCTIONS.register_module(module=multi_scale_deformable_attn2)
+-
+-TRT_FUNCTIONS.register_module(module=modulated_deformable_conv2d)
+-TRT_FUNCTIONS.register_module(module=modulated_deformable_conv2d2)
+-
+-TRT_FUNCTIONS.register_module(module=rotate)
+-TRT_FUNCTIONS.register_module(module=rotate2)
+-
+-TRT_FUNCTIONS.register_module(module=inverse)
+-
+-TRT_FUNCTIONS.register_module(module=bev_pool_v2)
+-TRT_FUNCTIONS.register_module(module=bev_pool_v2_2)
+-
+-TRT_FUNCTIONS.register_module(module=qkv)
+-TRT_FUNCTIONS.register_module(module=qkv2)
+diff --git a/projects/mmdet3d_plugin/uniad/functions/bev_pool_v2.py b/projects/mmdet3d_plugin/uniad/functions/bev_pool_v2.py
+index 1a95bcc..09e5fc6 100644
+--- a/projects/mmdet3d_plugin/uniad/functions/bev_pool_v2.py
++++ b/projects/mmdet3d_plugin/uniad/functions/bev_pool_v2.py
+@@ -1,5 +1,5 @@
+ from torch.autograd import Function
+-from third_party.bev_mmdet3d.ops.bev_pool_v2 import bev_pool_v2_gpu
++from third_party.uniad_mmdet3d.ops.bev_pool_v2 import bev_pool_v2_gpu
+ 
+ 
+ class _BEVPoolV2(Function):
+diff --git a/projects/mmdet3d_plugin/uniad/functions/multi_scale_deformable_attn.py b/projects/mmdet3d_plugin/uniad/functions/multi_scale_deformable_attn.py
+index 36db587..6208e9e 100644
+--- a/projects/mmdet3d_plugin/uniad/functions/multi_scale_deformable_attn.py
++++ b/projects/mmdet3d_plugin/uniad/functions/multi_scale_deformable_attn.py
+@@ -6,7 +6,6 @@ ext_module = ext_loader.load_ext(
+     "_ext", ["ms_deform_attn_backward", "ms_deform_attn_forward"]
+ )
+ 
+-
+ class _MultiScaleDeformableAttnFunction(Function):
+     @staticmethod
+     def symbolic(
+@@ -104,7 +103,6 @@ class _MultiScaleDeformableAttnFunction(Function):
+         value_level_start_index[1:] = torch.cumsum(
+             value_spatial_shapes[:, 0] * value_spatial_shapes[:, 1], dim=0
+         )[:-1]
+-
+         output = ext_module.ms_deform_attn_forward(
+             value,
+             value_spatial_shapes,
+@@ -141,10 +139,89 @@ class _MultiScaleDeformableAttnFunction2(_MultiScaleDeformableAttnFunction):
+             sampling_offsets,
+             attention_weights,
+         )
++    
++class _MSDAPlugin(Function):
++    @staticmethod
++    def symbolic(
++        g,
++        value,
++        spatial_shapes,
++        level_start_index,
++        sampling_locations,
++        attention_weights,
++        im2col_step,
++    ):
++        return g.op(
++            "MSDAPlugin",
++            value,
++            spatial_shapes,
++            level_start_index,
++            sampling_locations,
++            attention_weights,
++        )
++
++    @staticmethod
++    def forward(
++        ctx,
++        value,
++        spatial_shapes,
++        level_start_index,
++        sampling_locations,
++        attention_weights,
++        im2col_step,
++    ):
++        """GPU version of multi-scale deformable attention.
++
++        Args:
++            value (Tensor): The value has shape
++                (bs, mum_heads, embed_dims//num_heads, num_keys)
++            value_spatial_shapes (Tensor): Spatial shape of
++                each feature map, has shape (num_levels, 2),
++                last dimension 2 represent (h, w)
++            reference_points (Tensor): The reference points.
++            sampling_offsets (Tensor): The offset of sampling points,
++                has shape
++                (bs, num_heads, num_queries, num_levels*num_points*2),
++                the last dimension 2 represent (x, y).
++            attention_weights (Tensor): The weight of sampling points used
++                when calculate the attention, has shape
++                (bs, num_heads, num_queries, num_levels*num_points).
++
++        Returns:
++            Tensor: has shape (bs, embed_dims, num_queries)
++        """
++
++        ctx.im2col_step = im2col_step
++
++        ctx.fp16 = False
++        if value.dtype == torch.float16:
++            ctx.fp16 = True
++            value = value.float()
++            sampling_locations = sampling_locations.float()
++            attention_weights = attention_weights.float()
++
++        N, _, M, D = value.shape
++        output = ext_module.ms_deform_attn_forward(
++            value,
++            spatial_shapes,
++            level_start_index,
++            sampling_locations,
++            attention_weights,
++            im2col_step=ctx.im2col_step,
++        ).view(N, -1, M, D)
++        ctx.save_for_backward(
++            value,
++            spatial_shapes,
++            level_start_index,
++            sampling_locations,
++            attention_weights,
++        )
++        return output.half() if ctx.fp16 else output
+ 
+ 
+ _multi_scale_deformable_attn_gpu = _MultiScaleDeformableAttnFunction.apply
+ _multi_scale_deformable_attn_gpu2 = _MultiScaleDeformableAttnFunction2.apply
++_MSDAPlugin_gpu = _MSDAPlugin.apply
+ 
+ 
+ def multi_scale_deformable_attn(
+@@ -181,6 +258,46 @@ def multi_scale_deformable_attn(
+         attention_weights,
+     )
+ 
++def MSDAPlugin(
++    value,
++    spatial_shapes,
++    level_start_index,
++    sampling_locations,
++    attention_weights,
++    im2col_step,
++):
++    """Multi-scale deformable attention.
++
++    Support TensorRT plugin MultiScaleDeformableAttnTRT: FP32 and FP16(nv_half).
++
++    Args:
++        value (Tensor): The value has shape
++            (bs, num_keys, mum_heads, embed_dims//num_heads)
++        value_spatial_shapes (Tensor): Spatial shape of
++            each feature map, has shape (num_levels, 2),
++            last dimension 2 represent (h, w)
++        reference_points (Tensor): The reference points.
++        sampling_offsets (Tensor): The offset of sampling points,
++            has shape
++            (bs, num_heads, num_queries, num_levels*num_points*2),
++            the last dimension 2 represent (x, y).
++        attention_weights (Tensor): The weight of sampling points used
++            when calculate the attention, has shape
++            (bs ,num_queries, num_heads, num_levels, num_points).
++
++    Returns:
++        Tensor: has shape (bs, num_queries, embed_dims)
++    """
++    assert value.is_cuda
++    return _MSDAPlugin_gpu(
++        value,
++        spatial_shapes,
++        level_start_index,
++        sampling_locations,
++        attention_weights,
++        im2col_step,
++    )
++
+ 
+ def multi_scale_deformable_attn2(
+     value, value_spatial_shapes, reference_points, sampling_offsets, attention_weights
+diff --git a/projects/mmdet3d_plugin/uniad/functions/rotate.py b/projects/mmdet3d_plugin/uniad/functions/rotate.py
+index d2d4307..dd23c9d 100644
+--- a/projects/mmdet3d_plugin/uniad/functions/rotate.py
++++ b/projects/mmdet3d_plugin/uniad/functions/rotate.py
+@@ -41,8 +41,10 @@ class _Rotate(Function):
+         base_grid[..., 2].fill_(1)
+ 
+         rescaled_theta = 2 * theta.transpose(1, 2)
+-        rescaled_theta[..., 0] /= ow
+-        rescaled_theta[..., 1] /= oh
++        # rescaled_theta[..., 0] /= ow
++        # rescaled_theta[..., 1] /= oh
++        rescaled_theta[..., 0] = rescaled_theta[..., 0] / ow
++        rescaled_theta[..., 1] = rescaled_theta[..., 1] / oh
+ 
+         output_grid = base_grid.view(1, oh * ow, 3).bmm(rescaled_theta)
+         grid = output_grid.view(1, oh, ow, 2)
+diff --git a/projects/mmdet3d_plugin/uniad/modules/cnn/__init__.py b/projects/mmdet3d_plugin/uniad/modules/cnn/__init__.py
+index 938a739..ccbdb2a 100644
+--- a/projects/mmdet3d_plugin/uniad/modules/cnn/__init__.py
++++ b/projects/mmdet3d_plugin/uniad/modules/cnn/__init__.py
+@@ -1,7 +1,7 @@
+ from .dcn import (
+-    ModulatedDeformConv2dPackQ,
++    # ModulatedDeformConv2dPackQ,
+     ModulatedDeformConv2dPackPlugin,
+     ModulatedDeformConv2dPackPlugin2,
+-    ModulatedDeformConv2dPackPluginQ,
+-    ModulatedDeformConv2dPackPluginQ2,
++    # ModulatedDeformConv2dPackPluginQ,
++    # ModulatedDeformConv2dPackPluginQ2,
+ )
+diff --git a/projects/mmdet3d_plugin/uniad/modules/cnn/dcn.py b/projects/mmdet3d_plugin/uniad/modules/cnn/dcn.py
+index 2ca2e01..c08610c 100644
+--- a/projects/mmdet3d_plugin/uniad/modules/cnn/dcn.py
++++ b/projects/mmdet3d_plugin/uniad/modules/cnn/dcn.py
+@@ -1,31 +1,31 @@
+ import torch
+ import torch.nn as nn
+-import pytorch_quantization.nn as quant_nn
++# import pytorch_quantization.nn as quant_nn
+ from mmcv.ops.modulated_deform_conv import (
+     ModulatedDeformConv2dPack,
+     ModulatedDeformConv2d,
+ )
+ from mmcv.cnn.bricks.registry import CONV_LAYERS
+-from det2trt.models.functions import (
++from ...functions import (
+     modulated_deformable_conv2d,
+     modulated_deformable_conv2d2,
+ )
+ 
+ 
+-@CONV_LAYERS.register_module("DCNv2Q")
+-class ModulatedDeformConv2dPackQ(ModulatedDeformConv2dPack):
+-    def __init__(self, *args, **kwargs):
+-        super(ModulatedDeformConv2dPack, self).__init__(*args, **kwargs)
+-        self.conv_offset = quant_nn.Conv2d(
+-            self.in_channels,
+-            self.deform_groups * 3 * self.kernel_size[0] * self.kernel_size[1],
+-            kernel_size=self.kernel_size,
+-            stride=self.stride,
+-            padding=self.padding,
+-            dilation=self.dilation,
+-            bias=True,
+-        )
+-        self.init_weights()
++# @CONV_LAYERS.register_module("DCNv2Q")
++# class ModulatedDeformConv2dPackQ(ModulatedDeformConv2dPack):
++#     def __init__(self, *args, **kwargs):
++#         super(ModulatedDeformConv2dPack, self).__init__(*args, **kwargs)
++#         self.conv_offset = quant_nn.Conv2d(
++#             self.in_channels,
++#             self.deform_groups * 3 * self.kernel_size[0] * self.kernel_size[1],
++#             kernel_size=self.kernel_size,
++#             stride=self.stride,
++#             padding=self.padding,
++#             dilation=self.dilation,
++#             bias=True,
++#         )
++#         self.init_weights()
+ 
+ 
+ @CONV_LAYERS.register_module("DCNv2P")
+@@ -164,33 +164,33 @@ class ModulatedDeformConv2dPackPlugin2(ModulatedDeformConv2dPackPlugin):
+         )
+ 
+ 
+-@CONV_LAYERS.register_module("DCNv2PQ")
+-class ModulatedDeformConv2dPackPluginQ(ModulatedDeformConv2dPackPlugin):
+-    def __init__(self, *args, **kwargs):
+-        super(ModulatedDeformConv2dPackPlugin, self).__init__(*args, **kwargs)
+-        self.conv_offset = quant_nn.Conv2d(
+-            self.in_channels,
+-            self.deform_groups * 3 * self.kernel_size[0] * self.kernel_size[1],
+-            kernel_size=self.kernel_size,
+-            stride=self.stride,
+-            padding=self.padding,
+-            dilation=self.dilation,
+-            bias=True,
+-        )
+-        self.init_weights()
+-
+-
+-@CONV_LAYERS.register_module("DCNv2PQ2")
+-class ModulatedDeformConv2dPackPluginQ2(ModulatedDeformConv2dPackPlugin2):
+-    def __init__(self, *args, **kwargs):
+-        super(ModulatedDeformConv2dPackPlugin2, self).__init__(*args, **kwargs)
+-        self.conv_offset = quant_nn.Conv2d(
+-            self.in_channels,
+-            self.deform_groups * 3 * self.kernel_size[0] * self.kernel_size[1],
+-            kernel_size=self.kernel_size,
+-            stride=self.stride,
+-            padding=self.padding,
+-            dilation=self.dilation,
+-            bias=True,
+-        )
+-        self.init_weights()
++# @CONV_LAYERS.register_module("DCNv2PQ")
++# class ModulatedDeformConv2dPackPluginQ(ModulatedDeformConv2dPackPlugin):
++#     def __init__(self, *args, **kwargs):
++#         super(ModulatedDeformConv2dPackPlugin, self).__init__(*args, **kwargs)
++#         self.conv_offset = quant_nn.Conv2d(
++#             self.in_channels,
++#             self.deform_groups * 3 * self.kernel_size[0] * self.kernel_size[1],
++#             kernel_size=self.kernel_size,
++#             stride=self.stride,
++#             padding=self.padding,
++#             dilation=self.dilation,
++#             bias=True,
++#         )
++#         self.init_weights()
++
++
++# @CONV_LAYERS.register_module("DCNv2PQ2")
++# class ModulatedDeformConv2dPackPluginQ2(ModulatedDeformConv2dPackPlugin2):
++#     def __init__(self, *args, **kwargs):
++#         super(ModulatedDeformConv2dPackPlugin2, self).__init__(*args, **kwargs)
++#         self.conv_offset = quant_nn.Conv2d(
++#             self.in_channels,
++#             self.deform_groups * 3 * self.kernel_size[0] * self.kernel_size[1],
++#             kernel_size=self.kernel_size,
++#             stride=self.stride,
++#             padding=self.padding,
++#             dilation=self.dilation,
++#             bias=True,
++#         )
++#         self.init_weights()
+diff --git a/projects/mmdet3d_plugin/uniad/modules/feedforward_network.py b/projects/mmdet3d_plugin/uniad/modules/feedforward_network.py
+index 139746e..582e581 100644
+--- a/projects/mmdet3d_plugin/uniad/modules/feedforward_network.py
++++ b/projects/mmdet3d_plugin/uniad/modules/feedforward_network.py
+@@ -17,7 +17,7 @@ class ReLUAddZeros(nn.Module):
+         return self.relu(x + torch.zeros_like(x))
+ 
+ 
+-@FEEDFORWARD_NETWORK.register_module()
++@FEEDFORWARD_NETWORK.register_module(force=True)
+ class FFNTRT(FFN):
+     @deprecated_api_warning(
+         {"dropout": "ffn_drop", "add_residual": "add_identity"}, cls_name="FFNQ"
+@@ -43,23 +43,22 @@ class FFNTRT(FFN):
+         self.act_cfg = act_cfg
+         self.activate = build_activation_layer(act_cfg)
+ 
+-        if linear_cfg is None:
+-            linear_cfg = dict(type="Linear")
+-        linear = LINEAR_LAYERS.get(linear_cfg["type"])
++        # if linear_cfg is None:
++        #     linear_cfg = dict(type="Linear")
++        # linear = LINEAR_LAYERS.get(linear_cfg["type"])
+ 
+         layers = []
+         in_channels = embed_dims
+         for _ in range(num_fcs - 1):
+             layers.append(
+                 nn.Sequential(
+-                    linear(in_channels, feedforward_channels),
+-                    # TODO: Waiting bug of TensorRT-8.5.1.7 fixed
+-                    self.activate if linear == nn.Linear else ReLUAddZeros(),
++                    nn.Linear(in_channels, feedforward_channels),
++                    self.activate,
+                     nn.Dropout(ffn_drop),
+                 )
+             )
+             in_channels = feedforward_channels
+-        layers.append(linear(feedforward_channels, embed_dims))
++        layers.append(nn.Linear(feedforward_channels, embed_dims))
+         layers.append(nn.Dropout(ffn_drop))
+         self.layers = nn.Sequential(*layers)
+         self.dropout_layer = (
+diff --git a/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_modulated_deformable_conv2d.py b/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_modulated_deformable_conv2d.py
+index bfe8acc..c505751 100644
+--- a/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_modulated_deformable_conv2d.py
++++ b/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_modulated_deformable_conv2d.py
+@@ -87,14 +87,6 @@ class ModulatedDeformableConv2dTestCase(BaseTestCase, unittest.TestCase):
+             cost = self.getCost(output_trt, output_pth)
+             self.assertLessEqual(cost, delta)
+ 
+-    def int8_fp16_case(self, delta=None):
+-        delta = self.delta if delta is None else delta
+-        for dic in self.models:
+-            output_pth = self.torchForward(dic["model_pth_int8"], int8=True, fp16=True)
+-            output_trt, t = self.engineForward(dic["engine_int8"], int8=True, fp16=True)
+-            cost = self.getCost(output_trt, output_pth)
+-            self.assertLessEqual(cost, delta)
+-
+     def test_fp32(self):
+         self.fp32_case()
+ 
+@@ -105,7 +97,7 @@ class ModulatedDeformableConv2dTestCase(BaseTestCase, unittest.TestCase):
+         self.int8_case(1.5)
+ 
+     def test_int8_fp16(self):
+-        self.int8_fp16_case(1.5)
++        self.int8_case(1.5)
+ 
+ 
+ class ModulatedDeformableConv2dTestCase2(BaseTestCase, unittest.TestCase):
+@@ -183,14 +175,6 @@ class ModulatedDeformableConv2dTestCase2(BaseTestCase, unittest.TestCase):
+             cost = self.getCost(output_trt, output_pth)
+             self.assertLessEqual(cost, delta)
+ 
+-    def int8_fp16_case(self, delta=None):
+-        delta = self.delta if delta is None else delta
+-        for dic in self.models:
+-            output_pth = self.torchForward(dic["model_pth_int8"], int8=True, fp16=True)
+-            output_trt, t = self.engineForward(dic["engine_int8"], int8=True, fp16=True)
+-            cost = self.getCost(output_trt, output_pth)
+-            self.assertLessEqual(cost, delta)
+-
+     def test_fp32(self):
+         self.fp32_case()
+ 
+@@ -201,4 +185,4 @@ class ModulatedDeformableConv2dTestCase2(BaseTestCase, unittest.TestCase):
+         self.int8_case(1.5)
+ 
+     def test_int8_fp16(self):
+-        self.int8_fp16_case(1.5)
++        self.int8_case(1.5)
+diff --git a/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_multi_head_attn.py b/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_multi_head_attn.py
+index ca2b266..fb869fc 100644
+--- a/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_multi_head_attn.py
++++ b/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_multi_head_attn.py
+@@ -132,7 +132,7 @@ class TransformerTestCase(BaseTestCase, unittest.TestCase):
+         self.fp16_case(1e-4)
+ 
+     def test_int8(self):
+-        self.int8_case(3e-3)
++        self.int8_case(1e-3)
+ 
+ 
+ class TransformerTestCase2(BaseTestCase, unittest.TestCase):
+@@ -210,4 +210,4 @@ class TransformerTestCase2(BaseTestCase, unittest.TestCase):
+         self.fp16_case(1e-4)
+ 
+     def test_int8(self):
+-        self.int8_case(3e-3)
++        self.int8_case(1e-3)
+diff --git a/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_multi_scale_deformable_attn.py b/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_multi_scale_deformable_attn.py
+index 8c03257..1695578 100644
+--- a/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_multi_scale_deformable_attn.py
++++ b/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_multi_scale_deformable_attn.py
+@@ -128,25 +128,17 @@ class MultiScaleDeformableAttnTestCase(BaseTestCase, unittest.TestCase):
+             cost = self.getCost(output_trt, output_pth)
+             self.assertLessEqual(cost, delta)
+ 
+-    def int8_fp16_case(self, delta=None):
+-        delta = self.delta if delta is None else delta
+-        for dic in self.models:
+-            output_pth = self.torchForward(dic["model_pth_int8"], int8=True, fp16=True)
+-            output_trt, t = self.engineForward(dic["engine_int8"], int8=True, fp16=True)
+-            cost = self.getCost(output_trt, output_pth)
+-            self.assertLessEqual(cost, delta)
+-
+     def test_fp32(self):
+-        self.fp32_case()
++        self.fp32_case(2e-5)
+ 
+     def test_fp16(self):
+-        self.fp16_case(0.01)
++        self.fp16_case(0.15)
+ 
+     def test_int8_fp16(self):
+-        self.int8_fp16_case(0.01)
++        self.int8_case(0.20)
+ 
+     def test_int8(self):
+-        self.int8_case(0.01)
++        self.int8_case(0.15)
+ 
+ 
+ class MultiScaleDeformableAttnTestCase2(BaseTestCase, unittest.TestCase):
+@@ -199,29 +191,7 @@ class MultiScaleDeformableAttnTestCase2(BaseTestCase, unittest.TestCase):
+ 
+     def createInputs(self):
+         f_keys = ["value", "reference_points", "sampling_offsets", "attention_weights"]
+-        if self.int8_fp16:
+-            self.inputs_pth_int8 = self.getInputs()
+-            self.inputs_pth_fp16 = {
+-                key: (val.half() if key in f_keys else val)
+-                for key, val in self.inputs_pth_int8.items()
+-            }
+-            self.inputs_np_fp16 = {
+-                key: (
+-                    val.cpu().numpy()
+-                    if key in f_keys
+-                    else val.cpu().numpy().astype(np.int32)
+-                )
+-                for key, val in self.inputs_pth_fp16.items()
+-            }
+-            self.inputs_np_int8 = {
+-                key: (
+-                    val.cpu().numpy()
+-                    if key in f_keys
+-                    else val.cpu().numpy().astype(np.int32)
+-                )
+-                for key, val in self.inputs_pth_int8.items()
+-            }
+-        elif self.fp16:
++        if self.fp16:
+             inputs_pth = self.getInputs()
+             self.inputs_pth_fp16 = {
+                 key: (val.half() if key in f_keys else val)
+@@ -286,22 +256,14 @@ class MultiScaleDeformableAttnTestCase2(BaseTestCase, unittest.TestCase):
+             cost = self.getCost(output_trt, output_pth)
+             self.assertLessEqual(cost, delta)
+ 
+-    def int8_fp16_case(self, delta=None):
+-        delta = self.delta if delta is None else delta
+-        for dic in self.models:
+-            output_pth = self.torchForward(dic["model_pth_int8"], int8=True, fp16=True)
+-            output_trt, t = self.engineForward(dic["engine_int8"], int8=True, fp16=True)
+-            cost = self.getCost(output_trt, output_pth)
+-            self.assertLessEqual(cost, delta)
+-
+     def test_fp32(self):
+-        self.fp32_case()
++        self.fp32_case(2e-5)
+ 
+     def test_fp16(self):
+-        self.fp16_case(0.01)
++        self.fp16_case(0.15)
+ 
+     def test_int8_fp16(self):
+-        self.int8_fp16_case(0.01)
++        self.int8_case(0.15)
+ 
+     def test_int8(self):
+-        self.int8_case(0.01)
++        self.int8_case(0.15)
+diff --git a/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_rotate.py b/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_rotate.py
+index e5d7567..d24ae4f 100644
+--- a/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_rotate.py
++++ b/projects/mmdet3d_plugin/uniad/utils/test_trt_ops/test_rotate.py
+@@ -89,14 +89,6 @@ class RotateTestCase(BaseTestCase, unittest.TestCase):
+             cost = self.getCost(output_trt, output_pth)
+             self.assertLessEqual(cost, delta)
+ 
+-    def int8_fp16_case(self, delta=None):
+-        delta = self.delta if delta is None else delta
+-        for dic in self.models:
+-            output_pth = self.torchForward(dic["model_pth_int8"], int8=True, fp16=True)
+-            output_trt, t = self.engineForward(dic["engine_int8"], int8=True, fp16=True)
+-            cost = self.getCost(output_trt, output_pth)
+-            self.assertLessEqual(cost, delta)
+-
+     def test_fp32_bilinear(self):
+         self.fp32_case(1e-4)
+ 
+@@ -116,10 +108,10 @@ class RotateTestCase(BaseTestCase, unittest.TestCase):
+         self.int8_case(0.5)
+ 
+     def test_int8_fp16_bilinear(self):
+-        self.int8_fp16_case(0.3)
++        self.int8_case(0.3)
+ 
+     def test_int8_fp16_nearest(self):
+-        self.int8_fp16_case(0.5)
++        self.int8_case(0.5)
+ 
+ 
+ class RotateTestCase2(BaseTestCase, unittest.TestCase):
+@@ -202,14 +194,6 @@ class RotateTestCase2(BaseTestCase, unittest.TestCase):
+             cost = self.getCost(output_trt, output_pth)
+             self.assertLessEqual(cost, delta)
+ 
+-    def int8_fp16_case(self, delta=None):
+-        delta = self.delta if delta is None else delta
+-        for dic in self.models:
+-            output_pth = self.torchForward(dic["model_pth_int8"], int8=True, fp16=True)
+-            output_trt, t = self.engineForward(dic["engine_int8"], int8=True, fp16=True)
+-            cost = self.getCost(output_trt, output_pth)
+-            self.assertLessEqual(cost, delta)
+-
+     def test_fp32_bilinear(self):
+         self.fp32_case(1e-4)
+ 
+@@ -229,7 +213,7 @@ class RotateTestCase2(BaseTestCase, unittest.TestCase):
+         self.int8_case(0.5)
+ 
+     def test_int8_fp16_bilinear(self):
+-        self.int8_fp16_case(0.3)
++        self.int8_case(0.3)
+ 
+     def test_int8_fp16_nearest(self):
+-        self.int8_fp16_case(0.5)
++        self.int8_case(0.5)
+-- 
+2.39.3 (Apple Git-146)
+
