@@ -1,0 +1,580 @@
+diff --git a/TensorRT/plugin/grid_sampler/gridSamplerKernel.cu b/TensorRT/plugin/grid_sampler/gridSamplerKernel.cu
+index 4cd713f..f3c7be8 100644
+--- a/TensorRT/plugin/grid_sampler/gridSamplerKernel.cu
++++ b/TensorRT/plugin/grid_sampler/gridSamplerKernel.cu
+@@ -1922,7 +1922,7 @@ __global__ void grid_sampler_3d_kernel(
+   }
+ }
+ 
+-void create_desc(const int *dims, int nb_dims, TensorDesc &desc) {
++void create_desc(const TRT_INT_TYPE *dims, int nb_dims, TensorDesc &desc) {
+   memcpy(&desc.shape[0], dims, sizeof(int) * nb_dims);
+   desc.stride[nb_dims - 1] = 1;
+   for (int i = nb_dims - 2; i >= 0; --i) {
+@@ -1931,8 +1931,8 @@ void create_desc(const int *dims, int nb_dims, TensorDesc &desc) {
+ }
+ 
+ template <typename T>
+-void grid_sample(T *output, const T *input, const T *grid, int *output_dims,
+-                 int *input_dims, int *grid_dims, int nb_dims,
++void grid_sample(T *output, const T *input, const T *grid, TRT_INT_TYPE *output_dims,
++                 TRT_INT_TYPE *input_dims, TRT_INT_TYPE *grid_dims, int nb_dims,
+                  GridSamplerInterpolation interp, GridSamplerPadding padding,
+                  bool align_corners, cudaStream_t stream) {
+   TensorDesc input_desc;
+@@ -1969,7 +1969,7 @@ void grid_sample(T *output, const T *input, const T *grid, int *output_dims,
+ 
+ template <>
+ void grid_sample(__half2 *output, const __half2 *input, const __half2 *grid,
+-                 int *output_dims, int *input_dims, int *grid_dims, int nb_dims,
++                 TRT_INT_TYPE *output_dims, TRT_INT_TYPE *input_dims, TRT_INT_TYPE *grid_dims, int nb_dims,
+                  GridSamplerInterpolation interp, GridSamplerPadding padding,
+                  bool align_corners, cudaStream_t stream) {
+   TensorDesc input_desc;
+@@ -2009,8 +2009,8 @@ void grid_sample(__half2 *output, const __half2 *input, const __half2 *grid,
+ 
+ void grid_sample_int8(int8_4 *output, const float &scale_o, const int8_4 *input,
+                       const float &scale_i, const int8_4 *grid,
+-                      const float &scale_g, int *output_dims, int *input_dims,
+-                      int *grid_dims, int nb_dims,
++                      const float &scale_g, TRT_INT_TYPE *output_dims, TRT_INT_TYPE *input_dims,
++                      TRT_INT_TYPE *grid_dims, int nb_dims,
+                       GridSamplerInterpolation interp,
+                       GridSamplerPadding padding, bool align_corners,
+                       cudaStream_t stream) {
+@@ -2043,22 +2043,22 @@ void grid_sample_int8(int8_4 *output, const float &scale_o, const int8_4 *input,
+ }
+ 
+ template void grid_sample<float>(float *output, const float *input,
+-                                 const float *grid, int *output_dims,
+-                                 int *input_dims, int *grid_dims, int nb_dims,
++                                 const float *grid, TRT_INT_TYPE *output_dims,
++                                 TRT_INT_TYPE *input_dims, TRT_INT_TYPE *grid_dims, int nb_dims,
+                                  GridSamplerInterpolation interp,
+                                  GridSamplerPadding padding, bool align_corners,
+                                  cudaStream_t stream);
+ 
+ template void grid_sample<__half>(__half *output, const __half *input,
+-                                  const __half *grid, int *output_dims,
+-                                  int *input_dims, int *grid_dims, int nb_dims,
++                                  const __half *grid, TRT_INT_TYPE *output_dims,
++                                  TRT_INT_TYPE *input_dims, TRT_INT_TYPE *grid_dims, int nb_dims,
+                                   GridSamplerInterpolation interp,
+                                   GridSamplerPadding padding,
+                                   bool align_corners, cudaStream_t stream);
+ 
+ template void grid_sample<__half2>(__half2 *output, const __half2 *input,
+-                                   const __half2 *grid, int *output_dims,
+-                                   int *input_dims, int *grid_dims, int nb_dims,
++                                   const __half2 *grid, TRT_INT_TYPE *output_dims,
++                                   TRT_INT_TYPE *input_dims, TRT_INT_TYPE *grid_dims, int nb_dims,
+                                    GridSamplerInterpolation interp,
+                                    GridSamplerPadding padding,
+                                    bool align_corners, cudaStream_t stream);
+diff --git a/TensorRT/plugin/grid_sampler/gridSamplerKernel.h b/TensorRT/plugin/grid_sampler/gridSamplerKernel.h
+index 0a913c1..321e167 100644
+--- a/TensorRT/plugin/grid_sampler/gridSamplerKernel.h
++++ b/TensorRT/plugin/grid_sampler/gridSamplerKernel.h
+@@ -7,20 +7,25 @@
+ 
+ #include "cuda_int8.h"
+ #include <cuda_runtime.h>
++#include <cuda_runtime_api.h>
++#include <type_traits>
++#include <NvInfer.h>
++
++typedef std::conditional<NV_TENSORRT_MAJOR<10, int, int64_t>::type TRT_INT_TYPE;
+ 
+ enum class GridSamplerInterpolation { Bilinear, Nearest, Bicubic };
+ enum class GridSamplerPadding { Zeros, Border, Reflection };
+ 
+ template <typename T>
+-void grid_sample(T *output, const T *input, const T *grid, int *output_dims,
+-                 int *input_dims, int *grid_dims, int nb_dims,
++void grid_sample(T *output, const T *input, const T *grid, TRT_INT_TYPE *output_dims,
++                 TRT_INT_TYPE *input_dims, TRT_INT_TYPE *grid_dims, int nb_dims,
+                  GridSamplerInterpolation interp, GridSamplerPadding padding,
+                  bool align_corners, cudaStream_t stream);
+ 
+ void grid_sample_int8(int8_4 *output, const float &scale_o, const int8_4 *input,
+                       const float &scale_i, const int8_4 *grid,
+-                      const float &scale_g, int *output_dims, int *input_dims,
+-                      int *grid_dims, int nb_dims,
++                      const float &scale_g, TRT_INT_TYPE *output_dims, TRT_INT_TYPE *input_dims,
++                      TRT_INT_TYPE *grid_dims, int nb_dims,
+                       GridSamplerInterpolation interp,
+                       GridSamplerPadding padding, bool align_corners,
+                       cudaStream_t stream);
+diff --git a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.cu b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.cu
+index e1a70ac..3bd468a 100644
+--- a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.cu
++++ b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.cu
+@@ -610,7 +610,7 @@ __device__ void ms_deform_attn_im2col_bilinear_int8_h2_(
+ 
+ template <typename scalar_t>
+ __global__ void ms_deformable_im2col_gpu_kernel(
+-    const int n, const scalar_t *data_value, const int32_t *data_spatial_shapes,
++    const int n, const scalar_t *data_value, const TRT_INT *data_spatial_shapes,
+     const scalar_t *data_reference_points,
+     const scalar_t *data_sampling_offsets, const scalar_t *data_attn_weight,
+     const int spatial_size, const int num_heads, const int channels,
+@@ -689,7 +689,7 @@ __global__ void ms_deformable_im2col_gpu_kernel(
+ 
+ template <>
+ __global__ void ms_deformable_im2col_gpu_kernel(
+-    const int n, const __half *data_value, const int32_t *data_spatial_shapes,
++    const int n, const __half *data_value, const TRT_INT *data_spatial_shapes,
+     const __half *data_reference_points, const __half *data_sampling_offsets,
+     const __half *data_attn_weight, const int spatial_size, const int num_heads,
+     const int channels, const int num_levels, const int num_query,
+@@ -770,7 +770,7 @@ __global__ void ms_deformable_im2col_gpu_kernel(
+ }
+ 
+ __global__ void ms_deformable_im2col_gpu_kernel_h2(
+-    const int n, const __half2 *data_value, const int32_t *data_spatial_shapes,
++    const int n, const __half2 *data_value, const TRT_INT *data_spatial_shapes,
+     const __half2 *data_reference_points, const __half2 *data_sampling_offsets,
+     const __half *data_attn_weight, const int spatial_size, const int num_heads,
+     const int channels, const int num_levels, const int num_query,
+@@ -848,7 +848,7 @@ __global__ void ms_deformable_im2col_gpu_kernel_h2(
+ template <typename scalar_t>
+ __global__ void ms_deformable_im2col_gpu_kernel_int8(
+     const int n, const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const scalar_t *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const scalar_t *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int spatial_size,
+     const int num_heads, const int channels, const int num_levels,
+@@ -957,7 +957,7 @@ __global__ void ms_deformable_im2col_gpu_kernel_int8(
+ template <>
+ __global__ void ms_deformable_im2col_gpu_kernel_int8(
+     const int n, const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const __half2 *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const __half2 *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int spatial_size,
+     const int num_heads, const int channels, const int num_levels,
+@@ -1105,7 +1105,7 @@ __global__ void ms_deformable_im2col_gpu_kernel_int8(
+ 
+ template <typename scalar_t>
+ void ms_deformable_im2col_cuda(const scalar_t *data_value,
+-                               const int32_t *data_spatial_shapes,
++                               const TRT_INT *data_spatial_shapes,
+                                const scalar_t *data_reference_points,
+                                const scalar_t *data_sampling_offsets,
+                                const scalar_t *data_attn_weight,
+@@ -1129,7 +1129,7 @@ void ms_deformable_im2col_cuda(const scalar_t *data_value,
+ 
+ template <>
+ void ms_deformable_im2col_cuda(
+-    const __half *data_value, const int32_t *data_spatial_shapes,
++    const __half *data_value, const TRT_INT *data_spatial_shapes,
+     const __half *data_reference_points, const __half *data_sampling_offsets,
+     const __half *data_attn_weight, const int batch_size,
+     const int spatial_size, const int num_heads, const int channels,
+@@ -1149,7 +1149,7 @@ void ms_deformable_im2col_cuda(
+ }
+ 
+ void ms_deformable_im2col_cuda_h2(
+-    const __half2 *data_value, const int32_t *data_spatial_shapes,
++    const __half2 *data_value, const TRT_INT *data_spatial_shapes,
+     const __half2 *data_reference_points, const __half2 *data_sampling_offsets,
+     const __half *data_attn_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+@@ -1171,7 +1171,7 @@ void ms_deformable_im2col_cuda_h2(
+ template <typename scalar_t>
+ void ms_deformable_im2col_cuda_int8(
+     const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const scalar_t *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const scalar_t *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+@@ -1196,7 +1196,7 @@ void ms_deformable_im2col_cuda_int8(
+ template <>
+ void ms_deformable_im2col_cuda_int8(
+     const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const __half2 *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const __half2 *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+@@ -1218,7 +1218,7 @@ void ms_deformable_im2col_cuda_int8(
+ }
+ 
+ template void ms_deformable_im2col_cuda<float>(
+-    const float *data_value, const int32_t *data_spatial_shapes,
++    const float *data_value, const TRT_INT *data_spatial_shapes,
+     const float *data_reference_points, const float *data_sampling_offsets,
+     const float *data_attn_weight, const int batch_size, const int spatial_size,
+     const int num_heads, const int channels, const int num_levels,
+@@ -1226,7 +1226,7 @@ template void ms_deformable_im2col_cuda<float>(
+     float *data_col, cudaStream_t stream);
+ 
+ template void ms_deformable_im2col_cuda<__half>(
+-    const __half *data_value, const int32_t *data_spatial_shapes,
++    const __half *data_value, const TRT_INT *data_spatial_shapes,
+     const __half *data_reference_points, const __half *data_sampling_offsets,
+     const __half *data_attn_weight, const int batch_size,
+     const int spatial_size, const int num_heads, const int channels,
+@@ -1235,7 +1235,7 @@ template void ms_deformable_im2col_cuda<__half>(
+ 
+ template void ms_deformable_im2col_cuda_int8<float>(
+     const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const float *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const float *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+@@ -1245,7 +1245,7 @@ template void ms_deformable_im2col_cuda_int8<float>(
+ 
+ template void ms_deformable_im2col_cuda_int8<__half2>(
+     const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const __half2 *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const __half2 *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+diff --git a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.h b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.h
+index 78785d1..a9bdb1a 100644
+--- a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.h
++++ b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.h
+@@ -9,9 +9,12 @@
+ #include <cuda_fp16.h>
+ #include <cuda_runtime.h>
+ 
++#include <type_traits>
++typedef std::conditional<NV_TENSORRT_MAJOR<10, int32_t, int64_t>::type TRT_INT;
++
+ template <typename T>
+ void ms_deformable_im2col_cuda(
+-    const T *data_value, const int32_t *data_spatial_shapes,
++    const T *data_value, const TRT_INT *data_spatial_shapes,
+     const T *data_reference_points, const T *data_sampling_offsets,
+     const T *data_attn_weight, const int batch_size, const int spatial_size,
+     const int num_heads, const int channels, const int num_levels,
+@@ -19,7 +22,7 @@ void ms_deformable_im2col_cuda(
+     T *data_col, cudaStream_t stream);
+ 
+ void ms_deformable_im2col_cuda_h2(
+-    const __half2 *data_value, const int32_t *data_spatial_shapes,
++    const __half2 *data_value, const TRT_INT *data_spatial_shapes,
+     const __half2 *data_reference_points, const __half2 *data_sampling_offsets,
+     const __half *data_attn_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+@@ -29,7 +32,7 @@ void ms_deformable_im2col_cuda_h2(
+ template <typename T>
+ void ms_deformable_im2col_cuda_int8(
+     const int8_4 *data_value, float scale_value,
+-    const int32_t *data_spatial_shapes, const T *data_reference_points,
++    const TRT_INT *data_spatial_shapes, const T *data_reference_points,
+     const int8_4 *data_sampling_offsets, float scale_offset,
+     const int8_4 *data_attn_weight, float scale_weight, const int batch_size,
+     const int spatial_size, const int num_heads, int channels,
+diff --git a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.cpp b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.cpp
+index 67886e0..4b67dd1 100644
+--- a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.cpp
++++ b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.cpp
+@@ -96,7 +96,7 @@ int32_t MultiScaleDeformableAttnPlugin::enqueue(
+   switch (data_type) {
+   case DataType::kFLOAT:
+     ms_deformable_im2col_cuda<float>(
+-        (float *)inputs[0], (int32_t *)inputs[1], (float *)inputs[2],
++        (float *)inputs[0], (TRT_INT *)inputs[1], (float *)inputs[2],
+         (float *)inputs[3], (float *)inputs[4], batch, spatial_size, num_heads,
+         channels, num_levels, num_query, num_point, points_per_group,
+         (float *)outputs[0], stream);
+@@ -104,13 +104,13 @@ int32_t MultiScaleDeformableAttnPlugin::enqueue(
+   case DataType::kHALF:
+     if (use_h2) {
+       ms_deformable_im2col_cuda_h2(
+-          (__half2 *)inputs[0], (int32_t *)inputs[1], (__half2 *)inputs[2],
++          (__half2 *)inputs[0], (TRT_INT *)inputs[1], (__half2 *)inputs[2],
+           (__half2 *)inputs[3], (__half *)inputs[4], batch, spatial_size,
+           num_heads, channels, num_levels, num_query, num_point,
+           points_per_group, (__half2 *)outputs[0], stream);
+     } else {
+       ms_deformable_im2col_cuda<__half>(
+-          (__half *)inputs[0], (int32_t *)inputs[1], (__half *)inputs[2],
++          (__half *)inputs[0], (TRT_INT *)inputs[1], (__half *)inputs[2],
+           (__half *)inputs[3], (__half *)inputs[4], batch, spatial_size,
+           num_heads, channels, num_levels, num_query, num_point,
+           points_per_group, (__half *)outputs[0], stream);
+@@ -119,14 +119,14 @@ int32_t MultiScaleDeformableAttnPlugin::enqueue(
+   case DataType::kINT8:
+     if (data_type_rp == DataType::kHALF) {
+       ms_deformable_im2col_cuda_int8<__half2>(
+-          (int8_4 *)inputs[0], scale_value, (int32_t *)inputs[1],
++          (int8_4 *)inputs[0], scale_value, (TRT_INT *)inputs[1],
+           (__half2 *)inputs[2], (int8_4 *)inputs[3], scale_offset,
+           (int8_4 *)inputs[4], scale_weight, batch, spatial_size, num_heads,
+           channels, num_levels, num_query, num_point, points_per_group,
+           (int8_4 *)outputs[0], scale_out, stream);
+     } else {
+       ms_deformable_im2col_cuda_int8<float>(
+-          (int8_4 *)inputs[0], scale_value, (int32_t *)inputs[1],
++          (int8_4 *)inputs[0], scale_value, (TRT_INT *)inputs[1],
+           (float *)inputs[2], (int8_4 *)inputs[3], scale_offset,
+           (int8_4 *)inputs[4], scale_weight, batch, spatial_size, num_heads,
+           channels, num_levels, num_query, num_point, points_per_group,
+@@ -163,7 +163,7 @@ bool MultiScaleDeformableAttnPlugin::supportsFormatCombination(
+            (inOut[pos].type == nvinfer1::DataType::kINT8 &&
+             inOut[pos].format == nvinfer1::TensorFormat::kLINEAR && use_int8);
+   case 1:
+-    return inOut[pos].type == nvinfer1::DataType::kINT32 &&
++    return inOut[pos].type == TRT_kINT &&
+            inOut[pos].format == nvinfer1::TensorFormat::kLINEAR;
+   case 2:
+     if (inOut[0].type == nvinfer1::DataType::kFLOAT ||
+diff --git a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.h b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.h
+index c93610b..d52c2e3 100644
+--- a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.h
++++ b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnPlugin.h
+@@ -11,6 +11,14 @@
+ #include <string>
+ #include <vector>
+ 
++#if NV_TENSORRT_MAJOR < 10
++  #define TRT_kINT nvinfer1::DataType::kINT32
++#else
++  #define TRT_kINT nvinfer1::DataType::kINT64
++#endif
++#include <type_traits>
++typedef std::conditional<NV_TENSORRT_MAJOR<10, int32_t, int64_t>::type TRT_INT;
++
+ namespace trt_plugin {
+ 
+ class MultiScaleDeformableAttnPlugin : public nvinfer1::IPluginV2DynamicExt {
+diff --git a/TensorRT/plugin/rotate/rotateKernel.cu b/TensorRT/plugin/rotate/rotateKernel.cu
+index 379b7cc..71e1f9f 100644
+--- a/TensorRT/plugin/rotate/rotateKernel.cu
++++ b/TensorRT/plugin/rotate/rotateKernel.cu
+@@ -706,7 +706,7 @@ __global__ void rotateKernel_int8(const int nthreads, int8_4 *output,
+ }
+ 
+ template <typename T>
+-void rotate(T *output, T *input, T *angle, T *center, int *input_dims,
++void rotate(T *output, T *input, T *angle, T *center, TRT_INT_TYPE *input_dims,
+             RotateInterpolation interp, cudaStream_t stream) {
+   int channel = input_dims[0];
+   int height = input_dims[1];
+@@ -719,7 +719,7 @@ void rotate(T *output, T *input, T *angle, T *center, int *input_dims,
+ }
+ 
+ void rotate_h2(__half2 *output, __half2 *input, __half *angle, __half *center,
+-               int *input_dims, RotateInterpolation interp,
++               TRT_INT_TYPE *input_dims, RotateInterpolation interp,
+                cudaStream_t stream) {
+   int channel = input_dims[0];
+   int height = input_dims[1];
+@@ -734,7 +734,7 @@ void rotate_h2(__half2 *output, __half2 *input, __half *angle, __half *center,
+ template <typename T>
+ void rotate_int8(int8_4 *output, float scale_o, const int8_4 *input,
+                  float scale_i, const T *angle, const T *center,
+-                 int *input_dims, RotateInterpolation interp,
++                 TRT_INT_TYPE *input_dims, RotateInterpolation interp,
+                  cudaStream_t stream) {
+   int channel = input_dims[0];
+   int height = input_dims[1];
+@@ -748,19 +748,19 @@ void rotate_int8(int8_4 *output, float scale_o, const int8_4 *input,
+ }
+ 
+ template void rotate(float *output, float *input, float *angle, float *center,
+-                     int *input_dims, RotateInterpolation interp,
++                     TRT_INT_TYPE *input_dims, RotateInterpolation interp,
+                      cudaStream_t stream);
+ 
+ template void rotate(__half *output, __half *input, __half *angle,
+-                     __half *center, int *input_dims,
++                     __half *center, TRT_INT_TYPE *input_dims,
+                      RotateInterpolation interp, cudaStream_t stream);
+ 
+ template void rotate_int8(int8_4 *output, float scale_o, const int8_4 *input,
+                           float scale_i, const float *angle,
+-                          const float *center, int *input_dims,
++                          const float *center, TRT_INT_TYPE *input_dims,
+                           RotateInterpolation interp, cudaStream_t stream);
+ 
+ template void rotate_int8(int8_4 *output, float scale_o, const int8_4 *input,
+                           float scale_i, const __half *angle,
+-                          const __half *center, int *input_dims,
++                          const __half *center, TRT_INT_TYPE *input_dims,
+                           RotateInterpolation interp, cudaStream_t stream);
+diff --git a/TensorRT/plugin/rotate/rotateKernel.h b/TensorRT/plugin/rotate/rotateKernel.h
+index d5808b9..e8f7030 100644
+--- a/TensorRT/plugin/rotate/rotateKernel.h
++++ b/TensorRT/plugin/rotate/rotateKernel.h
+@@ -8,21 +8,26 @@
+ #include "cuda_int8.h"
+ #include <cuda_fp16.h>
+ #include <cuda_runtime.h>
++#include <NvInfer.h>
++#include <cuda_runtime_api.h>
++#include <type_traits>
++
++typedef std::conditional<NV_TENSORRT_MAJOR<10, int, int64_t>::type TRT_INT_TYPE;
+ 
+ enum class RotateInterpolation { Bilinear, Nearest };
+ 
+ template <typename T>
+-void rotate(T *output, T *input, T *angle, T *center, int *input_dims,
++void rotate(T *output, T *input, T *angle, T *center, TRT_INT_TYPE *input_dims,
+             RotateInterpolation interp, cudaStream_t stream);
+ 
+ void rotate_h2(__half2 *output, __half2 *input, __half *angle, __half *center,
+-               int *input_dims, RotateInterpolation interp,
++               TRT_INT_TYPE *input_dims, RotateInterpolation interp,
+                cudaStream_t stream);
+ 
+ template <typename T>
+ void rotate_int8(int8_4 *output, float scale_o, const int8_4 *input,
+                  float scale_i, const T *angle, const T *center,
+-                 int *input_dims, RotateInterpolation interp,
++                 TRT_INT_TYPE *input_dims, RotateInterpolation interp,
+                  cudaStream_t stream);
+ 
+ #endif // TENSORRT_OPS_ROTATEKERNEL_H
+diff --git a/det2trt/convert/pytorch2onnx.py b/det2trt/convert/pytorch2onnx.py
+index 978e544..a01c8b4 100644
+--- a/det2trt/convert/pytorch2onnx.py
++++ b/det2trt/convert/pytorch2onnx.py
+@@ -62,12 +62,13 @@ def pytorch2onnx(
+         input_names=input_name,
+         output_names=output_name,
+         export_params=True,
+-        keep_initializers_as_inputs=True,
+-        do_constant_folding=False,
++        keep_initializers_as_inputs=False,
++        do_constant_folding=True,
+         verbose=verbose,
+         opset_version=opset_version,
+         dynamic_axes=dynamic_axes,
+         operator_export_type=OperatorExportTypes.ONNX_FALLTHROUGH,
++        autograd_inlining=False,
+     )
+ 
+     print(f"ONNX file has been saved in {output_file}")
+diff --git a/det2trt/quantization/calibrator_trt.py b/det2trt/quantization/calibrator_trt.py
+index af58840..59b9b30 100644
+--- a/det2trt/quantization/calibrator_trt.py
++++ b/det2trt/quantization/calibrator_trt.py
+@@ -60,7 +60,7 @@ def get_calibrator(calibrator):
+                     return None
+                 assert set(names) == self.names
+                 # Assume self.batches is a generator that provides batch data.
+-                data = self.iter.next()
++                data = next(self.iter)
+                 self.decode_data(data)
+                 # Assume that self.device_input is a device buffer allocated by the constructor.
+                 [
+diff --git a/det2trt/utils/tensorrt.py b/det2trt/utils/tensorrt.py
+index 36198fc..44ffe5e 100644
+--- a/det2trt/utils/tensorrt.py
++++ b/det2trt/utils/tensorrt.py
+@@ -43,35 +43,42 @@ def allocate_buffers(engine, context, input_shapes, output_shapes):
+     inputs = []
+     outputs = []
+     bindings = []
+-    for binding_id, binding in enumerate(engine):
+-        if engine.binding_is_input(binding):
++    tensor_names = [
++        engine.get_tensor_name(i) for i in range(engine.num_io_tensors)
++    ]
++    for binding in tensor_names:
++        tensor_mode = engine.get_tensor_mode(binding)
++        if tensor_mode == trt.TensorIOMode.INPUT:
+             dims = input_shapes[binding]
+-            context.set_binding_shape(binding_id, dims)
++            context.set_input_shape(binding, dims)
+         else:
+             dims = output_shapes[binding]
+ 
+         size = trt.volume(dims)
+         # The maximum batch size which can be used for inference.
+-        dtype = trt.nptype(engine.get_binding_dtype(binding))
++        dtype = trt.nptype(engine.get_tensor_dtype(binding))
+         assert dtype == np.float32, "Engine's inputs/outputs only support FP32."
+         # Allocate host and device buffers
+         host_mem = cuda.pagelocked_empty(size, dtype)
+         device_mem = cuda.mem_alloc(host_mem.nbytes)
+         # Append the device buffer to device bindings.
+         bindings.append(int(device_mem))
+-        if engine.binding_is_input(binding):
++        if tensor_mode == trt.TensorIOMode.INPUT:
+             inputs.append(HostDeviceMem(binding, host_mem, device_mem))
+         else:
+             outputs.append(HostDeviceMem(binding, host_mem, device_mem))
++        # Setup context tensor address.
++        context.set_tensor_address(binding, int(device_mem))
++
+     return inputs, outputs, bindings
+ 
+ 
+-def do_inference(context, bindings, inputs, outputs, stream, batch_size=1):
++def do_inference(context, inputs, outputs, stream):
+     [cuda.memcpy_htod_async(inp.device, inp.host, stream) for inp in inputs]
+ 
+     stream.synchronize()
+     t1 = time.time()
+-    context.execute_async_v2(bindings=bindings, stream_handle=stream.handle)
++    context.execute_async_v3(stream_handle=stream.handle)
+     stream.synchronize()
+     t2 = time.time()
+     [cuda.memcpy_dtoh_async(out.host, out.device, stream) for out in outputs]
+diff --git a/tools/bevformer/evaluate_trt.py b/tools/bevformer/evaluate_trt.py
+index 2648ecb..c572f0b 100644
+--- a/tools/bevformer/evaluate_trt.py
++++ b/tools/bevformer/evaluate_trt.py
+@@ -7,8 +7,9 @@ import mmcv
+ import copy
+ import numpy as np
+ from mmcv import Config
+-from mmdeploy.backend.tensorrt import load_tensorrt_plugin
+ 
++import os
++import ctypes
+ import sys
+ 
+ sys.path.append(".")
+@@ -26,13 +27,31 @@ def parse_args():
+     parser = argparse.ArgumentParser(description="MMDet test (and eval) a model")
+     parser.add_argument("config", help="test config file path")
+     parser.add_argument("trt_model", help="checkpoint file")
++    parser.add_argument("--trt_plugins", default="/workspace/BEVFormer_tensorrt/TensorRT/lib/libtensorrt_ops.so")
+     args = parser.parse_args()
+     return args
+ 
+ 
++def load_tensorrt_plugin(lib_path) -> bool:
++    """Load TensorRT plugins library.
++
++    Returns:
++        bool: True if TensorRT plugin library is successfully loaded.
++    """
++    success = False
++    if os.path.exists(lib_path):
++        ctypes.CDLL(lib_path)
++        print(f'Successfully loaded tensorrt plugins from {lib_path}')
++        success = True
++    else:
++        print(f'Could not load the library of tensorrt plugins. \
++            Because the file does not exist: {lib_path}')
++    return success
++
++
+ def main():
+     args = parse_args()
+-    load_tensorrt_plugin()
++    load_tensorrt_plugin(args.trt_plugins)
+ 
+     trt_model = args.trt_model
+     config_file = args.config
+@@ -134,7 +153,7 @@ def main():
+                 raise RuntimeError(f"Cannot find input name {inp.name}.")
+ 
+         trt_outputs, t = do_inference(
+-            context, bindings=bindings, inputs=inputs, outputs=outputs, stream=stream
++            context, inputs=inputs, outputs=outputs, stream=stream
+         )
+ 
+         trt_outputs = {

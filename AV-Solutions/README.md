@@ -12,3 +12,6 @@ This folder contains samples for autonomous vehicle on NVIDIA DRIVE platform, in
 
 ## DCNv4-TensorRT
 [DCNv4-TensorRT](./dcnv4-trt/) is a sample application to demonstrate the deployment and optimization of [Deformable Convolution v4 (DCNv4)](https://github.com/OpenGVLab/DCNv4) on NVIDIA Drive Orin platform using TensorRT with multiple plugin implementations.
+
+## BEVFormer: INT8 explicit quantization for TensorRT
+[BEVFormer-INT8-EQ](./bevformer-int8-eq) is an end-to-end example to demonstrate the explicit quantization and deployment of [BEVFormer](https://github.com/fundamentalvision/BEVFormer) on NVIDIA GPUs using TensorRT.
