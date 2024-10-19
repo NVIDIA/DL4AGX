@@ -1,5 +1,0 @@
-ssdConvertUFF/*.cmake
-ssdConvertUFF/*.so
-ssdConvertUFF/Makefile
-__pycache__
-*.pyc

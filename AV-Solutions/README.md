@@ -1,6 +1,9 @@
 # Autonomous Vehicle Solutions
 This folder contains samples for autonomous vehicle on NVIDIA DRIVE platform, including deployment of SOTA methods with TensorRT and inference application design. More is on the way. Please stay tuned.
 
+## Sparsity in INT8
+[Sparsity in INT8](./SparsityINT8/) contains the PyTorch codebase for sparsity INT8 training and TensorRT inference, demonstrating the workflow for leveraging both structured sparsity and quantization for more efficient deployment. Please refer to ["Sparsity in INT8: Training Workflow and Best Practices for NVIDIA TensorRT Acceleration"](https://developer.nvidia.com/blog/sparsity-in-int8-training-workflow-and-best-practices-for-tensorrt-acceleration/) for more details..
+
 ## Multi-task model inference on multiple devices
 [Multi-task model inference on multiple devices](./mtmi/) is to demonstrate the deployment of a multi-task network on NVIDIA Drive Orin platform using both GPU and DLA. Please refer to our webinar on [Optimizing Multi-task Model Inference for Autonomous Vehicles](https://www.nvidia.com/en-us/on-demand/session/other2024-inferenceauto/)
 

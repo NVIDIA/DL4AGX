@@ -1,14 +1,5 @@
-bazel*
-docker/DRIVE/pdk_files/*
-docker/DRIVE/qnx_toolchain/*
-docker/Jetson/jetpack_files/*
 .vscode/
-.dazel_run
-.nvvp
 __pycache__/
 # The experiments space can be used to keep things you
 # don't want to push up but want to use the build system 
 experiments/ 
-.DS_Store
-._.DS_Store
-._*
