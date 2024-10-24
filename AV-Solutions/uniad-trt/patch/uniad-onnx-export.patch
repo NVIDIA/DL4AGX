@@ -4633,7 +4633,7 @@ index 33024f8..0186ef3 100644
  class CustomMSDeformableAttention(BaseModule):
      """An attention module used in Deformable-Detr.
  
-@@ -343,3 +350,585 @@ class CustomMSDeformableAttention(BaseModule):
+@@ -343,3 +350,582 @@ class CustomMSDeformableAttention(BaseModule):
              output = output.permute(1, 0, 2)
  
          return self.dropout(output) + identity
@@ -5070,10 +5070,10 @@ index 33024f8..0186ef3 100644
 +@ATTENTION.register_module(force=True)
 +class MultiScaleDeformableAttentionTRTP(CustomMSDeformableAttentionTRT):
 +    """An attention module used in Deformable-Detr.
-
++
 +    `Deformable DETR: Deformable Transformers for End-to-End Object Detection.
 +    <https://arxiv.org/pdf/2010.04159.pdf>`_.
-
++
 +    Args:
 +        embed_dims (int): The embedding dimension of Attention.
 +            Default: 256.
@@ -5094,12 +5094,11 @@ index 33024f8..0186ef3 100644
 +        init_cfg (obj:`mmcv.ConfigDict`): The Config for initialization.
 +            Default: None.
 +    """
-
++
 +    def __init__(self, *args, **kwargs):
 +        super(MultiScaleDeformableAttentionTRTP, self).__init__(*args, **kwargs)
-+        self.multi_scale_deformable_attn_standard = multi_scale_deformable_attn_standard
 +        self.multi_scale_deformable_attn = multi_scale_deformable_attn
-
++
 +    @deprecated_api_warning(
 +        {"residual": "identity"}, cls_name="MultiScaleDeformableAttention"
 +    )
@@ -5118,7 +5117,7 @@ index 33024f8..0186ef3 100644
 +        **kwargs,
 +    ):
 +        """Forward Function of MultiScaleDeformAttention.
-
++
 +        Args:
 +            query (Tensor): Query of Transformer with shape
 +                (num_query, bs, embed_dims).
@@ -5148,32 +5147,32 @@ index 33024f8..0186ef3 100644
 +            level_start_index (Tensor): The start index of each level.
 +                A tensor has shape ``(num_levels, )`` and can be represented
 +                as [0, h_0*w_0, h_0*w_0+h_1*w_1, ...].
-
++
 +        Returns:
 +             Tensor: forwarded results with shape [num_query, bs, embed_dims].
 +        """
 +        if value is None:
 +            value = query
-
++
 +        if identity is None:
 +            identity = query
 +        if query_pos is not None:
 +            query = query + query_pos
 +        assert not self.batch_first
-+        +change to (bs, num_query ,embed_dims)
++        #change to (bs, num_query ,embed_dims)
 +        query = query.view(1, -1, self.embed_dims)
 +        value = value.view(1, -1, self.embed_dims)
-
++
 +        assert (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() == value.shape[1]
-
++
 +        value = self.value_proj(value)
 +        if key_padding_mask is not None:
 +            value = value.masked_fill(key_padding_mask[..., None], 0.0)
 +        value = value.view(1, -1, self.num_heads, self.embed_dims // self.num_heads)
-
++
 +        sampling_offsets = self.sampling_offsets(query)
 +        attention_weights = self.attention_weights(query)
-
++
 +        if torch.onnx.is_in_onnx_export():
 +            assert value.is_cuda
 +        sampling_offsets = sampling_offsets.view(
@@ -5211,12 +5210,10 @@ index 33024f8..0186ef3 100644
 +                attention_weights,
 +            ).flatten(2)
 +        else:
-+            raise ValueError(
-+                f'Last dim of reference_points must be'
-+                f' 2 or 4, but get {reference_points.shape[-1]} instead.')
-
++            raise ValueError(f'Last dim of reference_points must be 2 or 4, but get {reference_points.shape[-1]} instead.')
++
 +        output = self.output_proj(output)
-
++
 +        output = output.permute(1, 0, 2)
 +        return self.dropout(output) + identity
 diff --git a/projects/mmdet3d_plugin/uniad/modules/encoder.py b/projects/mmdet3d_plugin/uniad/modules/encoder.py
