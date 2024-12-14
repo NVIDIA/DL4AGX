@@ -1,0 +1,1852 @@
+diff --git a/projects/configs/far3d.py b/projects/configs/far3d.py
+index 3bcf271..a07574d 100644
+--- a/projects/configs/far3d.py
++++ b/projects/configs/far3d.py
+@@ -40,6 +40,7 @@ model = dict(
+     use_grid_mask=True,
+     stride=[8, 16, 32, 64],
+     position_level=[0, 1, 2, 3],
++    **img_norm_cfg,
+     img_backbone=dict(
+         type='VoVNet', ###use checkpoint to save memory
+         spec_name='V-99-eSE',
+@@ -179,7 +180,7 @@ train_pipeline = [
+     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
+     dict(type='ObjectNameFilter', classes=class_names),
+     dict(type='AV2ResizeCropFlipRotImageV2', data_aug_conf=ida_aug_conf),
+-    dict(type='NormalizeMultiviewImage', **img_norm_cfg),
++    #dict(type='NormalizeMultiviewImage', **img_norm_cfg),
+     dict(type='AV2PadMultiViewImage', size='same2max'),
+     dict(type='AV2DownsampleQuantizeInstanceDepthmap', downsample=depthnet_config['stride'], depth_config=depthnet_config),
+     dict(type='PETRFormatBundle3D', class_names=class_names, collect_keys=collect_keys + ['prev_exists']),
+@@ -187,9 +188,8 @@ train_pipeline = [
+              meta_keys=('filename', 'ori_shape', 'img_shape', 'pad_shape', 'scale_factor', 'flip', 'box_mode_3d', 'box_type_3d', 'img_norm_cfg', 'scene_token', 'gt_bboxes_3d','gt_labels_3d', 'ins_depthmap', 'ins_depthmap_mask'))
+ ]
+ test_pipeline = [
+-    dict(type='AV2LoadMultiViewImageFromFiles', to_float32=True),
++    dict(type='AV2LoadMultiViewImageFromFiles', to_float32=False),
+     dict(type='AV2ResizeCropFlipRotImageV2', data_aug_conf=ida_aug_conf),
+-    dict(type='NormalizeMultiviewImage', **img_norm_cfg),
+     dict(type='AV2PadMultiViewImage', size='same2max'),
+     dict(
+         type='MultiScaleFlipAug3D',
+diff --git a/projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py b/projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py
+index 3accf02..5229230 100644
+--- a/projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py
++++ b/projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py
+@@ -66,22 +66,22 @@ class NMSFreeCoder(BaseBBoxCoder):
+         if self.post_center_range is not None:
+             self.post_center_range = torch.tensor(self.post_center_range, device=scores.device)
+             
+-            mask = (final_box_preds[..., :3] >=
+-                    self.post_center_range[:3]).all(1)
+-            mask &= (final_box_preds[..., :3] <=
+-                     self.post_center_range[3:]).all(1)
++            #mask = (final_box_preds[..., :3] >=
++                    #self.post_center_range[:3]).all(1)
++            #mask &= (final_box_preds[..., :3] <=
++                     #self.post_center_range[3:]).all(1)
+ 
+-            if self.score_threshold:
+-                mask &= thresh_mask
++            #if self.score_threshold:
++                #mask &= thresh_mask
+ 
+-            boxes3d = final_box_preds[mask]
+-            scores = final_scores[mask]
+-            labels = final_preds[mask]
++            #boxes3d = final_box_preds[mask]
++            #scores = final_scores[mask]
++            #labels = final_preds[mask]
+ 
+             predictions_dict = {
+-                'bboxes': boxes3d,
+-                'scores': scores,
+-                'labels': labels,
++                'bboxes': final_box_preds,
++                'scores': final_scores,
++                'labels': final_preds,
+             }
+ 
+         else:
+diff --git a/projects/mmdet3d_plugin/datasets/argoverse2_dataset.py b/projects/mmdet3d_plugin/datasets/argoverse2_dataset.py
+index d62b0f3..b2b025e 100644
+--- a/projects/mmdet3d_plugin/datasets/argoverse2_dataset.py
++++ b/projects/mmdet3d_plugin/datasets/argoverse2_dataset.py
+@@ -287,7 +287,7 @@ class Argoverse2Dataset(Custom3DDataset):
+                 for saving json files when jsonfile_prefix is not specified.
+         """
+         import pandas as pd
+-
++        self.data_infos = self.data_infos[:len(outputs)]
+         assert len(self.data_infos) == len(outputs)
+         num_samples = len(outputs)
+         print('\nGot {} samples'.format(num_samples))
+diff --git a/projects/mmdet3d_plugin/models/dense_heads/farhead.py b/projects/mmdet3d_plugin/models/dense_heads/farhead.py
+index 48e8ee5..12d286e 100644
+--- a/projects/mmdet3d_plugin/models/dense_heads/farhead.py
++++ b/projects/mmdet3d_plugin/models/dense_heads/farhead.py
+@@ -13,10 +13,12 @@ from mmdet3d.core.bbox.coders import build_bbox_coder
+ from projects.mmdet3d_plugin.core.bbox.util import normalize_bbox
+ from projects.mmdet3d_plugin.models.utils.positional_encoding import pos2posemb3d, pos2posemb1d, nerf_positional_encoding
+ from projects.mmdet3d_plugin.models.utils.misc import MLN, topk_gather, transform_reference_points, memory_refresh, SELayer_Linear
++from mmdet3d.core.bbox.structures.lidar_box3d import LiDARInstance3DBoxes
+ import copy
+ from mmdet.models.utils import NormedLinear
+ from scipy.optimize import linear_sum_assignment
+ import numpy as np
++
+ @HEADS.register_module()
+ class FarHead(AnchorFreeHead):
+     """Implements the DETR transformer head.
+@@ -187,7 +189,7 @@ class FarHead(AnchorFreeHead):
+         self.train_use_gt_depth = train_use_gt_depth
+         self.flag_disable_gt_depth = False
+         self.val_use_gt_depth = val_use_gt_depth
+-        self.add_multi_depth_proposal = add_multi_depth_proposal
++        self.add_multi_depth_proposal = add_multi_depth_proposal and multi_depth_config['topk'] > 1
+         self.multi_depth_config = multi_depth_config
+         self.return_context_feat = return_context_feat
+         self.return_bbox2d_scores = return_bbox2d_scores
+@@ -223,7 +225,9 @@ class FarHead(AnchorFreeHead):
+ 
+ 
+         self._init_layers()
+-        self.reset_memory()
++        self.reset_memory(1)
++        range_min = self.multi_depth_config.get('range_min', -1)
++        self.range_min_bin = self._convert_bin_depth_to_specific(torch.tensor([range_min]), inverse=True).item()
+ 
+     def _init_layers(self):
+         """Initialize layers of the transformer head."""
+@@ -281,12 +285,12 @@ class FarHead(AnchorFreeHead):
+             self.ego_pose_pe = MLN(180)
+             self.ego_pose_memory = MLN(180)
+ 
+-    def temporal_alignment(self, query_pos, tgt, reference_points):
++    def temporal_alignment(self, query_pos, tgt, reference_points, memory_reference_point, memory_embedding, memory_velo, memory_timestamp, memory_egopose):
+         B = query_pos.size(0)
+ 
+-        temp_reference_point = (self.memory_reference_point - self.pc_range[:3]) / (self.pc_range[3:6] - self.pc_range[0:3])
++        temp_reference_point = (memory_reference_point - self.pc_range[:3]) / (self.pc_range[3:6] - self.pc_range[0:3])
+         temp_pos = self.query_embedding(pos2posemb3d(temp_reference_point)) 
+-        temp_memory = self.memory_embedding
++        temp_memory = memory_embedding
+         rec_ego_pose = torch.eye(4, device=query_pos.device).unsqueeze(0).unsqueeze(0).repeat(B, query_pos.size(1), 1, 1)
+         
+         if self.with_ego_pos:
+@@ -294,13 +298,13 @@ class FarHead(AnchorFreeHead):
+             rec_ego_motion = nerf_positional_encoding(rec_ego_motion)
+             tgt = self.ego_pose_memory(tgt, rec_ego_motion)
+             query_pos = self.ego_pose_pe(query_pos, rec_ego_motion)
+-            memory_ego_motion = torch.cat([self.memory_velo, self.memory_timestamp, self.memory_egopose[..., :3, :].flatten(-2)], dim=-1).float()
++            memory_ego_motion = torch.cat([memory_velo, memory_timestamp, memory_egopose[..., :3, :].flatten(-2)], dim=-1).float()
+             memory_ego_motion = nerf_positional_encoding(memory_ego_motion)
+             temp_pos = self.ego_pose_pe(temp_pos, memory_ego_motion)
+             temp_memory = self.ego_pose_memory(temp_memory, memory_ego_motion)
+ 
+         query_pos += self.time_embedding(pos2posemb1d(torch.zeros_like(reference_points[...,:1])))
+-        temp_pos += self.time_embedding(pos2posemb1d(self.memory_timestamp).float())
++        temp_pos += self.time_embedding(pos2posemb1d(memory_timestamp).float())
+ 
+         if self.num_propagated > 0:
+             tgt = torch.cat([tgt, temp_memory[:, :self.num_propagated]], dim=1)
+@@ -443,40 +447,47 @@ class FarHead(AnchorFreeHead):
+                 nn.init.constant_(m[-1].bias, bias_init)
+ 
+ 
+-    def reset_memory(self):
+-        self.memory_embedding = None
+-        self.memory_reference_point = None
+-        self.memory_timestamp = None
+-        self.memory_egopose = None
+-        self.memory_velo = None
++    def reset_memory(self, batch_size, device="cuda:0"):
++        self.state = self.get_memory(batch_size, device)
++
++    def get_memory(self, batch_size, device="cuda:0"):
++        memory_embedding = torch.zeros(batch_size, self.memory_len, self.embed_dims, device=device)
++        memory_reference_point = torch.zeros(batch_size, self.memory_len, 3, device=device)
++        memory_timestamp = torch.zeros(batch_size, self.memory_len, 1, device=device)
++        memory_egopose = torch.zeros(batch_size, self.memory_len, 4, 4, device=device)
++        memory_velo = torch.zeros(batch_size, self.memory_len, 2, device=device)
++        return dict(memory_embedding=memory_embedding, memory_reference_point=memory_reference_point,
++                    memory_timestamp=memory_timestamp, memory_egopose=memory_egopose,
++                    memory_velo=memory_velo)
++
+ 
+-    def pre_update_memory(self, data):
++    def pre_update_memory(self, data, memory_embedding, memory_reference_point, memory_timestamp, memory_egopose, memory_velo):
+         x = data['prev_exists']
+         B = x.size(0)
+         # refresh the memory when the scene changes
+-        if self.memory_embedding is None:
+-            self.memory_embedding = x.new_zeros(B, self.memory_len, self.embed_dims)
+-            self.memory_reference_point = x.new_zeros(B, self.memory_len, 3)
+-            self.memory_timestamp = x.new_zeros(B, self.memory_len, 1)
+-            self.memory_egopose = x.new_zeros(B, self.memory_len, 4, 4)
+-            self.memory_velo = x.new_zeros(B, self.memory_len, 2)
+-        else:
+-            self.memory_timestamp += data['timestamp'].unsqueeze(-1).unsqueeze(-1)
+-            self.memory_egopose = data['ego_pose_inv'].unsqueeze(1) @ self.memory_egopose
+-            self.memory_reference_point = transform_reference_points(self.memory_reference_point, data['ego_pose_inv'], reverse=False)
+-            self.memory_timestamp = memory_refresh(self.memory_timestamp[:, :self.memory_len], x)
+-            self.memory_reference_point = memory_refresh(self.memory_reference_point[:, :self.memory_len], x)
+-            self.memory_embedding = memory_refresh(self.memory_embedding[:, :self.memory_len], x)
+-            self.memory_egopose = memory_refresh(self.memory_egopose[:, :self.memory_len], x)
+-            self.memory_velo = memory_refresh(self.memory_velo[:, :self.memory_len], x)
++        
++        memory_timestamp += data['timestamp'].unsqueeze(-1).unsqueeze(-1)
++        memory_egopose = data['ego_pose_inv'].unsqueeze(1) @ memory_egopose
++        memory_reference_point = transform_reference_points(memory_reference_point, data['ego_pose_inv'], reverse=False)
++        memory_timestamp = memory_refresh(memory_timestamp[:, :self.memory_len], x)
++        memory_reference_point = memory_refresh(memory_reference_point[:, :self.memory_len], x)
++        memory_embedding = memory_refresh(memory_embedding[:, :self.memory_len], x)
++        memory_egopose = memory_refresh(memory_egopose[:, :self.memory_len], x)
++        memory_velo = memory_refresh(memory_velo[:, :self.memory_len], x)
+         
+         # for the first frame, padding pseudo_reference_points (non-learnable)
+         if self.num_propagated > 0:
+             pseudo_reference_points = self.pseudo_reference_points.weight * (self.pc_range[3:6] - self.pc_range[0:3]) + self.pc_range[0:3]
+-            self.memory_reference_point[:, :self.num_propagated]  = self.memory_reference_point[:, :self.num_propagated] + (1 - x).view(B, 1, 1) * pseudo_reference_points
+-            self.memory_egopose[:, :self.num_propagated]  = self.memory_egopose[:, :self.num_propagated] + (1 - x).view(B, 1, 1, 1) * torch.eye(4, device=x.device)
++            memory_reference_point[:, :self.num_propagated]  = memory_reference_point[:, :self.num_propagated] + (1 - x).view(B, 1, 1) * pseudo_reference_points
++            memory_egopose[:, :self.num_propagated]  = memory_egopose[:, :self.num_propagated] + (1 - x).view(B, 1, 1, 1) * torch.eye(4, device=x.device)
++        return dict(memory_embedding=memory_embedding, 
++                    memory_reference_point=memory_reference_point, 
++                    memory_timestamp=memory_timestamp, 
++                    memory_egopose=memory_egopose, memory_velo=memory_velo)
+ 
+-    def post_update_memory(self, data, rec_ego_pose, all_cls_scores, all_bbox_preds, outs_dec, mask_dict):
++
++    def post_update_memory(self, ego_pose, timestamp, rec_ego_pose, all_cls_scores, all_bbox_preds, outs_dec, mask_dict, 
++                           memory_embedding, memory_reference_point, memory_timestamp, memory_egopose, memory_velo):
+         if self.training and mask_dict and mask_dict['pad_size'] > 0:
+             rec_reference_points = all_bbox_preds[:, :, mask_dict['pad_size']:, :3][-1]
+             rec_velo = all_bbox_preds[:, :, mask_dict['pad_size']:, -2:][-1]
+@@ -497,15 +508,21 @@ class FarHead(AnchorFreeHead):
+         rec_memory = topk_gather(rec_memory, topk_indexes).detach()
+         rec_ego_pose = topk_gather(rec_ego_pose, topk_indexes)
+         rec_velo = topk_gather(rec_velo, topk_indexes).detach()
+-
+-        self.memory_embedding = torch.cat([rec_memory, self.memory_embedding], dim=1)
+-        self.memory_timestamp = torch.cat([rec_timestamp, self.memory_timestamp], dim=1)
+-        self.memory_egopose= torch.cat([rec_ego_pose, self.memory_egopose], dim=1)
+-        self.memory_reference_point = torch.cat([rec_reference_points, self.memory_reference_point], dim=1)
+-        self.memory_velo = torch.cat([rec_velo, self.memory_velo], dim=1)
+-        self.memory_reference_point = transform_reference_points(self.memory_reference_point, data['ego_pose'], reverse=False)
+-        self.memory_timestamp -= data['timestamp'].unsqueeze(-1).unsqueeze(-1)
+-        self.memory_egopose = data['ego_pose'].unsqueeze(1) @ self.memory_egopose
++        
++        memory_embedding = torch.cat([rec_memory, memory_embedding], dim=1)
++        memory_timestamp = torch.cat([rec_timestamp, memory_timestamp], dim=1)
++        memory_egopose= torch.cat([rec_ego_pose, memory_egopose], dim=1)
++        memory_reference_point = torch.cat([rec_reference_points, memory_reference_point], dim=1)
++        memory_velo = torch.cat([rec_velo, memory_velo], dim=1)
++        memory_reference_point = transform_reference_points(memory_reference_point, ego_pose, reverse=False)
++        memory_timestamp -= timestamp.unsqueeze(-1).unsqueeze(-1)
++        memory_egopose = ego_pose.unsqueeze(1) @ memory_egopose
++        return dict(memory_embedding=memory_embedding, 
++                    memory_reference_point=memory_reference_point, 
++                    memory_timestamp=memory_timestamp, 
++                    memory_egopose=memory_egopose, 
++                    memory_velo=memory_velo)
++        
+     
+     def _get_gt_depth(self, img_metas, device, BNHW):
+         B, N, H, W = BNHW
+@@ -530,7 +547,7 @@ class FarHead(AnchorFreeHead):
+                 indices = indices.type(torch.int64)
+                 return indices
+     
+-    def forward(self, img_metas, outs_roi=None, **data):
++    def forward(self, img_metas, outs_roi=None, state=None, **data):
+         """Forward function.
+         Args:
+             mlvl_feats (tuple[Tensor]): Features from the upstream
+@@ -544,7 +561,11 @@ class FarHead(AnchorFreeHead):
+                 head with normalized coordinate format (cx, cy, w, l, cz, h, theta, vx, vy). \
+                 Shape [nb_dec, bs, num_query, 9].
+         """
+-        self.pre_update_memory(data)
++        if state is None:
++            state = self.state
++        state = self.pre_update_memory(data, **state)
++        
++
+         mlvl_feats = data['img_feats']
+         B, N, _, _, _ = mlvl_feats[0].shape
+ 
+@@ -576,7 +597,8 @@ class FarHead(AnchorFreeHead):
+             if self.return_context_feat:
+                 _dim = feat_flatten.shape[-1]
+                 valid_indices = outs_roi['valid_indices']
+-                context_feat = feat_flatten[valid_indices.repeat(1, 1, _dim)].reshape(-1, _dim)
++                
++                context_feat = torch.gather(feat_flatten, dim=1, index=valid_indices.repeat(1,1,_dim)).reshape(-1, _dim)
+ 
+                 context2d_feat = context_feat.detach()
+             else:
+@@ -605,9 +627,15 @@ class FarHead(AnchorFreeHead):
+             # depth input: specific bins or depth logits
+             input_depth_logits = self.multi_depth_config.get('topk', -1) != -1 and not flag_use_gt_depth
+             depth_input = pred_depth_ if not input_depth_logits else pred_depth.permute(0, 2, 3, 1)
+-            reference_points2d, context_feat = self.build_query2d_proposal(pred_bbox_list, depth_input, data, (B, N),
+-                padHW, pred_depth_var=_pred_depth_var, input_depth_logits=input_depth_logits,
+-                context2d_feat=context2d_feat, bbox2d_scores=bbox2d_scores)
++            if self.add_multi_depth_proposal:
++                reference_points2d, context_feat = self.build_query2d_proposal_multi(pred_bbox_list, depth_input, data, (B, N),
++                    padHW, pred_depth_var=_pred_depth_var, input_depth_logits=input_depth_logits,
++                    context2d_feat=context2d_feat, bbox2d_scores=bbox2d_scores)
++            else:
++                reference_points2d, context_feat = self.build_query2d_proposal_single(pred_bbox_list, depth_input, data, (B, N),
++                    padHW, input_depth_logits=input_depth_logits,
++                    context2d_feat=context2d_feat, bbox2d_scores=bbox2d_scores)
++
+ 
+            
+             pred_depth_var = None   # [Deprecated function]
+@@ -633,12 +661,13 @@ class FarHead(AnchorFreeHead):
+                     attn_mask = None
+ 
+         tgt = torch.zeros_like(query_pos)
+-        if 'context_feat' in locals() and context_feat is not None:    # add context to Q_feat
++        if context_feat is not None:    # add context to Q_feat
+             context_feat = self.context_embed(context_feat)  # newly add
+             tgt[:, -pro2d_num:, :] = context_feat
+ 
+         # prepare for the tgt and query_pos using mln.
+-        tgt, query_pos, reference_points, temp_memory, temp_pos, rec_ego_pose = self.temporal_alignment(query_pos, tgt, reference_points)
++        
++        tgt, query_pos, reference_points, temp_memory, temp_pos, rec_ego_pose = self.temporal_alignment(query_pos, tgt, reference_points, **state)
+ 
+         outs_dec = self.transformer(tgt, query_pos, feat_flatten, spatial_flatten, level_start_index, temp_memory, 
+                                     temp_pos, attn_mask, reference_points, self.pc_range, data, img_metas)
+@@ -664,7 +693,7 @@ class FarHead(AnchorFreeHead):
+         all_bbox_preds[..., 0:3] = (all_bbox_preds[..., 0:3] * (self.pc_range[3:6] - self.pc_range[0:3]) + self.pc_range[0:3])
+         
+         # update the memory bank
+-        self.post_update_memory(data, rec_ego_pose, all_cls_scores, all_bbox_preds, outs_dec, mask_dict)
++        state = self.post_update_memory(data['ego_pose'], data['timestamp'], rec_ego_pose, all_cls_scores, all_bbox_preds, outs_dec, mask_dict, **state)
+ 
+         # cls_score_numpy = outputs_class.cpu().numpy()
+         # path = img_metas[0]['scene_token']
+@@ -689,8 +718,8 @@ class FarHead(AnchorFreeHead):
+                 'dn_mask_dict':None,
+                 'reference_points2d': reference_points2d,
+             }
+-
+-        return outs
++        self.state = state
++        return outs, state
+ 
+     def split_offline_pred2d(self, pred_bbox_list, device):
+         pred_bbox_list = [torch.from_numpy(img_bbox).to(device) if len(img_bbox) > 0 else torch.zeros(0, 6).to(device)
+@@ -708,7 +737,82 @@ class FarHead(AnchorFreeHead):
+         return new_pred_bbox_list, bbox2d_scores
+     
+     @torch.no_grad()
+-    def build_query2d_proposal(self, pred_bbox_list, pred_depth, data, bn, padHW,
++    def extract_objectwise_depth(self, pred_bbox_list, pred_depth, depth_downsample, pad_w, input_depth_logits):
++        depth_list = []
++        bbox_nums = [len(bbox) for bbox in pred_bbox_list]  # BN values
++        h_max, w_max = pred_depth.shape[1:3]
++        for ith, pred_bbox in enumerate(pred_bbox_list):
++            if bbox_nums[ith] != 0:
++                cur_depthmap = pred_depth[ith].flatten(0, 1)     # shape (HW, 1) or (HW, D)
++                cur_center2d = (pred_bbox[:, :2] / depth_downsample).round().long()      # first w then h
++                centers_x = cur_center2d[:,0]
++                centers_y = cur_center2d[:,1]
++                centers_x.clamp_(0, w_max - 1)
++                centers_y.clamp_(0, h_max - 1)
++
++                cur_center2d_ = centers_y * (pad_w//depth_downsample) + centers_x
++                if input_depth_logits:
++                    cur_depth = torch.gather(cur_depthmap, 0, cur_center2d_.long().unsqueeze(1)
++                                             .repeat(1, cur_depthmap.shape[1]))  # (Mi, D)
++                else:
++                    cur_depth = torch.gather(cur_depthmap, 0, cur_center2d_.long().unsqueeze(1))  # (Mi, 1)
++                depth_list.append(cur_depth)
++        depths = torch.cat(depth_list, dim=0)  # (M, 1) or (M, D)
++        return depths
++
++    @torch.no_grad()
++    def project_reference_points_to_image_single(self, bboxes, depths, img2lidars, bbox_nums, B, N):
++        # (u,v), d -> (ud,vd,d,1)
++        eps = 1e-5
++        coords = torch.cat([bboxes[:, :2], depths], dim=1)     # (M, 3), order is (w, h, d)
++        coords = torch.cat((coords, torch.ones_like(coords[..., :1])), -1)      # (M, 4)
++        coords[..., :2] = coords[..., :2] * torch.maximum(coords[..., 2:3], torch.ones_like(coords[..., 2:3]) * eps)
++        coords = coords.unsqueeze(-1)  # (M, 4, 1)
++        
++        # img2lidar array build
++        img2lidars = img2lidars.view(B*N, 1, 4, 4) # (BN, 1, 4, 4)
++        img2lidars_ = torch.cat([img2lidars[kth].repeat(num, 1, 1) for kth, num in enumerate(bbox_nums)], dim=0)    # (M, 4, 4)
++
++        # matmul and normalize 3d coords
++        coords3d = torch.matmul(img2lidars_, coords)[:,:3,0]    # (M, 3)
++        
++        coords3d[..., 0:1] = (coords3d[..., 0:1] - self.pc_range[0]) / (self.pc_range[3] - self.pc_range[0])
++        coords3d[..., 1:2] = (coords3d[..., 1:2] - self.pc_range[1]) / (self.pc_range[4] - self.pc_range[1])
++        coords3d[..., 2:3] = (coords3d[..., 2:3] - self.pc_range[2]) / (self.pc_range[5] - self.pc_range[2])
++        #coords_mask = (coords3d > 1.0) | (coords3d < 0.0)
++        new_reference_points = coords3d.unsqueeze(0)
++        return new_reference_points
++    
++    @torch.no_grad()
++    def project_reference_points_to_image_multi(self, bboxes, depths, img2lidars, input_depth_logits, topk, valid_indices, bbox_nums, B, N):
++        # (u,v), d -> (ud,vd,d,1)
++        eps = 1e-5
++        coords = torch.cat([bboxes[:, :2], depths], dim=1)     # (M, 3), order is (w, h, d)
++        coords = torch.cat((coords, torch.ones_like(coords[..., :1])), -1)      # (M, 4)
++        coords[..., :2] = coords[..., :2] * torch.maximum(coords[..., 2:3], torch.ones_like(coords[..., 2:3]) * eps)
++        coords = coords.unsqueeze(-1)  # (M, 4, 1)
++        
++        # img2lidar array build
++        img2lidars = img2lidars.view(B*N, 1, 4, 4) # (BN, 1, 4, 4)
++        img2lidars_ = torch.cat([img2lidars[kth].repeat(num, 1, 1) for kth, num in enumerate(bbox_nums)], dim=0)    # (M, 4, 4)
++        if input_depth_logits and self.multi_depth_config.get('topk', -1) != -1:
++            img2lidars_extra = img2lidars_.repeat(topk - 1, 1, 1)
++            img2lidars_extra = img2lidars_extra[valid_indices.repeat(topk - 1)]
++            img2lidars_ = torch.cat([img2lidars_, img2lidars_extra], dim=0)
++
++        # matmul and normalize 3d coords
++        coords3d = torch.matmul(img2lidars_, coords)[:,:3,0]    # (M, 3)
++        
++        coords3d[..., 0:1] = (coords3d[..., 0:1] - self.pc_range[0]) / (self.pc_range[3] - self.pc_range[0])
++        coords3d[..., 1:2] = (coords3d[..., 1:2] - self.pc_range[1]) / (self.pc_range[4] - self.pc_range[1])
++        coords3d[..., 2:3] = (coords3d[..., 2:3] - self.pc_range[2]) / (self.pc_range[5] - self.pc_range[2])
++        #coords_mask = (coords3d > 1.0) | (coords3d < 0.0)
++        new_reference_points = coords3d.unsqueeze(0)
++        return new_reference_points
++
++
++    @torch.no_grad()
++    def build_query2d_proposal_multi(self, pred_bbox_list, pred_depth, data, bn, padHW,
+                                valid_pred_depth=None, pred_depth_var=None, input_depth_logits=False,
+                                context2d_feat=None, bbox2d_scores=None):
+         '''
+@@ -718,7 +822,7 @@ class FarHead(AnchorFreeHead):
+         '''
+         B, N = bn
+         pad_h, pad_w = padHW
+-        eps = 1e-5
++        
+         depth_downsample = int(pad_h / pred_depth.shape[1])
+ 
+         # bbox list to (sum(Mi), 2)
+@@ -727,38 +831,23 @@ class FarHead(AnchorFreeHead):
+         if sum(bbox_nums) == 0:  # no effective 2d proposal
+             return None, None
+         # obtain corresponding depth
+-        depth_list = []
+-        depth_var_list = []
+-        h_max, w_max = pred_depth.shape[1:3]
+-        for ith, pred_bbox in enumerate(pred_bbox_list):
+-            if bbox_nums[ith] != 0:
+-                cur_depthmap = pred_depth[ith].flatten(0, 1)     # shape (HW, 1) or (HW, D)
+-                cur_center2d = (pred_bbox[:, :2] / depth_downsample).round().long()      # first w then h
+-                cur_center2d[cur_center2d < 0] = 0
+-                cur_center2d[:, 0][cur_center2d[:, 0] >= w_max] = w_max - 1
+-                cur_center2d[:, 1][cur_center2d[:, 1] >= h_max] = h_max - 1
+-
+-                cur_center2d = cur_center2d.flip(dims=(-1, ))   # to obtain depth, obtain (h, w)
+-                cur_center2d_ = cur_center2d[:, 0] * (pad_w/depth_downsample) + cur_center2d[:, 1]
+-                if input_depth_logits:
+-                    cur_depth = torch.gather(cur_depthmap, 0, cur_center2d_.long().unsqueeze(1)
+-                                             .repeat(1, cur_depthmap.shape[1]))  # (Mi, D)
+-                else:
+-                    cur_depth = torch.gather(cur_depthmap, 0, cur_center2d_.long().unsqueeze(1))  # (Mi, 1)
+-                depth_list.append(cur_depth)
+-
+-                if pred_depth_var is not None:
+-                    cur_depth_var = torch.gather(pred_depth_var[ith], 0, cur_center2d_.long())    # (Mi)
+-                    depth_var_list.append(cur_depth_var)
+-        depths = torch.cat(depth_list, dim=0)  # (M, 1) or (M, D)
++        depths = self.extract_objectwise_depth(pred_bbox_list=pred_bbox_list,
++                                               pred_depth=pred_depth,
++                                               depth_downsample=depth_downsample,
++                                               pad_w=pad_w,
++                                               input_depth_logits=input_depth_logits)
++        topk = self.multi_depth_config.get('topk')
++        valid_indices = None
+         if self.add_multi_depth_proposal:
+-            range_min = self.multi_depth_config.get('range_min', -1)
++            # this pathway does some weird stuff during export when topk == 1
+             if input_depth_logits and self.multi_depth_config.get('topk', -1) != -1:
+                 # generate multi proposals by topk depth logits
+-                topk = self.multi_depth_config.get('topk')
+-                range_min_bin = self._convert_bin_depth_to_specific(torch.tensor([range_min]), inverse=True).item()
+-                topk_values, topk_indices = torch.topk(depths, topk, dim=1)  # (M, K)
+-                valid_indices = topk_indices[:, 0] >= range_min_bin          # (M)
++                topk_values, topk_indices = torch.topk(depths, topk, dim=1)  # (M, K) # export works until here
++                valid_indices = topk_indices
++                # this causes errors in onnx export, 
++                valid_indices = topk_indices[:, 0] >= self.range_min_bin          # (M)
++                #valid_indices = topk_indices.squeeze(1) # for some reason this materializes a resolv_conj operation
++                
+                 bboxes_extra = bboxes.repeat(topk-1, 1)
+                 bboxes = torch.cat([bboxes, bboxes_extra[valid_indices.repeat(topk-1)]], dim=0) # (M', 4)
+                 depths_extra = topk_indices[:, 1:][valid_indices]   # (M, topk-1)
+@@ -769,60 +858,87 @@ class FarHead(AnchorFreeHead):
+                 if context2d_feat is not None:
+                     context2d_feat_extra = context2d_feat.repeat(topk-1, 1)
+                     context2d_feat = torch.cat([context2d_feat, context2d_feat_extra[valid_indices.repeat(topk-1)]], dim=0)
+-
+-            if bbox2d_scores is not None:   # currently use context_2d by default
+-                thr = torch.tensor([0.1]).to(bbox2d_scores.device)   # score threshold
+-                log_odds = torch.log(bbox2d_scores / (1 - bbox2d_scores)) - torch.log(thr / (1 - thr))  # (M, 1)
+-                if input_depth_logits and self.multi_depth_config.get('topk', -1) != -1:
+-                    # softmax depth logits, select topk, and rescale their weight
+-                    topk_values = topk_values / topk_values[:, 0:1]   # rescale, (M, topk)
+-                    dscores_extra = topk_values[:, 1:][valid_indices].transpose(1, 0).flatten().unsqueeze(-1) # (M*(topk-1), 1)
+-                    dscores = torch.cat([topk_values[:, 0:1], dscores_extra], dim=0)    # (M', 1)
+-                    log_odds = torch.cat([log_odds, log_odds[valid_indices].repeat(topk-1, 1)], dim=0)
+-                    log_odds = log_odds * dscores
+-                if context2d_feat is not None:
+-                    context2d_feat = torch.cat([context2d_feat, log_odds], dim=-1)  # check dim cat
+-                else:
+-                    context2d_feat = log_odds.repeat(1, self.in_channels)
++        else:
++            _, depths = torch.topk(depths, 1, dim=1)
++        if bbox2d_scores is not None:   # currently use context_2d by default
++            thr = torch.tensor([0.1]).to(bbox2d_scores.device)   # score threshold
++            log_odds = torch.log(bbox2d_scores / (1 - bbox2d_scores)) - torch.log(thr / (1 - thr))  # (M, 1)
++            if self.add_multi_depth_proposal:
++                # softmax depth logits, select topk, and rescale their weight
++                topk_values = topk_values / topk_values[:, 0:1]   # rescale, (M, topk)
++                dscores_extra = topk_values[:, 1:][valid_indices].transpose(1, 0).flatten().unsqueeze(-1) # (M*(topk-1), 1)
++                dscores = torch.cat([topk_values[:, 0:1], dscores_extra], dim=0)    # (M', 1)
++                log_odds = torch.cat([log_odds, log_odds[valid_indices].repeat(topk-1, 1)], dim=0)
++                log_odds = log_odds * dscores
++            if context2d_feat is not None:
++                context2d_feat = torch.cat([context2d_feat, log_odds], dim=-1)  # check dim cat
++            else:
++                context2d_feat = log_odds.repeat(1, self.in_channels)
++        
+ 
+         # convert bin to float depth
+         depths = self._convert_bin_depth_to_specific(depths)
++        new_reference_points = self.project_reference_points_to_image_single(
++            bboxes=bboxes,
++            depths=depths, 
++            img2lidars=data['img2lidar'], 
++            input_depth_logits=input_depth_logits,
++            topk=topk,
++            bbox_nums=bbox_nums,
++            B=B, N=N,
++            valid_indices=valid_indices
++        )
+ 
+-        # (u,v), d -> (ud,vd,d,1)
+-        coords = torch.cat([bboxes[:, :2], depths], dim=1)     # (M, 3), order is (w, h, d)
+-        coords = torch.cat((coords, torch.ones_like(coords[..., :1])), -1)      # (M, 4)
+-        coords[..., :2] = coords[..., :2] * torch.maximum(coords[..., 2:3], torch.ones_like(coords[..., 2:3]) * eps)
+-        coords = coords.unsqueeze(-1)  # (M, 4, 1)
+-
+-        # img2lidar array build
+-        img2lidars = data['lidar2img'].inverse()  # (B, N, 4, 4)
+-        img2lidars = img2lidars.view(B*N, 1, 4, 4) # (BN, 1, 4, 4)
+-        img2lidars_ = torch.cat([img2lidars[kth].repeat(num, 1, 1) for kth, num in enumerate(bbox_nums)], dim=0)    # (M, 4, 4)
+-        if self.add_multi_depth_proposal:
+-            if input_depth_logits and self.multi_depth_config.get('topk', -1) != -1:
+-                img2lidars_extra = img2lidars_.repeat(topk - 1, 1, 1)
+-                img2lidars_extra = img2lidars_extra[valid_indices.repeat(topk - 1)]
+-                img2lidars_ = torch.cat([img2lidars_, img2lidars_extra], dim=0)
+-
+-        # matmul and normalize 3d coords
+-        coords3d = torch.matmul(img2lidars_, coords).squeeze(-1)[..., :3]    # (M, 3)
+-        coords3d[..., 0:1] = (coords3d[..., 0:1] - self.pc_range[0]) / (self.pc_range[3] - self.pc_range[0])
+-        coords3d[..., 1:2] = (coords3d[..., 1:2] - self.pc_range[1]) / (self.pc_range[4] - self.pc_range[1])
+-        coords3d[..., 2:3] = (coords3d[..., 2:3] - self.pc_range[2]) / (self.pc_range[5] - self.pc_range[2])
+-        coords_mask = (coords3d > 1.0) | (coords3d < 0.0)
+-        if B == 1:
+-            new_reference_points = coords3d.unsqueeze(0)    # (B, M, 3)
+-        else:
+-            raise NotImplementedError
++        context2d_feat = context2d_feat.unsqueeze(0)
+ 
++        return new_reference_points, context2d_feat
++    
++    @torch.no_grad()
++    def build_query2d_proposal_single(self, pred_bbox_list, pred_depth, data, bn, padHW,
++                               input_depth_logits=False,
++                               context2d_feat=None, 
++                               bbox2d_scores=None):
+         '''
+-        if pred_depth_var is not None:
+-            depth_var = torch.cat(depth_var_list, dim=0).unsqueeze(0).unsqueeze(-1)    # (B, M)
+-        else:
+-            depth_var = None
++        pred_centers2d: ~~(B*N H*W 2)~~, now is a list, BN*(Mi, 4)
++        pred_depth: (B*N, H, W, 1) if not use topk depth proposals else (BN, H, W, D)
++        pred_depth_var: (B*N, 1, H, W)
+         '''
++        B, N = bn
++        pad_h, pad_w = padHW
++        
++        depth_downsample = int(pad_h / pred_depth.shape[1])
++
++        # bbox list to (sum(Mi), 2)
++        bbox_nums = [len(bbox) for bbox in pred_bbox_list]  # BN values
++        bboxes = torch.cat(pred_bbox_list, dim=0).float()   # gather boxes together
++        if sum(bbox_nums) == 0:  # no effective 2d proposal
++            return None, None
++        # obtain corresponding depth
++        depths = self.extract_objectwise_depth(pred_bbox_list=pred_bbox_list,
++                                               pred_depth=pred_depth,
++                                               depth_downsample=depth_downsample,
++                                               pad_w=pad_w,
++                                               input_depth_logits=input_depth_logits)
++        _, depths = torch.topk(depths, 1, dim=1)
++        if bbox2d_scores is not None:   # currently use context_2d by default
++            thr = torch.tensor([0.1]).to(bbox2d_scores.device)   # score threshold
++            log_odds = torch.log(bbox2d_scores / (1 - bbox2d_scores)) - torch.log(thr / (1 - thr))  # (M, 1)
++            if context2d_feat is not None:
++                context2d_feat = torch.cat([context2d_feat, log_odds], dim=-1)  # check dim cat
++            else:
++                context2d_feat = log_odds.repeat(1, self.in_channels)
++
++        # convert bin to float depth
++        depths = self._convert_bin_depth_to_specific(depths)
++        new_reference_points = self.project_reference_points_to_image_single(
++            bboxes=bboxes,
++            depths=depths, 
++            img2lidars=data['img2lidar'], 
++            bbox_nums=bbox_nums,
++            B=B, N=N,
++        )
+ 
+-        context2d_feat = context2d_feat.unsqueeze(0) if B == 1 and context2d_feat is not None else None
++        context2d_feat = context2d_feat.unsqueeze(0)
+ 
+         return new_reference_points, context2d_feat
+ 
+@@ -1238,7 +1354,8 @@ class FarHead(AnchorFreeHead):
+             preds = preds_dicts[i]
+             bboxes = preds['bboxes']
+             bboxes[:, 2] = bboxes[:, 2] - bboxes[:, 5] * 0.5
+-            bboxes = img_metas[i]['box_type_3d'](bboxes, bboxes.size(-1))
++            #bboxes = img_metas[i]['box_type_3d'](bboxes, bboxes.size(-1))
++            #bboxes = LiDARInstance3DBoxes(bboxes, bboxes.size(-1))
+             scores = preds['scores']
+             labels = preds['labels']
+             ret_list.append([bboxes, scores, labels])
+diff --git a/projects/mmdet3d_plugin/models/dense_heads/yolox_head.py b/projects/mmdet3d_plugin/models/dense_heads/yolox_head.py
+index 6884a76..f26f629 100644
+--- a/projects/mmdet3d_plugin/models/dense_heads/yolox_head.py
++++ b/projects/mmdet3d_plugin/models/dense_heads/yolox_head.py
+@@ -426,18 +426,19 @@ class YOLOXHeadCustom(BaseDenseHead, BBoxTestMixin):
+         for i in range(len(objectnesses)):
+         # for cls_score in cls_scores:
+             # sample_weight = cls_scores[i].topk(1, dim=1).values.sigmoid()       # (BN, 1, Hi, Wi)
+-            sample_weight = objectnesses[i].sigmoid() * cls_scores[i].topk(1, dim=1).values.sigmoid()
++            sample_weight = objectnesses[i].sigmoid() * torch.topk(cls_scores[i], 1, dim=1).values.sigmoid()
+             sample_weight_nms = nn.functional.max_pool2d(sample_weight, (3, 3), stride=1, padding=1)
+             sample_weight_nms = sample_weight_nms.permute(0, 2, 3, 1).reshape(num_imgs, -1, 1)  # (BN, Hi*Wi, 1)
+             sample_weight_ = sample_weight.permute(0, 2, 3, 1).reshape(num_imgs, -1, 1)
+             sample_weight = sample_weight_ * (sample_weight_ == sample_weight_nms).float()  # (BN, Hi*Wi, 1)
+             valid_indices_list.append(sample_weight)
+-        valid_indices = torch.cat(valid_indices_list, dim=1)
++        valid_indices = torch.cat(valid_indices_list, dim=1) # concat across our multihead outputs
+         flatten_sample_weight = valid_indices.clone()       # (BN, sum(Hi*Wi), 1)
+         if self.sample_with_score:
+             valid_indices = valid_indices > threshold_score
+         else:
+             _, topk_indexes = torch.topk(valid_indices, topk_proposal, dim=1)
++            valid_indices = topk_indexes
+ 
+         flatten_cls_scores = torch.cat(flatten_cls_scores, dim=1).sigmoid()     # (BN, sum(Hi*Wi), num_cls)
+         flatten_bbox_preds = torch.cat(flatten_bbox_preds, dim=1)               # (BN, sum(Hi*Wi), 4)
+@@ -463,8 +464,10 @@ class YOLOXHeadCustom(BaseDenseHead, BBoxTestMixin):
+         #     if bbox is not None:
+         #         bbox = bbox_xyxy_to_cxcywh(bbox[..., :4])
+         #     result_list.append(bbox)
+-
+-        bbox2d_scores = flatten_sample_weight[valid_indices].reshape(-1, 1)  # (M, 1)
++        if self.sample_with_score:
++            bbox2d_scores = flatten_sample_weight[valid_indices].reshape(-1, 1)  # (M, 1)
++        else:
++            bbox2d_scores = torch.gather(flatten_sample_weight, dim=1, index=valid_indices).reshape(-1, 1)  # (M, 1)
+         outs = {
+             'bbox_list': result_list,
+             'bbox2d_scores': bbox2d_scores,
+diff --git a/projects/mmdet3d_plugin/models/detectors/far3d.py b/projects/mmdet3d_plugin/models/detectors/far3d.py
+index 12489d2..742e143 100644
+--- a/projects/mmdet3d_plugin/models/detectors/far3d.py
++++ b/projects/mmdet3d_plugin/models/detectors/far3d.py
+@@ -42,7 +42,10 @@ class Far3D(MVXTwoStageDetector):
+                  position_level=[0],
+                  aux_2d_only=True,
+                  single_test=False,
+-                 pretrained=None):
++                 pretrained=None,
++                 mean=[103.530, 116.280, 123.675], 
++                 std=[57.375, 57.120, 58.395],
++                 to_rgb=False):
+         super(Far3D, self).__init__(pts_voxel_layer, pts_voxel_encoder,
+                              pts_middle_encoder, pts_fusion_layer,
+                              img_backbone, pts_backbone, img_neck, pts_neck,
+@@ -59,6 +62,8 @@ class Far3D(MVXTwoStageDetector):
+             self.depth_branch = build_from_cfg(depth_branch, PLUGIN_LAYERS)
+         else:
+             self.depth_branch = None
++        self.mean = mean
++        self.std = std
+ 
+ 
+     def extract_img_feat(self, img, return_depth=False):
+@@ -75,6 +80,8 @@ class Far3D(MVXTwoStageDetector):
+                 img = img.reshape(B * N, C, H, W)
+             if self.use_grid_mask:
+                 img = self.grid_mask(img)
++            img -= torch.tensor(self.mean, device=img.device).reshape(1,3,1,1)
++            img /= torch.tensor(self.std, device=img.device).reshape(1,3,1,1)
+ 
+             img_feats = self.img_backbone(img)
+             if isinstance(img_feats, dict):
+@@ -120,9 +127,9 @@ class Far3D(MVXTwoStageDetector):
+         return location_r
+ 
+     def forward_roi_head(self, location, **data):
+-        outs_roi = self.img_roi_head(location, **data)
++        outs_roi = self.img_roi_head(locations=location, **data)
+         
+-        return outs_roi
++        return outs_roi, data['img_feats']
+ 
+ 
+     def forward_pts_train(self,
+@@ -149,7 +156,7 @@ class Far3D(MVXTwoStageDetector):
+         """
+         location = self.prepare_location(img_metas, **data)
+ 
+-        outs_roi = self.forward_roi_head(location, **data)
++        outs_roi, _ = self.forward_roi_head(location, **data)
+         bbox_dict = self.img_roi_head.get_bboxes(outs_roi, **data)  # {'bbox_list': BN x (Mi, 4), 'bbox_score_list': BN x (Mi, 1)}
+         outs_roi.update(bbox_dict)
+         outs = self.pts_bbox_head(img_metas, outs_roi, **data)
+@@ -229,51 +236,59 @@ class Far3D(MVXTwoStageDetector):
+ 
+         return losses
+   
+-    def forward_test(self, img_metas, rescale, **data):
++    def forward_test(self, img_metas, rescale, state=None,**data):
+         for var, name in [(img_metas, 'img_metas')]:
+             if not isinstance(var, list):
+                 raise TypeError('{} must be a list, but got {}'.format(
+                     name, type(var)))
+         for key in data:
+-            if key not in ['img', 'gt_bboxes_3d', 'gt_bboxes', 'centers2d']:
++            if key not in ['img', 'gt_bboxes_3d', 'gt_bboxes', 'centers2d', 'state', "prev_exists"]:
+                 data[key] = data[key][0][0].unsqueeze(0)
+             else:
+                 data[key] = data[key][0]
+-        return self.simple_test(img_metas[0], **data)
++        data['img2lidar'] = data['lidar2img'].inverse()
++        return self.simple_test(img_metas[0], state=state, **data)
++    
++    def simple_test_bboxes(self, img_metas, outs_roi, state, **data):
++        outs, state = self.pts_bbox_head(img_metas, outs_roi, state=state, **data)
+ 
+-    def simple_test_pts(self, img_metas, **data):
+-        """Test function of point cloud branch."""
++        bbox_list = self.pts_bbox_head.get_bboxes(outs, img_metas)
++        return bbox_list, state
++
++    def get_bboxes(self, img_metas, **data):
+         location = self.prepare_location(img_metas, **data)
+-        outs_roi = self.forward_roi_head(location, **data)
++        outs_roi, img_feats = self.forward_roi_head(location, **data)
+         bbox_dict = self.img_roi_head.get_bboxes(outs_roi)  # {'bbox_list': BN x (Mi, 4), 'bbox_score_list': BN x (Mi, 1)}
+-        bbox_roi = bbox_dict['bbox_list']
+         outs_roi.update(bbox_dict)
++        return outs_roi, img_feats
+ 
+-        if img_metas[0]['scene_token'] != self.prev_scene_token:
+-            self.prev_scene_token = img_metas[0]['scene_token']
+-            data['prev_exists'] = data['img'].new_zeros(1)
+-            self.pts_bbox_head.reset_memory()
+-        else:
+-            data['prev_exists'] = data['img'].new_ones(1)
+-
+-        outs = self.pts_bbox_head(img_metas, outs_roi, **data)
+-        bbox_list = self.pts_bbox_head.get_bboxes(
+-            outs, img_metas)
++    def simple_test_pts(self, img_metas, state, **data):
++        """Test function of point cloud branch."""
++        outs_roi, _ = self.get_bboxes(img_metas, **data)
++        if state is None:
++            if img_metas[0]['scene_token'] != self.prev_scene_token:
++                self.prev_scene_token = img_metas[0]['scene_token']
++                data['prev_exists'] = data['img'].new_zeros(1)
++                self.pts_bbox_head.reset_memory(1)
++            else:
++                data['prev_exists'] = data['img'].new_ones(1)
++        
++        bbox_list, state = self.simple_test_bboxes(img_metas, outs_roi, state, **data)
+         bbox_results = [
+             bbox3d2result(bboxes, scores, labels)
+             for bboxes, scores, labels in bbox_list
+         ]
+-        return bbox_results, bbox_roi
++        return bbox_results, outs_roi['bbox_list'], state
+     
+-    def simple_test(self, img_metas, **data):
++    def simple_test(self, img_metas, state=None,**data):
+         """Test function without augmentaiton."""
+         data['img_feats'] = self.extract_img_feat(data['img'])
+ 
+         bbox_list = [dict() for i in range(len(img_metas))]
+-        bbox_pts, bbox_roi = self.simple_test_pts(img_metas, **data)
++        bbox_pts, bbox_roi, state = self.simple_test_pts(img_metas, state=state, **data)
+         for result_dict, pts_bbox in zip(bbox_list, bbox_pts):
+             result_dict['pts_bbox'] = pts_bbox
+             # result_dict['bbox_roi'] = bbox_roi
+-        return bbox_list
++        return bbox_list, state
+ 
+     
+\ No newline at end of file
+diff --git a/tools/create_infos_av2/create_av2_infos.py b/tools/create_infos_av2/create_av2_infos.py
+index 9f2d80f..64e2d9b 100644
+--- a/tools/create_infos_av2/create_av2_infos.py
++++ b/tools/create_infos_av2/create_av2_infos.py
+@@ -48,6 +48,7 @@ def create_av2_infos(dataset_dir, split, out_dir):
+         # if i % 5000 != 0: # to create mini pkl for debug
+         #     continue
+         infos = {}
++        skip = False
+         record = sensor_caches.iloc[i].name
+         log_id, _, lidar_timestamp_ns = record
+         log_dir = src_dir / log_id
+@@ -66,6 +67,7 @@ def create_av2_infos(dataset_dir, split, out_dir):
+                 print("No corresponding ring image")
+                 cam_infos[cam_name] = None
+                 camera_models[cam_name] = None
++                skip = True
+                 continue
+             
+             fpath = Path(split) / log_id / "sensors" / "cameras" / cam_name / f"{cam_timestamp_ns}.jpg" #img path
+@@ -106,7 +108,8 @@ def create_av2_infos(dataset_dir, split, out_dir):
+             infos['gt2d_infos'] = gt2d_infos
+         
+         #存储所有samples的info
+-        av2_split_infos.append(infos)
++        if not skip:
++            av2_split_infos.append(infos)
+     print('{}_sample:{}'.format(split, len(av2_split_infos)))
+     data = dict(infos=av2_split_infos, split=split)
+     info_path = osp.join(out_dir, 'av2_{}_infos_mini.pkl'.format(split))
+@@ -278,6 +281,7 @@ def post_process_coords(corner_coords, imsize = (2048, 1550)):
+ if __name__ == '__main__':
+     splits = ["val", "train"]
+     for split in splits:
++        print(split)
+         create_av2_infos(
+             dataset_dir=dataset_dir,
+             split=split,
+diff --git a/projects/configs/far3d.py b/projects/configs/far3d.py
+index 3bcf271..a07574d 100644
+--- a/projects/configs/far3d.py
++++ b/projects/configs/far3d.py
+@@ -40,6 +40,7 @@ model = dict(
+     use_grid_mask=True,
+     stride=[8, 16, 32, 64],
+     position_level=[0, 1, 2, 3],
++    **img_norm_cfg,
+     img_backbone=dict(
+         type='VoVNet', ###use checkpoint to save memory
+         spec_name='V-99-eSE',
+@@ -179,7 +180,7 @@ train_pipeline = [
+     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
+     dict(type='ObjectNameFilter', classes=class_names),
+     dict(type='AV2ResizeCropFlipRotImageV2', data_aug_conf=ida_aug_conf),
+-    dict(type='NormalizeMultiviewImage', **img_norm_cfg),
++    #dict(type='NormalizeMultiviewImage', **img_norm_cfg),
+     dict(type='AV2PadMultiViewImage', size='same2max'),
+     dict(type='AV2DownsampleQuantizeInstanceDepthmap', downsample=depthnet_config['stride'], depth_config=depthnet_config),
+     dict(type='PETRFormatBundle3D', class_names=class_names, collect_keys=collect_keys + ['prev_exists']),
+@@ -187,9 +188,8 @@ train_pipeline = [
+              meta_keys=('filename', 'ori_shape', 'img_shape', 'pad_shape', 'scale_factor', 'flip', 'box_mode_3d', 'box_type_3d', 'img_norm_cfg', 'scene_token', 'gt_bboxes_3d','gt_labels_3d', 'ins_depthmap', 'ins_depthmap_mask'))
+ ]
+ test_pipeline = [
+-    dict(type='AV2LoadMultiViewImageFromFiles', to_float32=True),
++    dict(type='AV2LoadMultiViewImageFromFiles', to_float32=False),
+     dict(type='AV2ResizeCropFlipRotImageV2', data_aug_conf=ida_aug_conf),
+-    dict(type='NormalizeMultiviewImage', **img_norm_cfg),
+     dict(type='AV2PadMultiViewImage', size='same2max'),
+     dict(
+         type='MultiScaleFlipAug3D',
+diff --git a/projects/mmdet3d_plugin/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/__pycache__/__init__.cpython-38.pyc
+index c6d142a..0f6fb4c 100644
+Binary files a/projects/mmdet3d_plugin/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/core/bbox/__pycache__/util.cpython-38.pyc b/projects/mmdet3d_plugin/core/bbox/__pycache__/util.cpython-38.pyc
+index 799c95e..32beddd 100644
+Binary files a/projects/mmdet3d_plugin/core/bbox/__pycache__/util.cpython-38.pyc and b/projects/mmdet3d_plugin/core/bbox/__pycache__/util.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/core/bbox/assigners/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/core/bbox/assigners/__pycache__/__init__.cpython-38.pyc
+index 3a8e08f..eac72fa 100644
+Binary files a/projects/mmdet3d_plugin/core/bbox/assigners/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/core/bbox/assigners/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/core/bbox/assigners/__pycache__/hungarian_assigner_2d.cpython-38.pyc b/projects/mmdet3d_plugin/core/bbox/assigners/__pycache__/hungarian_assigner_2d.cpython-38.pyc
+index b7ff397..d9eb8bb 100644
+Binary files a/projects/mmdet3d_plugin/core/bbox/assigners/__pycache__/hungarian_assigner_2d.cpython-38.pyc and b/projects/mmdet3d_plugin/core/bbox/assigners/__pycache__/hungarian_assigner_2d.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/core/bbox/assigners/__pycache__/hungarian_assigner_3d.cpython-38.pyc b/projects/mmdet3d_plugin/core/bbox/assigners/__pycache__/hungarian_assigner_3d.cpython-38.pyc
+index 3a742c5..5c146cb 100644
+Binary files a/projects/mmdet3d_plugin/core/bbox/assigners/__pycache__/hungarian_assigner_3d.cpython-38.pyc and b/projects/mmdet3d_plugin/core/bbox/assigners/__pycache__/hungarian_assigner_3d.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/core/bbox/coders/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/core/bbox/coders/__pycache__/__init__.cpython-38.pyc
+index f56d2b7..7d9f7e9 100644
+Binary files a/projects/mmdet3d_plugin/core/bbox/coders/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/core/bbox/coders/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/core/bbox/coders/__pycache__/nms_free_coder.cpython-38.pyc b/projects/mmdet3d_plugin/core/bbox/coders/__pycache__/nms_free_coder.cpython-38.pyc
+index 02796c7..a7a5bf7 100644
+Binary files a/projects/mmdet3d_plugin/core/bbox/coders/__pycache__/nms_free_coder.cpython-38.pyc and b/projects/mmdet3d_plugin/core/bbox/coders/__pycache__/nms_free_coder.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py b/projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py
+index 3accf02..5229230 100644
+--- a/projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py
++++ b/projects/mmdet3d_plugin/core/bbox/coders/nms_free_coder.py
+@@ -66,22 +66,22 @@ class NMSFreeCoder(BaseBBoxCoder):
+         if self.post_center_range is not None:
+             self.post_center_range = torch.tensor(self.post_center_range, device=scores.device)
+             
+-            mask = (final_box_preds[..., :3] >=
+-                    self.post_center_range[:3]).all(1)
+-            mask &= (final_box_preds[..., :3] <=
+-                     self.post_center_range[3:]).all(1)
++            #mask = (final_box_preds[..., :3] >=
++                    #self.post_center_range[:3]).all(1)
++            #mask &= (final_box_preds[..., :3] <=
++                     #self.post_center_range[3:]).all(1)
+ 
+-            if self.score_threshold:
+-                mask &= thresh_mask
++            #if self.score_threshold:
++                #mask &= thresh_mask
+ 
+-            boxes3d = final_box_preds[mask]
+-            scores = final_scores[mask]
+-            labels = final_preds[mask]
++            #boxes3d = final_box_preds[mask]
++            #scores = final_scores[mask]
++            #labels = final_preds[mask]
+ 
+             predictions_dict = {
+-                'bboxes': boxes3d,
+-                'scores': scores,
+-                'labels': labels,
++                'bboxes': final_box_preds,
++                'scores': final_scores,
++                'labels': final_preds,
+             }
+ 
+         else:
+diff --git a/projects/mmdet3d_plugin/core/bbox/match_costs/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/core/bbox/match_costs/__pycache__/__init__.cpython-38.pyc
+index 067bcbf..14b39a6 100644
+Binary files a/projects/mmdet3d_plugin/core/bbox/match_costs/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/core/bbox/match_costs/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/core/bbox/match_costs/__pycache__/match_cost.cpython-38.pyc b/projects/mmdet3d_plugin/core/bbox/match_costs/__pycache__/match_cost.cpython-38.pyc
+index 72ec1b3..dd8c3ae 100644
+Binary files a/projects/mmdet3d_plugin/core/bbox/match_costs/__pycache__/match_cost.cpython-38.pyc and b/projects/mmdet3d_plugin/core/bbox/match_costs/__pycache__/match_cost.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/__pycache__/__init__.cpython-38.pyc
+index cf0b516..a015d24 100644
+Binary files a/projects/mmdet3d_plugin/datasets/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/__pycache__/argoverse2_dataset.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/__pycache__/argoverse2_dataset.cpython-38.pyc
+index 12f7336..aee9f63 100644
+Binary files a/projects/mmdet3d_plugin/datasets/__pycache__/argoverse2_dataset.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/__pycache__/argoverse2_dataset.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/__pycache__/argoverse2_dataset_t.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/__pycache__/argoverse2_dataset_t.cpython-38.pyc
+index 83a9e0c..eab460c 100644
+Binary files a/projects/mmdet3d_plugin/datasets/__pycache__/argoverse2_dataset_t.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/__pycache__/argoverse2_dataset_t.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/__pycache__/av2_eval_util.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/__pycache__/av2_eval_util.cpython-38.pyc
+index 07ae001..4bb222d 100644
+Binary files a/projects/mmdet3d_plugin/datasets/__pycache__/av2_eval_util.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/__pycache__/av2_eval_util.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/__pycache__/av2_utils.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/__pycache__/av2_utils.cpython-38.pyc
+index 600cf84..1d79cf5 100644
+Binary files a/projects/mmdet3d_plugin/datasets/__pycache__/av2_utils.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/__pycache__/av2_utils.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/__pycache__/builder.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/__pycache__/builder.cpython-38.pyc
+index 2d96006..d128de4 100644
+Binary files a/projects/mmdet3d_plugin/datasets/__pycache__/builder.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/__pycache__/builder.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/__pycache__/nuscenes_dataset.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/__pycache__/nuscenes_dataset.cpython-38.pyc
+index eb51a16..70bd155 100644
+Binary files a/projects/mmdet3d_plugin/datasets/__pycache__/nuscenes_dataset.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/__pycache__/nuscenes_dataset.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/__pycache__/summarize_metrics_av2.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/__pycache__/summarize_metrics_av2.cpython-38.pyc
+index e170bc4..d891d23 100644
+Binary files a/projects/mmdet3d_plugin/datasets/__pycache__/summarize_metrics_av2.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/__pycache__/summarize_metrics_av2.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/argoverse2_dataset.py b/projects/mmdet3d_plugin/datasets/argoverse2_dataset.py
+index d62b0f3..b2b025e 100644
+--- a/projects/mmdet3d_plugin/datasets/argoverse2_dataset.py
++++ b/projects/mmdet3d_plugin/datasets/argoverse2_dataset.py
+@@ -287,7 +287,7 @@ class Argoverse2Dataset(Custom3DDataset):
+                 for saving json files when jsonfile_prefix is not specified.
+         """
+         import pandas as pd
+-
++        self.data_infos = self.data_infos[:len(outputs)]
+         assert len(self.data_infos) == len(outputs)
+         num_samples = len(outputs)
+         print('\nGot {} samples'.format(num_samples))
+diff --git a/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/__init__.cpython-38.pyc
+index 4cd5729..db3b377 100644
+Binary files a/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/custom_pipeline.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/custom_pipeline.cpython-38.pyc
+index cf0ff7a..4c87459 100644
+Binary files a/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/custom_pipeline.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/custom_pipeline.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/formating.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/formating.cpython-38.pyc
+index 83f5089..f3f9b46 100644
+Binary files a/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/formating.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/formating.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/transform_3d.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/transform_3d.cpython-38.pyc
+index 0750052..e22f6f6 100644
+Binary files a/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/transform_3d.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/pipelines/__pycache__/transform_3d.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/samplers/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/samplers/__pycache__/__init__.cpython-38.pyc
+index 8fec166..c3ee72b 100644
+Binary files a/projects/mmdet3d_plugin/datasets/samplers/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/samplers/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/samplers/__pycache__/distributed_sampler.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/samplers/__pycache__/distributed_sampler.cpython-38.pyc
+index 5f42d55..d032ac9 100644
+Binary files a/projects/mmdet3d_plugin/datasets/samplers/__pycache__/distributed_sampler.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/samplers/__pycache__/distributed_sampler.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/samplers/__pycache__/group_sampler.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/samplers/__pycache__/group_sampler.cpython-38.pyc
+index 8f0bd48..2ee88b5 100644
+Binary files a/projects/mmdet3d_plugin/datasets/samplers/__pycache__/group_sampler.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/samplers/__pycache__/group_sampler.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/datasets/samplers/__pycache__/sampler.cpython-38.pyc b/projects/mmdet3d_plugin/datasets/samplers/__pycache__/sampler.cpython-38.pyc
+index 566aa82..e3ce6f1 100644
+Binary files a/projects/mmdet3d_plugin/datasets/samplers/__pycache__/sampler.cpython-38.pyc and b/projects/mmdet3d_plugin/datasets/samplers/__pycache__/sampler.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/backbones/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/models/backbones/__pycache__/__init__.cpython-38.pyc
+index c240922..07cfe67 100644
+Binary files a/projects/mmdet3d_plugin/models/backbones/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/models/backbones/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/backbones/__pycache__/vovnet.cpython-38.pyc b/projects/mmdet3d_plugin/models/backbones/__pycache__/vovnet.cpython-38.pyc
+index 1816b55..78c6c31 100644
+Binary files a/projects/mmdet3d_plugin/models/backbones/__pycache__/vovnet.cpython-38.pyc and b/projects/mmdet3d_plugin/models/backbones/__pycache__/vovnet.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/backbones/__pycache__/vovnetcp.cpython-38.pyc b/projects/mmdet3d_plugin/models/backbones/__pycache__/vovnetcp.cpython-38.pyc
+index 9f61f8a..c96b5ec 100644
+Binary files a/projects/mmdet3d_plugin/models/backbones/__pycache__/vovnetcp.cpython-38.pyc and b/projects/mmdet3d_plugin/models/backbones/__pycache__/vovnetcp.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/dense_heads/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/models/dense_heads/__pycache__/__init__.cpython-38.pyc
+index a31a09a..5cddf68 100644
+Binary files a/projects/mmdet3d_plugin/models/dense_heads/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/models/dense_heads/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/dense_heads/__pycache__/farhead.cpython-38.pyc b/projects/mmdet3d_plugin/models/dense_heads/__pycache__/farhead.cpython-38.pyc
+index 7d56853..11d9b1d 100644
+Binary files a/projects/mmdet3d_plugin/models/dense_heads/__pycache__/farhead.cpython-38.pyc and b/projects/mmdet3d_plugin/models/dense_heads/__pycache__/farhead.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/dense_heads/__pycache__/yolox_head.cpython-38.pyc b/projects/mmdet3d_plugin/models/dense_heads/__pycache__/yolox_head.cpython-38.pyc
+index 29097f6..2ca4d85 100644
+Binary files a/projects/mmdet3d_plugin/models/dense_heads/__pycache__/yolox_head.cpython-38.pyc and b/projects/mmdet3d_plugin/models/dense_heads/__pycache__/yolox_head.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/dense_heads/farhead.py b/projects/mmdet3d_plugin/models/dense_heads/farhead.py
+index 48e8ee5..12d286e 100644
+--- a/projects/mmdet3d_plugin/models/dense_heads/farhead.py
++++ b/projects/mmdet3d_plugin/models/dense_heads/farhead.py
+@@ -13,10 +13,12 @@ from mmdet3d.core.bbox.coders import build_bbox_coder
+ from projects.mmdet3d_plugin.core.bbox.util import normalize_bbox
+ from projects.mmdet3d_plugin.models.utils.positional_encoding import pos2posemb3d, pos2posemb1d, nerf_positional_encoding
+ from projects.mmdet3d_plugin.models.utils.misc import MLN, topk_gather, transform_reference_points, memory_refresh, SELayer_Linear
++from mmdet3d.core.bbox.structures.lidar_box3d import LiDARInstance3DBoxes
+ import copy
+ from mmdet.models.utils import NormedLinear
+ from scipy.optimize import linear_sum_assignment
+ import numpy as np
++
+ @HEADS.register_module()
+ class FarHead(AnchorFreeHead):
+     """Implements the DETR transformer head.
+@@ -187,7 +189,7 @@ class FarHead(AnchorFreeHead):
+         self.train_use_gt_depth = train_use_gt_depth
+         self.flag_disable_gt_depth = False
+         self.val_use_gt_depth = val_use_gt_depth
+-        self.add_multi_depth_proposal = add_multi_depth_proposal
++        self.add_multi_depth_proposal = add_multi_depth_proposal and multi_depth_config['topk'] > 1
+         self.multi_depth_config = multi_depth_config
+         self.return_context_feat = return_context_feat
+         self.return_bbox2d_scores = return_bbox2d_scores
+@@ -223,7 +225,9 @@ class FarHead(AnchorFreeHead):
+ 
+ 
+         self._init_layers()
+-        self.reset_memory()
++        self.reset_memory(1)
++        range_min = self.multi_depth_config.get('range_min', -1)
++        self.range_min_bin = self._convert_bin_depth_to_specific(torch.tensor([range_min]), inverse=True).item()
+ 
+     def _init_layers(self):
+         """Initialize layers of the transformer head."""
+@@ -281,12 +285,12 @@ class FarHead(AnchorFreeHead):
+             self.ego_pose_pe = MLN(180)
+             self.ego_pose_memory = MLN(180)
+ 
+-    def temporal_alignment(self, query_pos, tgt, reference_points):
++    def temporal_alignment(self, query_pos, tgt, reference_points, memory_reference_point, memory_embedding, memory_velo, memory_timestamp, memory_egopose):
+         B = query_pos.size(0)
+ 
+-        temp_reference_point = (self.memory_reference_point - self.pc_range[:3]) / (self.pc_range[3:6] - self.pc_range[0:3])
++        temp_reference_point = (memory_reference_point - self.pc_range[:3]) / (self.pc_range[3:6] - self.pc_range[0:3])
+         temp_pos = self.query_embedding(pos2posemb3d(temp_reference_point)) 
+-        temp_memory = self.memory_embedding
++        temp_memory = memory_embedding
+         rec_ego_pose = torch.eye(4, device=query_pos.device).unsqueeze(0).unsqueeze(0).repeat(B, query_pos.size(1), 1, 1)
+         
+         if self.with_ego_pos:
+@@ -294,13 +298,13 @@ class FarHead(AnchorFreeHead):
+             rec_ego_motion = nerf_positional_encoding(rec_ego_motion)
+             tgt = self.ego_pose_memory(tgt, rec_ego_motion)
+             query_pos = self.ego_pose_pe(query_pos, rec_ego_motion)
+-            memory_ego_motion = torch.cat([self.memory_velo, self.memory_timestamp, self.memory_egopose[..., :3, :].flatten(-2)], dim=-1).float()
++            memory_ego_motion = torch.cat([memory_velo, memory_timestamp, memory_egopose[..., :3, :].flatten(-2)], dim=-1).float()
+             memory_ego_motion = nerf_positional_encoding(memory_ego_motion)
+             temp_pos = self.ego_pose_pe(temp_pos, memory_ego_motion)
+             temp_memory = self.ego_pose_memory(temp_memory, memory_ego_motion)
+ 
+         query_pos += self.time_embedding(pos2posemb1d(torch.zeros_like(reference_points[...,:1])))
+-        temp_pos += self.time_embedding(pos2posemb1d(self.memory_timestamp).float())
++        temp_pos += self.time_embedding(pos2posemb1d(memory_timestamp).float())
+ 
+         if self.num_propagated > 0:
+             tgt = torch.cat([tgt, temp_memory[:, :self.num_propagated]], dim=1)
+@@ -443,40 +447,47 @@ class FarHead(AnchorFreeHead):
+                 nn.init.constant_(m[-1].bias, bias_init)
+ 
+ 
+-    def reset_memory(self):
+-        self.memory_embedding = None
+-        self.memory_reference_point = None
+-        self.memory_timestamp = None
+-        self.memory_egopose = None
+-        self.memory_velo = None
++    def reset_memory(self, batch_size, device="cuda:0"):
++        self.state = self.get_memory(batch_size, device)
++
++    def get_memory(self, batch_size, device="cuda:0"):
++        memory_embedding = torch.zeros(batch_size, self.memory_len, self.embed_dims, device=device)
++        memory_reference_point = torch.zeros(batch_size, self.memory_len, 3, device=device)
++        memory_timestamp = torch.zeros(batch_size, self.memory_len, 1, device=device)
++        memory_egopose = torch.zeros(batch_size, self.memory_len, 4, 4, device=device)
++        memory_velo = torch.zeros(batch_size, self.memory_len, 2, device=device)
++        return dict(memory_embedding=memory_embedding, memory_reference_point=memory_reference_point,
++                    memory_timestamp=memory_timestamp, memory_egopose=memory_egopose,
++                    memory_velo=memory_velo)
++
+ 
+-    def pre_update_memory(self, data):
++    def pre_update_memory(self, data, memory_embedding, memory_reference_point, memory_timestamp, memory_egopose, memory_velo):
+         x = data['prev_exists']
+         B = x.size(0)
+         # refresh the memory when the scene changes
+-        if self.memory_embedding is None:
+-            self.memory_embedding = x.new_zeros(B, self.memory_len, self.embed_dims)
+-            self.memory_reference_point = x.new_zeros(B, self.memory_len, 3)
+-            self.memory_timestamp = x.new_zeros(B, self.memory_len, 1)
+-            self.memory_egopose = x.new_zeros(B, self.memory_len, 4, 4)
+-            self.memory_velo = x.new_zeros(B, self.memory_len, 2)
+-        else:
+-            self.memory_timestamp += data['timestamp'].unsqueeze(-1).unsqueeze(-1)
+-            self.memory_egopose = data['ego_pose_inv'].unsqueeze(1) @ self.memory_egopose
+-            self.memory_reference_point = transform_reference_points(self.memory_reference_point, data['ego_pose_inv'], reverse=False)
+-            self.memory_timestamp = memory_refresh(self.memory_timestamp[:, :self.memory_len], x)
+-            self.memory_reference_point = memory_refresh(self.memory_reference_point[:, :self.memory_len], x)
+-            self.memory_embedding = memory_refresh(self.memory_embedding[:, :self.memory_len], x)
+-            self.memory_egopose = memory_refresh(self.memory_egopose[:, :self.memory_len], x)
+-            self.memory_velo = memory_refresh(self.memory_velo[:, :self.memory_len], x)
++        
++        memory_timestamp += data['timestamp'].unsqueeze(-1).unsqueeze(-1)
++        memory_egopose = data['ego_pose_inv'].unsqueeze(1) @ memory_egopose
++        memory_reference_point = transform_reference_points(memory_reference_point, data['ego_pose_inv'], reverse=False)
++        memory_timestamp = memory_refresh(memory_timestamp[:, :self.memory_len], x)
++        memory_reference_point = memory_refresh(memory_reference_point[:, :self.memory_len], x)
++        memory_embedding = memory_refresh(memory_embedding[:, :self.memory_len], x)
++        memory_egopose = memory_refresh(memory_egopose[:, :self.memory_len], x)
++        memory_velo = memory_refresh(memory_velo[:, :self.memory_len], x)
+         
+         # for the first frame, padding pseudo_reference_points (non-learnable)
+         if self.num_propagated > 0:
+             pseudo_reference_points = self.pseudo_reference_points.weight * (self.pc_range[3:6] - self.pc_range[0:3]) + self.pc_range[0:3]
+-            self.memory_reference_point[:, :self.num_propagated]  = self.memory_reference_point[:, :self.num_propagated] + (1 - x).view(B, 1, 1) * pseudo_reference_points
+-            self.memory_egopose[:, :self.num_propagated]  = self.memory_egopose[:, :self.num_propagated] + (1 - x).view(B, 1, 1, 1) * torch.eye(4, device=x.device)
++            memory_reference_point[:, :self.num_propagated]  = memory_reference_point[:, :self.num_propagated] + (1 - x).view(B, 1, 1) * pseudo_reference_points
++            memory_egopose[:, :self.num_propagated]  = memory_egopose[:, :self.num_propagated] + (1 - x).view(B, 1, 1, 1) * torch.eye(4, device=x.device)
++        return dict(memory_embedding=memory_embedding, 
++                    memory_reference_point=memory_reference_point, 
++                    memory_timestamp=memory_timestamp, 
++                    memory_egopose=memory_egopose, memory_velo=memory_velo)
+ 
+-    def post_update_memory(self, data, rec_ego_pose, all_cls_scores, all_bbox_preds, outs_dec, mask_dict):
++
++    def post_update_memory(self, ego_pose, timestamp, rec_ego_pose, all_cls_scores, all_bbox_preds, outs_dec, mask_dict, 
++                           memory_embedding, memory_reference_point, memory_timestamp, memory_egopose, memory_velo):
+         if self.training and mask_dict and mask_dict['pad_size'] > 0:
+             rec_reference_points = all_bbox_preds[:, :, mask_dict['pad_size']:, :3][-1]
+             rec_velo = all_bbox_preds[:, :, mask_dict['pad_size']:, -2:][-1]
+@@ -497,15 +508,21 @@ class FarHead(AnchorFreeHead):
+         rec_memory = topk_gather(rec_memory, topk_indexes).detach()
+         rec_ego_pose = topk_gather(rec_ego_pose, topk_indexes)
+         rec_velo = topk_gather(rec_velo, topk_indexes).detach()
+-
+-        self.memory_embedding = torch.cat([rec_memory, self.memory_embedding], dim=1)
+-        self.memory_timestamp = torch.cat([rec_timestamp, self.memory_timestamp], dim=1)
+-        self.memory_egopose= torch.cat([rec_ego_pose, self.memory_egopose], dim=1)
+-        self.memory_reference_point = torch.cat([rec_reference_points, self.memory_reference_point], dim=1)
+-        self.memory_velo = torch.cat([rec_velo, self.memory_velo], dim=1)
+-        self.memory_reference_point = transform_reference_points(self.memory_reference_point, data['ego_pose'], reverse=False)
+-        self.memory_timestamp -= data['timestamp'].unsqueeze(-1).unsqueeze(-1)
+-        self.memory_egopose = data['ego_pose'].unsqueeze(1) @ self.memory_egopose
++        
++        memory_embedding = torch.cat([rec_memory, memory_embedding], dim=1)
++        memory_timestamp = torch.cat([rec_timestamp, memory_timestamp], dim=1)
++        memory_egopose= torch.cat([rec_ego_pose, memory_egopose], dim=1)
++        memory_reference_point = torch.cat([rec_reference_points, memory_reference_point], dim=1)
++        memory_velo = torch.cat([rec_velo, memory_velo], dim=1)
++        memory_reference_point = transform_reference_points(memory_reference_point, ego_pose, reverse=False)
++        memory_timestamp -= timestamp.unsqueeze(-1).unsqueeze(-1)
++        memory_egopose = ego_pose.unsqueeze(1) @ memory_egopose
++        return dict(memory_embedding=memory_embedding, 
++                    memory_reference_point=memory_reference_point, 
++                    memory_timestamp=memory_timestamp, 
++                    memory_egopose=memory_egopose, 
++                    memory_velo=memory_velo)
++        
+     
+     def _get_gt_depth(self, img_metas, device, BNHW):
+         B, N, H, W = BNHW
+@@ -530,7 +547,7 @@ class FarHead(AnchorFreeHead):
+                 indices = indices.type(torch.int64)
+                 return indices
+     
+-    def forward(self, img_metas, outs_roi=None, **data):
++    def forward(self, img_metas, outs_roi=None, state=None, **data):
+         """Forward function.
+         Args:
+             mlvl_feats (tuple[Tensor]): Features from the upstream
+@@ -544,7 +561,11 @@ class FarHead(AnchorFreeHead):
+                 head with normalized coordinate format (cx, cy, w, l, cz, h, theta, vx, vy). \
+                 Shape [nb_dec, bs, num_query, 9].
+         """
+-        self.pre_update_memory(data)
++        if state is None:
++            state = self.state
++        state = self.pre_update_memory(data, **state)
++        
++
+         mlvl_feats = data['img_feats']
+         B, N, _, _, _ = mlvl_feats[0].shape
+ 
+@@ -576,7 +597,8 @@ class FarHead(AnchorFreeHead):
+             if self.return_context_feat:
+                 _dim = feat_flatten.shape[-1]
+                 valid_indices = outs_roi['valid_indices']
+-                context_feat = feat_flatten[valid_indices.repeat(1, 1, _dim)].reshape(-1, _dim)
++                
++                context_feat = torch.gather(feat_flatten, dim=1, index=valid_indices.repeat(1,1,_dim)).reshape(-1, _dim)
+ 
+                 context2d_feat = context_feat.detach()
+             else:
+@@ -605,9 +627,15 @@ class FarHead(AnchorFreeHead):
+             # depth input: specific bins or depth logits
+             input_depth_logits = self.multi_depth_config.get('topk', -1) != -1 and not flag_use_gt_depth
+             depth_input = pred_depth_ if not input_depth_logits else pred_depth.permute(0, 2, 3, 1)
+-            reference_points2d, context_feat = self.build_query2d_proposal(pred_bbox_list, depth_input, data, (B, N),
+-                padHW, pred_depth_var=_pred_depth_var, input_depth_logits=input_depth_logits,
+-                context2d_feat=context2d_feat, bbox2d_scores=bbox2d_scores)
++            if self.add_multi_depth_proposal:
++                reference_points2d, context_feat = self.build_query2d_proposal_multi(pred_bbox_list, depth_input, data, (B, N),
++                    padHW, pred_depth_var=_pred_depth_var, input_depth_logits=input_depth_logits,
++                    context2d_feat=context2d_feat, bbox2d_scores=bbox2d_scores)
++            else:
++                reference_points2d, context_feat = self.build_query2d_proposal_single(pred_bbox_list, depth_input, data, (B, N),
++                    padHW, input_depth_logits=input_depth_logits,
++                    context2d_feat=context2d_feat, bbox2d_scores=bbox2d_scores)
++
+ 
+            
+             pred_depth_var = None   # [Deprecated function]
+@@ -633,12 +661,13 @@ class FarHead(AnchorFreeHead):
+                     attn_mask = None
+ 
+         tgt = torch.zeros_like(query_pos)
+-        if 'context_feat' in locals() and context_feat is not None:    # add context to Q_feat
++        if context_feat is not None:    # add context to Q_feat
+             context_feat = self.context_embed(context_feat)  # newly add
+             tgt[:, -pro2d_num:, :] = context_feat
+ 
+         # prepare for the tgt and query_pos using mln.
+-        tgt, query_pos, reference_points, temp_memory, temp_pos, rec_ego_pose = self.temporal_alignment(query_pos, tgt, reference_points)
++        
++        tgt, query_pos, reference_points, temp_memory, temp_pos, rec_ego_pose = self.temporal_alignment(query_pos, tgt, reference_points, **state)
+ 
+         outs_dec = self.transformer(tgt, query_pos, feat_flatten, spatial_flatten, level_start_index, temp_memory, 
+                                     temp_pos, attn_mask, reference_points, self.pc_range, data, img_metas)
+@@ -664,7 +693,7 @@ class FarHead(AnchorFreeHead):
+         all_bbox_preds[..., 0:3] = (all_bbox_preds[..., 0:3] * (self.pc_range[3:6] - self.pc_range[0:3]) + self.pc_range[0:3])
+         
+         # update the memory bank
+-        self.post_update_memory(data, rec_ego_pose, all_cls_scores, all_bbox_preds, outs_dec, mask_dict)
++        state = self.post_update_memory(data['ego_pose'], data['timestamp'], rec_ego_pose, all_cls_scores, all_bbox_preds, outs_dec, mask_dict, **state)
+ 
+         # cls_score_numpy = outputs_class.cpu().numpy()
+         # path = img_metas[0]['scene_token']
+@@ -689,8 +718,8 @@ class FarHead(AnchorFreeHead):
+                 'dn_mask_dict':None,
+                 'reference_points2d': reference_points2d,
+             }
+-
+-        return outs
++        self.state = state
++        return outs, state
+ 
+     def split_offline_pred2d(self, pred_bbox_list, device):
+         pred_bbox_list = [torch.from_numpy(img_bbox).to(device) if len(img_bbox) > 0 else torch.zeros(0, 6).to(device)
+@@ -708,7 +737,82 @@ class FarHead(AnchorFreeHead):
+         return new_pred_bbox_list, bbox2d_scores
+     
+     @torch.no_grad()
+-    def build_query2d_proposal(self, pred_bbox_list, pred_depth, data, bn, padHW,
++    def extract_objectwise_depth(self, pred_bbox_list, pred_depth, depth_downsample, pad_w, input_depth_logits):
++        depth_list = []
++        bbox_nums = [len(bbox) for bbox in pred_bbox_list]  # BN values
++        h_max, w_max = pred_depth.shape[1:3]
++        for ith, pred_bbox in enumerate(pred_bbox_list):
++            if bbox_nums[ith] != 0:
++                cur_depthmap = pred_depth[ith].flatten(0, 1)     # shape (HW, 1) or (HW, D)
++                cur_center2d = (pred_bbox[:, :2] / depth_downsample).round().long()      # first w then h
++                centers_x = cur_center2d[:,0]
++                centers_y = cur_center2d[:,1]
++                centers_x.clamp_(0, w_max - 1)
++                centers_y.clamp_(0, h_max - 1)
++
++                cur_center2d_ = centers_y * (pad_w//depth_downsample) + centers_x
++                if input_depth_logits:
++                    cur_depth = torch.gather(cur_depthmap, 0, cur_center2d_.long().unsqueeze(1)
++                                             .repeat(1, cur_depthmap.shape[1]))  # (Mi, D)
++                else:
++                    cur_depth = torch.gather(cur_depthmap, 0, cur_center2d_.long().unsqueeze(1))  # (Mi, 1)
++                depth_list.append(cur_depth)
++        depths = torch.cat(depth_list, dim=0)  # (M, 1) or (M, D)
++        return depths
++
++    @torch.no_grad()
++    def project_reference_points_to_image_single(self, bboxes, depths, img2lidars, bbox_nums, B, N):
++        # (u,v), d -> (ud,vd,d,1)
++        eps = 1e-5
++        coords = torch.cat([bboxes[:, :2], depths], dim=1)     # (M, 3), order is (w, h, d)
++        coords = torch.cat((coords, torch.ones_like(coords[..., :1])), -1)      # (M, 4)
++        coords[..., :2] = coords[..., :2] * torch.maximum(coords[..., 2:3], torch.ones_like(coords[..., 2:3]) * eps)
++        coords = coords.unsqueeze(-1)  # (M, 4, 1)
++        
++        # img2lidar array build
++        img2lidars = img2lidars.view(B*N, 1, 4, 4) # (BN, 1, 4, 4)
++        img2lidars_ = torch.cat([img2lidars[kth].repeat(num, 1, 1) for kth, num in enumerate(bbox_nums)], dim=0)    # (M, 4, 4)
++
++        # matmul and normalize 3d coords
++        coords3d = torch.matmul(img2lidars_, coords)[:,:3,0]    # (M, 3)
++        
++        coords3d[..., 0:1] = (coords3d[..., 0:1] - self.pc_range[0]) / (self.pc_range[3] - self.pc_range[0])
++        coords3d[..., 1:2] = (coords3d[..., 1:2] - self.pc_range[1]) / (self.pc_range[4] - self.pc_range[1])
++        coords3d[..., 2:3] = (coords3d[..., 2:3] - self.pc_range[2]) / (self.pc_range[5] - self.pc_range[2])
++        #coords_mask = (coords3d > 1.0) | (coords3d < 0.0)
++        new_reference_points = coords3d.unsqueeze(0)
++        return new_reference_points
++    
++    @torch.no_grad()
++    def project_reference_points_to_image_multi(self, bboxes, depths, img2lidars, input_depth_logits, topk, valid_indices, bbox_nums, B, N):
++        # (u,v), d -> (ud,vd,d,1)
++        eps = 1e-5
++        coords = torch.cat([bboxes[:, :2], depths], dim=1)     # (M, 3), order is (w, h, d)
++        coords = torch.cat((coords, torch.ones_like(coords[..., :1])), -1)      # (M, 4)
++        coords[..., :2] = coords[..., :2] * torch.maximum(coords[..., 2:3], torch.ones_like(coords[..., 2:3]) * eps)
++        coords = coords.unsqueeze(-1)  # (M, 4, 1)
++        
++        # img2lidar array build
++        img2lidars = img2lidars.view(B*N, 1, 4, 4) # (BN, 1, 4, 4)
++        img2lidars_ = torch.cat([img2lidars[kth].repeat(num, 1, 1) for kth, num in enumerate(bbox_nums)], dim=0)    # (M, 4, 4)
++        if input_depth_logits and self.multi_depth_config.get('topk', -1) != -1:
++            img2lidars_extra = img2lidars_.repeat(topk - 1, 1, 1)
++            img2lidars_extra = img2lidars_extra[valid_indices.repeat(topk - 1)]
++            img2lidars_ = torch.cat([img2lidars_, img2lidars_extra], dim=0)
++
++        # matmul and normalize 3d coords
++        coords3d = torch.matmul(img2lidars_, coords)[:,:3,0]    # (M, 3)
++        
++        coords3d[..., 0:1] = (coords3d[..., 0:1] - self.pc_range[0]) / (self.pc_range[3] - self.pc_range[0])
++        coords3d[..., 1:2] = (coords3d[..., 1:2] - self.pc_range[1]) / (self.pc_range[4] - self.pc_range[1])
++        coords3d[..., 2:3] = (coords3d[..., 2:3] - self.pc_range[2]) / (self.pc_range[5] - self.pc_range[2])
++        #coords_mask = (coords3d > 1.0) | (coords3d < 0.0)
++        new_reference_points = coords3d.unsqueeze(0)
++        return new_reference_points
++
++
++    @torch.no_grad()
++    def build_query2d_proposal_multi(self, pred_bbox_list, pred_depth, data, bn, padHW,
+                                valid_pred_depth=None, pred_depth_var=None, input_depth_logits=False,
+                                context2d_feat=None, bbox2d_scores=None):
+         '''
+@@ -718,7 +822,7 @@ class FarHead(AnchorFreeHead):
+         '''
+         B, N = bn
+         pad_h, pad_w = padHW
+-        eps = 1e-5
++        
+         depth_downsample = int(pad_h / pred_depth.shape[1])
+ 
+         # bbox list to (sum(Mi), 2)
+@@ -727,38 +831,23 @@ class FarHead(AnchorFreeHead):
+         if sum(bbox_nums) == 0:  # no effective 2d proposal
+             return None, None
+         # obtain corresponding depth
+-        depth_list = []
+-        depth_var_list = []
+-        h_max, w_max = pred_depth.shape[1:3]
+-        for ith, pred_bbox in enumerate(pred_bbox_list):
+-            if bbox_nums[ith] != 0:
+-                cur_depthmap = pred_depth[ith].flatten(0, 1)     # shape (HW, 1) or (HW, D)
+-                cur_center2d = (pred_bbox[:, :2] / depth_downsample).round().long()      # first w then h
+-                cur_center2d[cur_center2d < 0] = 0
+-                cur_center2d[:, 0][cur_center2d[:, 0] >= w_max] = w_max - 1
+-                cur_center2d[:, 1][cur_center2d[:, 1] >= h_max] = h_max - 1
+-
+-                cur_center2d = cur_center2d.flip(dims=(-1, ))   # to obtain depth, obtain (h, w)
+-                cur_center2d_ = cur_center2d[:, 0] * (pad_w/depth_downsample) + cur_center2d[:, 1]
+-                if input_depth_logits:
+-                    cur_depth = torch.gather(cur_depthmap, 0, cur_center2d_.long().unsqueeze(1)
+-                                             .repeat(1, cur_depthmap.shape[1]))  # (Mi, D)
+-                else:
+-                    cur_depth = torch.gather(cur_depthmap, 0, cur_center2d_.long().unsqueeze(1))  # (Mi, 1)
+-                depth_list.append(cur_depth)
+-
+-                if pred_depth_var is not None:
+-                    cur_depth_var = torch.gather(pred_depth_var[ith], 0, cur_center2d_.long())    # (Mi)
+-                    depth_var_list.append(cur_depth_var)
+-        depths = torch.cat(depth_list, dim=0)  # (M, 1) or (M, D)
++        depths = self.extract_objectwise_depth(pred_bbox_list=pred_bbox_list,
++                                               pred_depth=pred_depth,
++                                               depth_downsample=depth_downsample,
++                                               pad_w=pad_w,
++                                               input_depth_logits=input_depth_logits)
++        topk = self.multi_depth_config.get('topk')
++        valid_indices = None
+         if self.add_multi_depth_proposal:
+-            range_min = self.multi_depth_config.get('range_min', -1)
++            # this pathway does some weird stuff during export when topk == 1
+             if input_depth_logits and self.multi_depth_config.get('topk', -1) != -1:
+                 # generate multi proposals by topk depth logits
+-                topk = self.multi_depth_config.get('topk')
+-                range_min_bin = self._convert_bin_depth_to_specific(torch.tensor([range_min]), inverse=True).item()
+-                topk_values, topk_indices = torch.topk(depths, topk, dim=1)  # (M, K)
+-                valid_indices = topk_indices[:, 0] >= range_min_bin          # (M)
++                topk_values, topk_indices = torch.topk(depths, topk, dim=1)  # (M, K) # export works until here
++                valid_indices = topk_indices
++                # this causes errors in onnx export, 
++                valid_indices = topk_indices[:, 0] >= self.range_min_bin          # (M)
++                #valid_indices = topk_indices.squeeze(1) # for some reason this materializes a resolv_conj operation
++                
+                 bboxes_extra = bboxes.repeat(topk-1, 1)
+                 bboxes = torch.cat([bboxes, bboxes_extra[valid_indices.repeat(topk-1)]], dim=0) # (M', 4)
+                 depths_extra = topk_indices[:, 1:][valid_indices]   # (M, topk-1)
+@@ -769,60 +858,87 @@ class FarHead(AnchorFreeHead):
+                 if context2d_feat is not None:
+                     context2d_feat_extra = context2d_feat.repeat(topk-1, 1)
+                     context2d_feat = torch.cat([context2d_feat, context2d_feat_extra[valid_indices.repeat(topk-1)]], dim=0)
+-
+-            if bbox2d_scores is not None:   # currently use context_2d by default
+-                thr = torch.tensor([0.1]).to(bbox2d_scores.device)   # score threshold
+-                log_odds = torch.log(bbox2d_scores / (1 - bbox2d_scores)) - torch.log(thr / (1 - thr))  # (M, 1)
+-                if input_depth_logits and self.multi_depth_config.get('topk', -1) != -1:
+-                    # softmax depth logits, select topk, and rescale their weight
+-                    topk_values = topk_values / topk_values[:, 0:1]   # rescale, (M, topk)
+-                    dscores_extra = topk_values[:, 1:][valid_indices].transpose(1, 0).flatten().unsqueeze(-1) # (M*(topk-1), 1)
+-                    dscores = torch.cat([topk_values[:, 0:1], dscores_extra], dim=0)    # (M', 1)
+-                    log_odds = torch.cat([log_odds, log_odds[valid_indices].repeat(topk-1, 1)], dim=0)
+-                    log_odds = log_odds * dscores
+-                if context2d_feat is not None:
+-                    context2d_feat = torch.cat([context2d_feat, log_odds], dim=-1)  # check dim cat
+-                else:
+-                    context2d_feat = log_odds.repeat(1, self.in_channels)
++        else:
++            _, depths = torch.topk(depths, 1, dim=1)
++        if bbox2d_scores is not None:   # currently use context_2d by default
++            thr = torch.tensor([0.1]).to(bbox2d_scores.device)   # score threshold
++            log_odds = torch.log(bbox2d_scores / (1 - bbox2d_scores)) - torch.log(thr / (1 - thr))  # (M, 1)
++            if self.add_multi_depth_proposal:
++                # softmax depth logits, select topk, and rescale their weight
++                topk_values = topk_values / topk_values[:, 0:1]   # rescale, (M, topk)
++                dscores_extra = topk_values[:, 1:][valid_indices].transpose(1, 0).flatten().unsqueeze(-1) # (M*(topk-1), 1)
++                dscores = torch.cat([topk_values[:, 0:1], dscores_extra], dim=0)    # (M', 1)
++                log_odds = torch.cat([log_odds, log_odds[valid_indices].repeat(topk-1, 1)], dim=0)
++                log_odds = log_odds * dscores
++            if context2d_feat is not None:
++                context2d_feat = torch.cat([context2d_feat, log_odds], dim=-1)  # check dim cat
++            else:
++                context2d_feat = log_odds.repeat(1, self.in_channels)
++        
+ 
+         # convert bin to float depth
+         depths = self._convert_bin_depth_to_specific(depths)
++        new_reference_points = self.project_reference_points_to_image_single(
++            bboxes=bboxes,
++            depths=depths, 
++            img2lidars=data['img2lidar'], 
++            input_depth_logits=input_depth_logits,
++            topk=topk,
++            bbox_nums=bbox_nums,
++            B=B, N=N,
++            valid_indices=valid_indices
++        )
+ 
+-        # (u,v), d -> (ud,vd,d,1)
+-        coords = torch.cat([bboxes[:, :2], depths], dim=1)     # (M, 3), order is (w, h, d)
+-        coords = torch.cat((coords, torch.ones_like(coords[..., :1])), -1)      # (M, 4)
+-        coords[..., :2] = coords[..., :2] * torch.maximum(coords[..., 2:3], torch.ones_like(coords[..., 2:3]) * eps)
+-        coords = coords.unsqueeze(-1)  # (M, 4, 1)
+-
+-        # img2lidar array build
+-        img2lidars = data['lidar2img'].inverse()  # (B, N, 4, 4)
+-        img2lidars = img2lidars.view(B*N, 1, 4, 4) # (BN, 1, 4, 4)
+-        img2lidars_ = torch.cat([img2lidars[kth].repeat(num, 1, 1) for kth, num in enumerate(bbox_nums)], dim=0)    # (M, 4, 4)
+-        if self.add_multi_depth_proposal:
+-            if input_depth_logits and self.multi_depth_config.get('topk', -1) != -1:
+-                img2lidars_extra = img2lidars_.repeat(topk - 1, 1, 1)
+-                img2lidars_extra = img2lidars_extra[valid_indices.repeat(topk - 1)]
+-                img2lidars_ = torch.cat([img2lidars_, img2lidars_extra], dim=0)
+-
+-        # matmul and normalize 3d coords
+-        coords3d = torch.matmul(img2lidars_, coords).squeeze(-1)[..., :3]    # (M, 3)
+-        coords3d[..., 0:1] = (coords3d[..., 0:1] - self.pc_range[0]) / (self.pc_range[3] - self.pc_range[0])
+-        coords3d[..., 1:2] = (coords3d[..., 1:2] - self.pc_range[1]) / (self.pc_range[4] - self.pc_range[1])
+-        coords3d[..., 2:3] = (coords3d[..., 2:3] - self.pc_range[2]) / (self.pc_range[5] - self.pc_range[2])
+-        coords_mask = (coords3d > 1.0) | (coords3d < 0.0)
+-        if B == 1:
+-            new_reference_points = coords3d.unsqueeze(0)    # (B, M, 3)
+-        else:
+-            raise NotImplementedError
++        context2d_feat = context2d_feat.unsqueeze(0)
+ 
++        return new_reference_points, context2d_feat
++    
++    @torch.no_grad()
++    def build_query2d_proposal_single(self, pred_bbox_list, pred_depth, data, bn, padHW,
++                               input_depth_logits=False,
++                               context2d_feat=None, 
++                               bbox2d_scores=None):
+         '''
+-        if pred_depth_var is not None:
+-            depth_var = torch.cat(depth_var_list, dim=0).unsqueeze(0).unsqueeze(-1)    # (B, M)
+-        else:
+-            depth_var = None
++        pred_centers2d: ~~(B*N H*W 2)~~, now is a list, BN*(Mi, 4)
++        pred_depth: (B*N, H, W, 1) if not use topk depth proposals else (BN, H, W, D)
++        pred_depth_var: (B*N, 1, H, W)
+         '''
++        B, N = bn
++        pad_h, pad_w = padHW
++        
++        depth_downsample = int(pad_h / pred_depth.shape[1])
++
++        # bbox list to (sum(Mi), 2)
++        bbox_nums = [len(bbox) for bbox in pred_bbox_list]  # BN values
++        bboxes = torch.cat(pred_bbox_list, dim=0).float()   # gather boxes together
++        if sum(bbox_nums) == 0:  # no effective 2d proposal
++            return None, None
++        # obtain corresponding depth
++        depths = self.extract_objectwise_depth(pred_bbox_list=pred_bbox_list,
++                                               pred_depth=pred_depth,
++                                               depth_downsample=depth_downsample,
++                                               pad_w=pad_w,
++                                               input_depth_logits=input_depth_logits)
++        _, depths = torch.topk(depths, 1, dim=1)
++        if bbox2d_scores is not None:   # currently use context_2d by default
++            thr = torch.tensor([0.1]).to(bbox2d_scores.device)   # score threshold
++            log_odds = torch.log(bbox2d_scores / (1 - bbox2d_scores)) - torch.log(thr / (1 - thr))  # (M, 1)
++            if context2d_feat is not None:
++                context2d_feat = torch.cat([context2d_feat, log_odds], dim=-1)  # check dim cat
++            else:
++                context2d_feat = log_odds.repeat(1, self.in_channels)
++
++        # convert bin to float depth
++        depths = self._convert_bin_depth_to_specific(depths)
++        new_reference_points = self.project_reference_points_to_image_single(
++            bboxes=bboxes,
++            depths=depths, 
++            img2lidars=data['img2lidar'], 
++            bbox_nums=bbox_nums,
++            B=B, N=N,
++        )
+ 
+-        context2d_feat = context2d_feat.unsqueeze(0) if B == 1 and context2d_feat is not None else None
++        context2d_feat = context2d_feat.unsqueeze(0)
+ 
+         return new_reference_points, context2d_feat
+ 
+@@ -1238,7 +1354,8 @@ class FarHead(AnchorFreeHead):
+             preds = preds_dicts[i]
+             bboxes = preds['bboxes']
+             bboxes[:, 2] = bboxes[:, 2] - bboxes[:, 5] * 0.5
+-            bboxes = img_metas[i]['box_type_3d'](bboxes, bboxes.size(-1))
++            #bboxes = img_metas[i]['box_type_3d'](bboxes, bboxes.size(-1))
++            #bboxes = LiDARInstance3DBoxes(bboxes, bboxes.size(-1))
+             scores = preds['scores']
+             labels = preds['labels']
+             ret_list.append([bboxes, scores, labels])
+diff --git a/projects/mmdet3d_plugin/models/dense_heads/yolox_head.py b/projects/mmdet3d_plugin/models/dense_heads/yolox_head.py
+index 6884a76..f26f629 100644
+--- a/projects/mmdet3d_plugin/models/dense_heads/yolox_head.py
++++ b/projects/mmdet3d_plugin/models/dense_heads/yolox_head.py
+@@ -426,18 +426,19 @@ class YOLOXHeadCustom(BaseDenseHead, BBoxTestMixin):
+         for i in range(len(objectnesses)):
+         # for cls_score in cls_scores:
+             # sample_weight = cls_scores[i].topk(1, dim=1).values.sigmoid()       # (BN, 1, Hi, Wi)
+-            sample_weight = objectnesses[i].sigmoid() * cls_scores[i].topk(1, dim=1).values.sigmoid()
++            sample_weight = objectnesses[i].sigmoid() * torch.topk(cls_scores[i], 1, dim=1).values.sigmoid()
+             sample_weight_nms = nn.functional.max_pool2d(sample_weight, (3, 3), stride=1, padding=1)
+             sample_weight_nms = sample_weight_nms.permute(0, 2, 3, 1).reshape(num_imgs, -1, 1)  # (BN, Hi*Wi, 1)
+             sample_weight_ = sample_weight.permute(0, 2, 3, 1).reshape(num_imgs, -1, 1)
+             sample_weight = sample_weight_ * (sample_weight_ == sample_weight_nms).float()  # (BN, Hi*Wi, 1)
+             valid_indices_list.append(sample_weight)
+-        valid_indices = torch.cat(valid_indices_list, dim=1)
++        valid_indices = torch.cat(valid_indices_list, dim=1) # concat across our multihead outputs
+         flatten_sample_weight = valid_indices.clone()       # (BN, sum(Hi*Wi), 1)
+         if self.sample_with_score:
+             valid_indices = valid_indices > threshold_score
+         else:
+             _, topk_indexes = torch.topk(valid_indices, topk_proposal, dim=1)
++            valid_indices = topk_indexes
+ 
+         flatten_cls_scores = torch.cat(flatten_cls_scores, dim=1).sigmoid()     # (BN, sum(Hi*Wi), num_cls)
+         flatten_bbox_preds = torch.cat(flatten_bbox_preds, dim=1)               # (BN, sum(Hi*Wi), 4)
+@@ -463,8 +464,10 @@ class YOLOXHeadCustom(BaseDenseHead, BBoxTestMixin):
+         #     if bbox is not None:
+         #         bbox = bbox_xyxy_to_cxcywh(bbox[..., :4])
+         #     result_list.append(bbox)
+-
+-        bbox2d_scores = flatten_sample_weight[valid_indices].reshape(-1, 1)  # (M, 1)
++        if self.sample_with_score:
++            bbox2d_scores = flatten_sample_weight[valid_indices].reshape(-1, 1)  # (M, 1)
++        else:
++            bbox2d_scores = torch.gather(flatten_sample_weight, dim=1, index=valid_indices).reshape(-1, 1)  # (M, 1)
+         outs = {
+             'bbox_list': result_list,
+             'bbox2d_scores': bbox2d_scores,
+diff --git a/projects/mmdet3d_plugin/models/depth_predictor/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/models/depth_predictor/__pycache__/__init__.cpython-38.pyc
+index 7616a9d..3801b81 100644
+Binary files a/projects/mmdet3d_plugin/models/depth_predictor/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/models/depth_predictor/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/depth_predictor/__pycache__/depth_predictor.cpython-38.pyc b/projects/mmdet3d_plugin/models/depth_predictor/__pycache__/depth_predictor.cpython-38.pyc
+index 6c129e3..bceabac 100644
+Binary files a/projects/mmdet3d_plugin/models/depth_predictor/__pycache__/depth_predictor.cpython-38.pyc and b/projects/mmdet3d_plugin/models/depth_predictor/__pycache__/depth_predictor.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/__init__.cpython-38.pyc
+index 60167fd..3cc6a2f 100644
+Binary files a/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/balancer.cpython-38.pyc b/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/balancer.cpython-38.pyc
+index 25d0420..d1c7936 100644
+Binary files a/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/balancer.cpython-38.pyc and b/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/balancer.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/ddn_loss.cpython-38.pyc b/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/ddn_loss.cpython-38.pyc
+index 538210c..a1c0a38 100644
+Binary files a/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/ddn_loss.cpython-38.pyc and b/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/ddn_loss.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/focalloss.cpython-38.pyc b/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/focalloss.cpython-38.pyc
+index d0e877a..17fde81 100644
+Binary files a/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/focalloss.cpython-38.pyc and b/projects/mmdet3d_plugin/models/depth_predictor/ddn_loss/__pycache__/focalloss.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/detectors/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/models/detectors/__pycache__/__init__.cpython-38.pyc
+index 3305148..42dd121 100644
+Binary files a/projects/mmdet3d_plugin/models/detectors/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/models/detectors/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/detectors/__pycache__/far3d.cpython-38.pyc b/projects/mmdet3d_plugin/models/detectors/__pycache__/far3d.cpython-38.pyc
+index 42db9e5..a7e6aef 100644
+Binary files a/projects/mmdet3d_plugin/models/detectors/__pycache__/far3d.cpython-38.pyc and b/projects/mmdet3d_plugin/models/detectors/__pycache__/far3d.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/detectors/far3d.py b/projects/mmdet3d_plugin/models/detectors/far3d.py
+index 12489d2..c4b3adb 100644
+--- a/projects/mmdet3d_plugin/models/detectors/far3d.py
++++ b/projects/mmdet3d_plugin/models/detectors/far3d.py
+@@ -42,7 +42,10 @@ class Far3D(MVXTwoStageDetector):
+                  position_level=[0],
+                  aux_2d_only=True,
+                  single_test=False,
+-                 pretrained=None):
++                 pretrained=None,
++                 mean=[103.530, 116.280, 123.675], 
++                 std=[57.375, 57.120, 58.395],
++                 to_rgb=False):
+         super(Far3D, self).__init__(pts_voxel_layer, pts_voxel_encoder,
+                              pts_middle_encoder, pts_fusion_layer,
+                              img_backbone, pts_backbone, img_neck, pts_neck,
+@@ -59,6 +62,8 @@ class Far3D(MVXTwoStageDetector):
+             self.depth_branch = build_from_cfg(depth_branch, PLUGIN_LAYERS)
+         else:
+             self.depth_branch = None
++        self.mean = torch.tensor(mean)
++        self.std = torch.tensor(std)
+ 
+ 
+     def extract_img_feat(self, img, return_depth=False):
+@@ -75,6 +80,8 @@ class Far3D(MVXTwoStageDetector):
+                 img = img.reshape(B * N, C, H, W)
+             if self.use_grid_mask:
+                 img = self.grid_mask(img)
++            img -= self.mean.to(device=img.device).reshape(1,3,1,1)
++            img /= self.std.to(device=img.device).reshape(1,3,1,1)
+ 
+             img_feats = self.img_backbone(img)
+             if isinstance(img_feats, dict):
+@@ -120,9 +127,9 @@ class Far3D(MVXTwoStageDetector):
+         return location_r
+ 
+     def forward_roi_head(self, location, **data):
+-        outs_roi = self.img_roi_head(location, **data)
++        outs_roi = self.img_roi_head(locations=location, **data)
+         
+-        return outs_roi
++        return outs_roi, data['img_feats']
+ 
+ 
+     def forward_pts_train(self,
+@@ -149,7 +156,7 @@ class Far3D(MVXTwoStageDetector):
+         """
+         location = self.prepare_location(img_metas, **data)
+ 
+-        outs_roi = self.forward_roi_head(location, **data)
++        outs_roi, _ = self.forward_roi_head(location, **data)
+         bbox_dict = self.img_roi_head.get_bboxes(outs_roi, **data)  # {'bbox_list': BN x (Mi, 4), 'bbox_score_list': BN x (Mi, 1)}
+         outs_roi.update(bbox_dict)
+         outs = self.pts_bbox_head(img_metas, outs_roi, **data)
+@@ -229,51 +236,59 @@ class Far3D(MVXTwoStageDetector):
+ 
+         return losses
+   
+-    def forward_test(self, img_metas, rescale, **data):
++    def forward_test(self, img_metas, rescale, state=None,**data):
+         for var, name in [(img_metas, 'img_metas')]:
+             if not isinstance(var, list):
+                 raise TypeError('{} must be a list, but got {}'.format(
+                     name, type(var)))
+         for key in data:
+-            if key not in ['img', 'gt_bboxes_3d', 'gt_bboxes', 'centers2d']:
++            if key not in ['img', 'gt_bboxes_3d', 'gt_bboxes', 'centers2d', 'state', "prev_exists"]:
+                 data[key] = data[key][0][0].unsqueeze(0)
+             else:
+                 data[key] = data[key][0]
+-        return self.simple_test(img_metas[0], **data)
++        data['img2lidar'] = data['lidar2img'].inverse()
++        return self.simple_test(img_metas[0], state=state, **data)
++    
++    def simple_test_bboxes(self, img_metas, outs_roi, state, **data):
++        outs, state = self.pts_bbox_head(img_metas, outs_roi, state=state, **data)
+ 
+-    def simple_test_pts(self, img_metas, **data):
+-        """Test function of point cloud branch."""
++        bbox_list = self.pts_bbox_head.get_bboxes(outs, img_metas)
++        return bbox_list, state
++
++    def get_bboxes(self, img_metas, **data):
+         location = self.prepare_location(img_metas, **data)
+-        outs_roi = self.forward_roi_head(location, **data)
++        outs_roi, img_feats = self.forward_roi_head(location, **data)
+         bbox_dict = self.img_roi_head.get_bboxes(outs_roi)  # {'bbox_list': BN x (Mi, 4), 'bbox_score_list': BN x (Mi, 1)}
+-        bbox_roi = bbox_dict['bbox_list']
+         outs_roi.update(bbox_dict)
++        return outs_roi, img_feats
+ 
+-        if img_metas[0]['scene_token'] != self.prev_scene_token:
+-            self.prev_scene_token = img_metas[0]['scene_token']
+-            data['prev_exists'] = data['img'].new_zeros(1)
+-            self.pts_bbox_head.reset_memory()
+-        else:
+-            data['prev_exists'] = data['img'].new_ones(1)
+-
+-        outs = self.pts_bbox_head(img_metas, outs_roi, **data)
+-        bbox_list = self.pts_bbox_head.get_bboxes(
+-            outs, img_metas)
++    def simple_test_pts(self, img_metas, state, **data):
++        """Test function of point cloud branch."""
++        outs_roi, _ = self.get_bboxes(img_metas, **data)
++        if state is None:
++            if img_metas[0]['scene_token'] != self.prev_scene_token:
++                self.prev_scene_token = img_metas[0]['scene_token']
++                data['prev_exists'] = data['img'].new_zeros(1)
++                self.pts_bbox_head.reset_memory(1)
++            else:
++                data['prev_exists'] = data['img'].new_ones(1)
++        
++        bbox_list, state = self.simple_test_bboxes(img_metas, outs_roi, state, **data)
+         bbox_results = [
+             bbox3d2result(bboxes, scores, labels)
+             for bboxes, scores, labels in bbox_list
+         ]
+-        return bbox_results, bbox_roi
++        return bbox_results, outs_roi['bbox_list'], state
+     
+-    def simple_test(self, img_metas, **data):
++    def simple_test(self, img_metas, state=None,**data):
+         """Test function without augmentaiton."""
+         data['img_feats'] = self.extract_img_feat(data['img'])
+ 
+         bbox_list = [dict() for i in range(len(img_metas))]
+-        bbox_pts, bbox_roi = self.simple_test_pts(img_metas, **data)
++        bbox_pts, bbox_roi, state = self.simple_test_pts(img_metas, state=state, **data)
+         for result_dict, pts_bbox in zip(bbox_list, bbox_pts):
+             result_dict['pts_bbox'] = pts_bbox
+             # result_dict['bbox_roi'] = bbox_roi
+-        return bbox_list
++        return bbox_list, state
+ 
+     
+\ No newline at end of file
+diff --git a/projects/mmdet3d_plugin/models/necks/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/models/necks/__pycache__/__init__.cpython-38.pyc
+index 4410cf4..52fd8af 100644
+Binary files a/projects/mmdet3d_plugin/models/necks/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/models/necks/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/necks/__pycache__/cp_fpn.cpython-38.pyc b/projects/mmdet3d_plugin/models/necks/__pycache__/cp_fpn.cpython-38.pyc
+index 60a18a0..79be965 100644
+Binary files a/projects/mmdet3d_plugin/models/necks/__pycache__/cp_fpn.cpython-38.pyc and b/projects/mmdet3d_plugin/models/necks/__pycache__/cp_fpn.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/necks/__pycache__/second_fpn.cpython-38.pyc b/projects/mmdet3d_plugin/models/necks/__pycache__/second_fpn.cpython-38.pyc
+index e650747..0acd2b2 100644
+Binary files a/projects/mmdet3d_plugin/models/necks/__pycache__/second_fpn.cpython-38.pyc and b/projects/mmdet3d_plugin/models/necks/__pycache__/second_fpn.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/utils/__pycache__/__init__.cpython-38.pyc b/projects/mmdet3d_plugin/models/utils/__pycache__/__init__.cpython-38.pyc
+index 3ddaabf..be527f3 100644
+Binary files a/projects/mmdet3d_plugin/models/utils/__pycache__/__init__.cpython-38.pyc and b/projects/mmdet3d_plugin/models/utils/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/utils/__pycache__/attention.cpython-38.pyc b/projects/mmdet3d_plugin/models/utils/__pycache__/attention.cpython-38.pyc
+index d386db2..fbbe6bf 100644
+Binary files a/projects/mmdet3d_plugin/models/utils/__pycache__/attention.cpython-38.pyc and b/projects/mmdet3d_plugin/models/utils/__pycache__/attention.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/utils/__pycache__/detr3d_transformer.cpython-38.pyc b/projects/mmdet3d_plugin/models/utils/__pycache__/detr3d_transformer.cpython-38.pyc
+index 3290daa..ae79ab6 100644
+Binary files a/projects/mmdet3d_plugin/models/utils/__pycache__/detr3d_transformer.cpython-38.pyc and b/projects/mmdet3d_plugin/models/utils/__pycache__/detr3d_transformer.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/utils/__pycache__/grid_mask.cpython-38.pyc b/projects/mmdet3d_plugin/models/utils/__pycache__/grid_mask.cpython-38.pyc
+index 58a8fbf..3a54901 100644
+Binary files a/projects/mmdet3d_plugin/models/utils/__pycache__/grid_mask.cpython-38.pyc and b/projects/mmdet3d_plugin/models/utils/__pycache__/grid_mask.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/utils/__pycache__/hook.cpython-38.pyc b/projects/mmdet3d_plugin/models/utils/__pycache__/hook.cpython-38.pyc
+index 6d44ec8..7ce577d 100644
+Binary files a/projects/mmdet3d_plugin/models/utils/__pycache__/hook.cpython-38.pyc and b/projects/mmdet3d_plugin/models/utils/__pycache__/hook.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/utils/__pycache__/layer_decay_optimizer_constructor.cpython-38.pyc b/projects/mmdet3d_plugin/models/utils/__pycache__/layer_decay_optimizer_constructor.cpython-38.pyc
+index ee4c023..df7b8c8 100644
+Binary files a/projects/mmdet3d_plugin/models/utils/__pycache__/layer_decay_optimizer_constructor.cpython-38.pyc and b/projects/mmdet3d_plugin/models/utils/__pycache__/layer_decay_optimizer_constructor.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/utils/__pycache__/misc.cpython-38.pyc b/projects/mmdet3d_plugin/models/utils/__pycache__/misc.cpython-38.pyc
+index 7de6b47..d1b6e88 100644
+Binary files a/projects/mmdet3d_plugin/models/utils/__pycache__/misc.cpython-38.pyc and b/projects/mmdet3d_plugin/models/utils/__pycache__/misc.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/utils/__pycache__/petr_transformer.cpython-38.pyc b/projects/mmdet3d_plugin/models/utils/__pycache__/petr_transformer.cpython-38.pyc
+index 14fec6d..51f5350 100644
+Binary files a/projects/mmdet3d_plugin/models/utils/__pycache__/petr_transformer.cpython-38.pyc and b/projects/mmdet3d_plugin/models/utils/__pycache__/petr_transformer.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/utils/__pycache__/positional_encoding.cpython-38.pyc b/projects/mmdet3d_plugin/models/utils/__pycache__/positional_encoding.cpython-38.pyc
+index 9f2ad45..ba45dc2 100644
+Binary files a/projects/mmdet3d_plugin/models/utils/__pycache__/positional_encoding.cpython-38.pyc and b/projects/mmdet3d_plugin/models/utils/__pycache__/positional_encoding.cpython-38.pyc differ
+diff --git a/projects/mmdet3d_plugin/models/utils/__pycache__/warmup_fp16_optimizer.cpython-38.pyc b/projects/mmdet3d_plugin/models/utils/__pycache__/warmup_fp16_optimizer.cpython-38.pyc
+index 6f67fdb..901bc55 100644
+Binary files a/projects/mmdet3d_plugin/models/utils/__pycache__/warmup_fp16_optimizer.cpython-38.pyc and b/projects/mmdet3d_plugin/models/utils/__pycache__/warmup_fp16_optimizer.cpython-38.pyc differ
+diff --git a/tools/create_infos_av2/create_av2_infos.py b/tools/create_infos_av2/create_av2_infos.py
+index 9f2d80f..64e2d9b 100644
+--- a/tools/create_infos_av2/create_av2_infos.py
++++ b/tools/create_infos_av2/create_av2_infos.py
+@@ -48,6 +48,7 @@ def create_av2_infos(dataset_dir, split, out_dir):
+         # if i % 5000 != 0: # to create mini pkl for debug
+         #     continue
+         infos = {}
++        skip = False
+         record = sensor_caches.iloc[i].name
+         log_id, _, lidar_timestamp_ns = record
+         log_dir = src_dir / log_id
+@@ -66,6 +67,7 @@ def create_av2_infos(dataset_dir, split, out_dir):
+                 print("No corresponding ring image")
+                 cam_infos[cam_name] = None
+                 camera_models[cam_name] = None
++                skip = True
+                 continue
+             
+             fpath = Path(split) / log_id / "sensors" / "cameras" / cam_name / f"{cam_timestamp_ns}.jpg" #img path
+@@ -106,7 +108,8 @@ def create_av2_infos(dataset_dir, split, out_dir):
+             infos['gt2d_infos'] = gt2d_infos
+         
+         #存储所有samples的info
+-        av2_split_infos.append(infos)
++        if not skip:
++            av2_split_infos.append(infos)
+     print('{}_sample:{}'.format(split, len(av2_split_infos)))
+     data = dict(infos=av2_split_infos, split=split)
+     info_path = osp.join(out_dir, 'av2_{}_infos_mini.pkl'.format(split))
+@@ -278,6 +281,7 @@ def post_process_coords(corner_coords, imsize = (2048, 1550)):
+ if __name__ == '__main__':
+     splits = ["val", "train"]
+     for split in splits:
++        print(split)
+         create_av2_infos(
+             dataset_dir=dataset_dir,
+             split=split,
