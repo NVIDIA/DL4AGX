@@ -18,3 +18,6 @@ This folder contains samples for autonomous vehicle on NVIDIA DRIVE platform, in
 
 ## BEVFormer: INT8 explicit quantization for TensorRT
 [BEVFormer-INT8-EQ](./bevformer-int8-eq) is an end-to-end example to demonstrate the explicit quantization and deployment of [BEVFormer](https://github.com/fundamentalvision/BEVFormer) on NVIDIA GPUs using TensorRT.
+
+## Far3D-TensorRT
+[Far3D-TensorRT](./far3d-trt) is a sample application to demonstrate the deployment of [Far3D](https://github.com/megvii-research/Far3D) on the NVIDIA Drive Orin platform using TensorRT.

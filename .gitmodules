@@ -16,3 +16,15 @@
 [submodule "AV-Solutions/dcnv4-trt/3rd_party/stb"]
 	path = AV-Solutions/dcnv4-trt/3rd_party/stb
 	url = https://github.com/nothings/stb.git
+[submodule "AV-Solutions/far3d/dependencies/Far3D"]
+	path = AV-Solutions/far3d-trt/dependencies/Far3D
+	url = https://github.com/megvii-research/Far3D
+[submodule "AV-Solutions/far3d-trt/dependencies/mmdetection3d"]
+	path = AV-Solutions/far3d-trt/dependencies/mmdetection3d
+	url = https://github.com/open-mmlab/mmdetection3d.git
+[submodule "AV-Solutions/far3d-trt/inference_app/dependencies/Lidar_AI_Solution"]
+	path = AV-Solutions/far3d-trt/inference_app/dependencies/Lidar_AI_Solution
+	url = https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution.git
+[submodule "AV-Solutions/common/dependencies/stb"]
+	path = AV-Solutions/common/dependencies/stb
+	url = https://github.com/nothings/stb.git
