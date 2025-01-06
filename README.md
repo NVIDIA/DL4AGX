@@ -6,13 +6,14 @@ This repository contains model designs, deployment solutions for state-of-the-ar
 
 ## Table of Contents
 - [Deployment and Inference Solutions](./AV-Solutions/)
+   - [ONNX Export Guidance for TensorRT](./AV-Solutions/onnx-export-guidance/)
    - [BEVFormer INT8 Explicit Quantization](./AV-Solutions/bevformer-int8-eq/)
    - [DCNv4 TensorRT](./AV-Solutions/dcnv4-trt/)
+   - [Far3D TensorRT](./AV-Solutions/far3d-trt/)
    - [MTMI TensorRT](./AV-Solutions/mtmi/)
    - [Sparsity INT8 Training and TensorRT Inference](./AV-Solutions/SparsityINT8/)
    - [StreamPETR TensorRT](./AV-Solutions/streampetr-trt/)
    - [UniAD TensorRT](./AV-Solutions/uniad-trt/)
-   - [Far3D TensorRT](./AV-Solutions/far3d-trt/)
 - [Hardware-friendly Models](./Models/)
    - [ConvSelfAttention](./Models/ConvSelfAttention/)
    - [DEST](./Models/DEST/)

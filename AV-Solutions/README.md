@@ -1,6 +1,9 @@
 # Autonomous Vehicle Solutions
 This folder contains samples for autonomous vehicle on NVIDIA DRIVE platform, including deployment of SOTA methods with TensorRT and inference application design. More is on the way. Please stay tuned.
 
+## ONNX Export Guidance for TensorRT
+As AV models are being developed with more complexity, one of the major challenges in deploying such a model with TensorRT is to be able to export the model to ONNX format from training framework. [ONNX Export Guidance for TensorRT](./onnx-export-guidance/) provides useful tips with examples on how to export TensorRT-friendly ONNX models based on [TorchScript-based ONNX exporter](https://pytorch.org/docs/stable/onnx_torchscript.html).
+
 ## Sparsity in INT8
 [Sparsity in INT8](./SparsityINT8/) contains the PyTorch codebase for sparsity INT8 training and TensorRT inference, demonstrating the workflow for leveraging both structured sparsity and quantization for more efficient deployment. Please refer to ["Sparsity in INT8: Training Workflow and Best Practices for NVIDIA TensorRT Acceleration"](https://developer.nvidia.com/blog/sparsity-in-int8-training-workflow-and-best-practices-for-tensorrt-acceleration/) for more details..
 
