@@ -24,3 +24,6 @@ As AV models are being developed with more complexity, one of the major challeng
 
 ## Far3D-TensorRT
 [Far3D-TensorRT](./far3d-trt) is a sample application to demonstrate the deployment of [Far3D](https://github.com/megvii-research/Far3D) on the NVIDIA Drive Orin platform using TensorRT.
+
+## VAD-TensorRT
+[VAD-TensorRT](./vad-trt) is a sample application to demonstrate the deployment of [VADv1](https://github.com/hustvl/VAD.git) on the NVIDIA Drive Orin platform using TensorRT.

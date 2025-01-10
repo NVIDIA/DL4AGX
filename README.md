@@ -14,6 +14,7 @@ This repository contains model designs, deployment solutions for state-of-the-ar
    - [Sparsity INT8 Training and TensorRT Inference](./AV-Solutions/SparsityINT8/)
    - [StreamPETR TensorRT](./AV-Solutions/streampetr-trt/)
    - [UniAD TensorRT](./AV-Solutions/uniad-trt/)
+   - [VAD-TensorRT](./AV-Solutions/vad-trt/)
 - [Hardware-friendly Models](./Models/)
    - [ConvSelfAttention](./Models/ConvSelfAttention/)
    - [DEST](./Models/DEST/)
