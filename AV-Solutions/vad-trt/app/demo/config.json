@@ -1,0 +1,32 @@
+{
+  "project": "vadv1",
+  "warm_up": 20,
+  "n_frames": 15,
+  "plugins": ["libplugins.so"],
+  "font_path": "simhei.ttf",
+  "images": [
+    "CAM_FRONT.jpg", "CAM_FRONT_RIGHT.jpg", "CAM_FRONT_LEFT.jpg", 
+    "CAM_BACK.jpg", "CAM_BACK_LEFT.jpg", "CAM_BACK_RIGHT.jpg"],
+  "nets": [
+    {
+      "name": "backbone",
+      "file":"engines/vadv1.extract_img_feat.fp16.engine",
+      "use_graph": true,
+      "inputs": {},
+      "outputs": {}
+    },
+    {
+      "name": "head",
+      "file":"engines/vadv1_prev.pts_bbox_head.forward.engine",
+      "use_graph": true,
+      "inputs": {
+        "mlvl_feats.0": {
+          "net": "backbone",
+          "name": "out.0"
+        }
+      },
+      "outputs": {}
+    }
+  ],
+  "viz": "viz"
+}
