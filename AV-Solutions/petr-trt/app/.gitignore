@@ -1,0 +1,8 @@
+build*/
+lib/cuOSD/
+lib/stb/
+demo/data/*
+demo/engines/*
+demo/onnx_files/*
+demo/viz*
+demo/*.ttf
