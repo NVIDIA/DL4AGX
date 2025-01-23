@@ -10,11 +10,13 @@ This repository contains model designs, deployment solutions for state-of-the-ar
    - [BEVFormer INT8 Explicit Quantization](./AV-Solutions/bevformer-int8-eq/)
    - [DCNv4 TensorRT](./AV-Solutions/dcnv4-trt/)
    - [Far3D TensorRT](./AV-Solutions/far3d-trt/)
+   - [Llama-3.1-8B with TensorRT-LLM](./AV-Solutions/Llama-3.1-8B-trtllm)
    - [MTMI TensorRT](./AV-Solutions/mtmi/)
    - [Sparsity INT8 Training and TensorRT Inference](./AV-Solutions/SparsityINT8/)
    - [StreamPETR TensorRT](./AV-Solutions/streampetr-trt/)
    - [UniAD TensorRT](./AV-Solutions/uniad-trt/)
    - [VAD-TensorRT](./AV-Solutions/vad-trt/)
+   
 - [Hardware-friendly Models](./Models/)
    - [ConvSelfAttention](./Models/ConvSelfAttention/)
    - [DEST](./Models/DEST/)
