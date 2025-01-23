@@ -58,7 +58,7 @@ work_dir
 ├── nccl
 ├── json_modifier.py
 ```
-Note that on Drive Orin, currently TensorRT-LLM v0.13 is supported.
+Note that on Drive Orin, currently TensorRT-LLM v0.13 is used for inference.
 
 ## Build LLM Engine and Sample Inference on Drive Orin
 After successfully build the TensorRT-LLM from source on target Drive Orin, the following command will build the corresponding LLM engine:
