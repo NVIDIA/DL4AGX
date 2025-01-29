@@ -12,6 +12,7 @@
 - [Dynamic Shape Tensors](#dynamic-shape-tensors)
 - [Update Instance Variables (Attributes)](#update-instance-variables-attributes)
 - [Shape Tensors and Execution Tensors](#shape-tensors-and-execution-tensors)
+- [TensorRT-Unsupported Operators](#tensorrt-unsupported-operators)
 - [Missing Operators](#missing-operators)
 - [Constant Folding Failure](#constant-folding-failure)
 - [Miscelleneous](#miscelleneous)
@@ -389,6 +390,49 @@ Moreover, in rare cases if after running `trtexec` TensorRT shows not supporting
 # avoid assigning a dynamic shape tensor's values to another dynamic shape tensor by cherry-picking values
 track_instances = ~cond * track_instances + cond * (cond.int().cumsum(0, dtype=torch.int32)-1)
 ```
+
+### TensorRT-Unsupported Operators
+#### Quick Solution: Re-write with TensorRT-supported Pytorch Operators
+Example 1: `torch.unique(tensor)`
+```
+def torch_unique_trt(tensor):
+    sorted_tensor, _ = torch.sort(tensor)
+    diff = torch.ones_like(sorted_tensor)
+    diff[1:] = sorted_tensor[1:] - sorted_tensor[:-1]
+    unique_elements = sorted_tensor[diff != 0]
+    return unique_elements
+```
+Example 2: `torch.atan2(y, x)`
+```
+import math
+def torch_atan2_trt(y, x):
+    '''
+    reference: https://en.wikipedia.org/wiki/Atan2
+    '''
+    eps = 1e-8
+    atan = torch.atan(y/(x+eps))
+    x_eq_0 = x==0
+    x_gt_0 = x>0
+    x_ls_0 = x<0
+    y_ge_0 = y>=0
+    y_gt_0 = y>0
+    y_ls_0 = y<0
+
+    pi_div_2 = (torch.ones_like(atan))*(math.pi/2)
+    negative_pi_div_2 = (torch.ones_like(atan))*(-math.pi/2)
+
+    atan2 = (negative_pi_div_2)*(x_eq_0 & y_ls_0).int()\
+            + (pi_div_2)*(x_eq_0 & y_gt_0).int()\
+            + (atan-math.pi)*(x_ls_0 & y_ls_0).int()\
+            + (atan+math.pi)*(x_ls_0 & y_ge_0).int()\
+            + (atan) * x_gt_0.int()
+
+    return atan2.float()
+```
+
+#### Standard Solution: ONNX Custom Operators and TensorRT Plugins
+For Pytorch Operators that cannot be re-written with both [ONNX Supported TorchScript Operators](https://pytorch.org/docs/stable/onnx_torchscript_supported_aten_ops.html) and [TensorRT-supported Operators](https://github.com/onnx/onnx-tensorrt?tab=readme-ov-file#supported-operators), consider exporting ONNX with [Custom Operators](https://pytorch.org/docs/stable/onnx_torchscript.html#custom-operators), and write [TensorRT Plugins](https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/extending-custom-layers.html) for it.
+
 
 ### Missing Operators
 #### Missing `NonZero` operation in TensorRT
