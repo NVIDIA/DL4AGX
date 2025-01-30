@@ -12,7 +12,7 @@
 - [Dynamic Shape Tensors](#dynamic-shape-tensors)
 - [Update Instance Variables (Attributes)](#update-instance-variables-attributes)
 - [Shape Tensors and Execution Tensors](#shape-tensors-and-execution-tensors)
-- [TensorRT-Unsupported Operators](#tensorrt-unsupported-operators)
+- [Unsupported Operators](#unsupported-operators)
 - [Missing Operators](#missing-operators)
 - [Constant Folding Failure](#constant-folding-failure)
 - [Miscelleneous](#miscelleneous)
@@ -391,7 +391,7 @@ Moreover, in rare cases if after running `trtexec` TensorRT shows not supporting
 track_instances = ~cond * track_instances + cond * (cond.int().cumsum(0, dtype=torch.int32)-1)
 ```
 
-### TensorRT-Unsupported Operators
+### Unsupported Operators
 #### Quick Solution: Re-write with TensorRT-supported Pytorch Operators
 Example 1: `torch.unique(tensor)`
 ```
@@ -431,7 +431,7 @@ def torch_atan2_trt(y, x):
 ```
 
 #### Standard Solution: ONNX Custom Operators and TensorRT Plugins
-For Pytorch Operators that cannot be re-written with both [ONNX Supported TorchScript Operators](https://pytorch.org/docs/stable/onnx_torchscript_supported_aten_ops.html) and [TensorRT-supported Operators](https://github.com/onnx/onnx-tensorrt?tab=readme-ov-file#supported-operators), consider exporting ONNX with [Custom Operators](https://pytorch.org/docs/stable/onnx_torchscript.html#custom-operators), and write [TensorRT Plugins](https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/extending-custom-layers.html) for it.
+For Pytorch Operators that cannot be re-written with both [ONNX Supported TorchScript Operators](https://pytorch.org/docs/stable/onnx_torchscript_supported_aten_ops.html) and [TensorRT-supported Operators](https://github.com/onnx/onnx-tensorrt?tab=readme-ov-file#supported-operators), export ONNX with [Custom Operators](https://pytorch.org/docs/stable/onnx_torchscript.html#custom-operators), and write [TensorRT Plugins](https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/extending-custom-layers.html) for it.
 
 
 ### Missing Operators
