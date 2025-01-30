@@ -37,7 +37,16 @@ The inference is showcased with a C++ sample application, it loads raw images an
 
 
 ## Results <a name="results"></a>
-The inference application will generate output visualizations to showcase the planning trajectory and dynamic object detection. Notice that post-processing such as collusion correction is not implemented in the current sample. Raw planning trajectory and object detection results are visualized.
+### Inference Performance on Orin
+
+| Model | Framework | Precision | DL model latency↓ | avg. L2↓ | avg. Col↓ |
+| :---:| :---: | :---: | :---: | :---: | :---: |
+| UniAD-tiny | Pytorch-1.12 | FP32 | 843.5172 ms | 0.9986  | 0.27 |
+| UniAD-tiny | TensorRT-10.7.0.23 | FP32 | 63.4498 ms | 0.9994 | 0.27 |
+| UniAD-tiny | TensorRT-10.7.0.23 | FP16 |  50.1014 ms | testing | testing |
+
+### Visualization
+The inference application will generate output visualizations to showcase the planning trajectory and dynamic object detection. Notice that post-processing such as collision correction is not implemented in the current sample. Raw planning trajectory and object detection results are visualized.
 
 
 ![](./assets/uniad-inference.gif)

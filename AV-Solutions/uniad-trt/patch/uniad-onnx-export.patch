@@ -3486,7 +3486,7 @@ index 78a4a87..e339d84 100644
 +                labels.int(),
 +                bbox_index.int(),
 +                obj_idxes.int(),
-+                max_obj_id_out.int(),
++                max_obj_id_out.int(),seg_out,
 +                outs_planning)
 diff --git a/projects/mmdet3d_plugin/uniad/detectors/uniad_track.py b/projects/mmdet3d_plugin/uniad/detectors/uniad_track.py
 index 577ae38..7fece7e 100644
@@ -3903,7 +3903,7 @@ index 577ae38..7fece7e 100644
 +        track_instances[1] = last_ref_pts[0]
 +        track_instances[3][900] = -2
 +        track_instances[3], track_instances[5], max_obj_id = \
-+            track_base_update_trt_script_v4(
++            track_base_update_trt_script_v5(
 +            track_instances[3], track_instances[5],track_instances[7], 
 +            track_instances[-5].shape[0], self.track_base.score_thresh, 
 +            self.track_base.filter_score_thresh, 
@@ -4560,7 +4560,7 @@ index 577ae38..7fece7e 100644
 +    cond3=cond2&(track_instances5_c >= miss_tolerance)
 +    track_instances3_c = ((-1)*cond3+(track_instances3_c)*~cond3).int()
 +    diff = cond1.int().sum().int()
-+    data = torch.arange(max_obj_id[0].int(), diff+max_obj_id[0].int(), device=max_obj_id.device, dtype=torch.int32)
++    data = torch.arange(cond1.nonzero().shape[0], device=track_instances3_c.device, dtype=torch.int32)+max_obj_id[0].int()
 +    track_instances3_c[index_bool2long_trt(cond1)] = data 
 +    max_obj_id_out = max_obj_id + diff
 +
