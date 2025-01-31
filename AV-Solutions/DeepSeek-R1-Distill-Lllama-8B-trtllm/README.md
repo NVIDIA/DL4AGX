@@ -74,7 +74,7 @@ python run.py --max_output_len 128 --engine_dir $path_engine/1-gpu/ --tokenizer_
 
 Here is a sample inference output for DeepSeek-R1-Distill-LLaMA-3.1-8B model 
 ```
-[11/21/2024-16:10:58] [TRT-LLM] [I] Load engine takes: 62.147863149642944 sec
-Input [Text 0]: "<|begin_of_text|>Born in north-east France, Soyer trained as a"
-Output [Text 0 Beam 0]: " chef in Paris before moving to London in 1848. He was appointed chef to the Prince of Wales in 1850, and later became chef to Queen Victoria. He was a pioneer of French cuisine in England, and his cookery books were very popular. He died in 1868."
+Input [Text 0]: "<｜begin▁of▁sentence｜>Born in north-east France, Soyer trained as a"
+Output [Text 0 Beam 0]: " chef in Paris. He worked at the famous restaurant 'Le Grand Véfour' under chef Marie-Antoine Carême, and later at 'Le Coq Rico' with chef Charles de la Faye. Soyer is known for his work in the development of the restaurant trade, and he wrote several books on the subject. He also became a member of the French Academy of Gastronomy.
+So, Soyer is a French chef, born in the 19th century, who worked in some of the most prominent restaurants in Paris. His contributions to the restaurant industry are well-documented, and he's considered a significant figure"
 ```
