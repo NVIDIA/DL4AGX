@@ -1,0 +1,4 @@
+data
+engines/*
+mmdetection3d
+onnx_files/*

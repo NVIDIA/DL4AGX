@@ -30,3 +30,7 @@ As AV models are being developed with more complexity, one of the major challeng
 
 ## VAD-TensorRT
 [VAD-TensorRT](./vad-trt) is a sample application to demonstrate the deployment of [VADv1](https://github.com/hustvl/VAD.git) on the NVIDIA Drive Orin platform using TensorRT.
+
+## PETRv1&v2-TensorRT
+[PETRv1&v2-TensorRT](./petr-trt) is a sample application to demonstrate the deployment of [PETRv1&v2](https://github.com/megvii-research/PETR) on the NVIDIA Drive Orin platform using TensorRT.
+

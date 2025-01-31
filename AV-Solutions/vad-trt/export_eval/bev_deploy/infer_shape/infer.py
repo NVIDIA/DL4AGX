@@ -48,7 +48,7 @@ def _infer_shape_msda(node):
     num_levels = node.inputs[1].shape[0]
     num_query = node.inputs[3].shape[1]
     num_point = node.inputs[3].shape[4]
-    node.outputs[0].shape = [B, num_query, num_heads, channels]
+    node.outputs[0].shape = [B, num_query, num_heads * channels]
     node.outputs[0].dtype = node.inputs[0].dtype
     return True
 
