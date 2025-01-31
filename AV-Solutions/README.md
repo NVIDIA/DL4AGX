@@ -28,6 +28,9 @@ As AV models are being developed with more complexity, one of the major challeng
 ## Llama-3.1-8B-TensorRT-LLM
 [Llama-3.1-8B-TensorRT-LLM](./Llama-3.1-8B-trtllm) is an example that walks through the setup process for deploying the Llama-3.1-8B model with NVIDIA TensorRT-LLM on the NVIDIA Drive Orin platform.
 
+## DeepSeek-R1-Distill-Llama-3.1-8B-TensorRT-LLM
+[DeepSeek-R1-Distill-Llama-3.1-8B-TensorRT-LLM](./DeepSeek-R1-Distill-Lllama-8B-trtllm) is an example that walks through the setup process for deploying the DeepSeek-R1-Distill-Llama-3.1-8B model with NVIDIA TensorRT-LLM on the NVIDIA Drive Orin platform.
+
 ## VAD-TensorRT
 [VAD-TensorRT](./vad-trt) is a sample application to demonstrate the deployment of [VADv1](https://github.com/hustvl/VAD.git) on the NVIDIA Drive Orin platform using TensorRT.
 

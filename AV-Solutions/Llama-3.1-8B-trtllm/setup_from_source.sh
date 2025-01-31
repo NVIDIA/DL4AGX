@@ -21,7 +21,7 @@ git submodule update --init --recursive
 cp -r ../batch_manager/ ./cpp/tensorrt_llm/
 cp -r ../executor/ ./cpp/tensorrt_llm/
 cp -r ../nvrtcWrapper/aarch64-linux-gnu/libtensorrt_llm_nvrtc_wrapper.so ./cpp/tensorrt_llm/kernels/decoderMaskedMultiheadAttention/decoderXQAImplJIT/nvrtcWrapper/aarch64-linux-gnu/
-git apply ../new_patch.patch
+git apply ../build_from_source_changes.patch
 
 
 # setup dependency
