@@ -34,11 +34,59 @@
 #include <stb/stb_image.h>
 #include <stb/stb_image_write.h>
 
+#include <sensor_msgs/msg/compressed_image.hpp>
+#include <sensor_msgs/msg/image.hpp>
+
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
 #include "net.h"
 #include "visualize.hpp"  
+
+// バイナリ画像データをROS CompressedImageに変換し、その後TensorRTのバインディングに渡す関数
+void processImageForInference(
+    const std::string& img_path,
+    std::shared_ptr<nv::Net>& net,
+    const std::string& binding_name,
+    cudaStream_t stream) {
+    
+    auto tensor = net->bindings[binding_name];
+    if (!tensor) {
+        throw std::runtime_error("Binding not found: " + binding_name);
+    }
+
+    // バイナリファイルを読み込む
+    std::ifstream file(img_path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open image file: " + img_path);
+    }
+    
+    // ファイルサイズを取得
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    
+    // データを読み込む
+    std::vector<char> buffer(size);
+    if (!file.read(buffer.data(), size)) {
+        throw std::runtime_error("Could not read image file");
+    }
+    
+    // ROSのCompressedImageメッセージを作成
+    auto compressed_msg = std::make_shared<sensor_msgs::msg::CompressedImage>();
+    compressed_msg->format = "jpeg";  // または適切なフォーマット
+    compressed_msg->data = std::vector<uint8_t>(buffer.begin(), buffer.end());
+    
+    // TensorRTのバインディングにデータを渡す
+    // データ型に応じて適切なサイズでコピー
+    cudaMemcpyAsync(
+        tensor->ptr,                               // destination (GPU memory)
+        compressed_msg->data.data(),              // source (CPU memory)
+        tensor->volume * nv::getElementSize(tensor->dtype),  // size
+        cudaMemcpyHostToDevice,                   // direction
+        stream                                    // CUDA stream
+    );
+}
+
 
 class Logger : public nvinfer1::ILogger {
 public:
@@ -155,7 +203,19 @@ int main(int argc, char** argv) {
   printf("[INFO] n_frames=%d\n", n_frames);
   for( int frame_id=1; frame_id < n_frames; frame_id++ ) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
-    nets["backbone"]->bindings["img"]->load(frame_dir + "img.bin");
+    // nets["backbone"]->bindings["img"]->load(frame_dir + "img.bin");
+    // 画像処理と推論
+    try {
+        processImageForInference(
+            frame_dir + "img.bin",
+            nets["backbone"],
+            "img",
+            stream
+        );
+    } catch (const std::exception& e) {
+        std::cerr << "Error processing image: " << e.what() << std::endl;
+        return -1;
+    }
     nets["head"]->bindings["prev_bev"]->load(frame_dir + "prev_bev.bin");
     nets["head"]->bindings["img_metas.0[shift]"]->load(frame_dir + "img_metas.0[shift].bin");
     nets["head"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
