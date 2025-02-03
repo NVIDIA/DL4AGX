@@ -65,6 +65,7 @@ elseif(${TARGET} MATCHES "x86_64")
     find_package(CUDA REQUIRED)
 
     message(STATUS ${TRT_ROOT})
+    include_directories(${CUDA_TOOLKIT_ROOT_DIR}/include)
     set(TENSORRT_INCLUDE_DIRS ${TRT_ROOT}/include/)
     set(TENSORRT_LIBRARY_DIRS ${TRT_ROOT}/lib/)
     
@@ -77,11 +78,36 @@ elseif(${TARGET} MATCHES "x86_64")
 else()
 endif()
 
+# インクルードディレクトリの設定を更新
+include_directories(
+    ${CMAKE_SOURCE_DIR}/include 
+    ${CMAKE_SOURCE_DIR}/lib 
+    ${CMAKE_SOURCE_DIR}/lib/cuOSD
+    ${CUDA_INCLUDE_DIRS}        # これを追加
+    ${CUDA_TOOLKIT_ROOT_DIR}/include  # これも追加
+)
+
 include_directories(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/lib ${CMAKE_SOURCE_DIR}/lib/cuOSD)
 
 add_definitions(-DENABLE_TEXT_BACKEND_STB)
 
-cuda_add_library(${APP}_cu ${CMAKE_SOURCE_DIR}/lib/visualize.cu ${CMAKE_SOURCE_DIR}/lib/cuOSD/cuosd_kernel.cu)
+# cuda_add_library(${APP}_cu ${CMAKE_SOURCE_DIR}/lib/visualize.cu ${CMAKE_SOURCE_DIR}/lib/cuOSD/cuosd_kernel.cu)
+add_library(${APP}_cu STATIC
+    ${CMAKE_SOURCE_DIR}/lib/visualize.cu
+    ${CMAKE_SOURCE_DIR}/lib/cuOSD/cuosd_kernel.cu
+)
+
+# CUDAのコンパイルオプションを設定
+set_target_properties(${APP}_cu PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON
+    POSITION_INDEPENDENT_CODE ON
+)
+
+# 必要に応じてCUDAのアーキテクチャを指定
+target_compile_options(${APP}_cu PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-arch=sm_86>  # 必要に応じてcompute capabilityを調整
+)
+
 set_target_properties(${APP}_cu PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_executable(${APP}_app main.cpp 
