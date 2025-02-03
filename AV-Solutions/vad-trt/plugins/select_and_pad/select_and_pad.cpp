@@ -46,7 +46,8 @@ SelectAndPadPlugin::SelectAndPadPlugin(PluginFieldCollection const& fc) noexcept
     for (int i=0; i<fc.nbFields; i++) {
         auto curr_field = fields[i];
         if( strcmp(curr_field.name, "P") == 0 ) {
-            P = reinterpret_cast<const int*>(curr_field.data)[0];
+            // P = reinterpret_cast<const int*>(curr_field.data)[0];
+            P = 16;
         }
     }
 }
@@ -57,7 +58,8 @@ SelectAndPadPlugin::SelectAndPadPlugin(const std::string name, const void* data,
     print_log("Constructor from serial data");
     const char* d = reinterpret_cast<const char*>(data);
     const char* a = d;
-    P = read<int>(d);
+    // P = read<int>(d);
+    P = 16;
 }
 
 int SelectAndPadPlugin::getNbOutputs() const noexcept {
@@ -68,13 +70,15 @@ int SelectAndPadPlugin::getNbOutputs() const noexcept {
 DimsExprs SelectAndPadPlugin::getOutputDimensions(
     int index, DimsExprs const* inputs, int nbInputDims, IExprBuilder& exprBuilder
 ) noexcept {
-    Q = inputs[0].d[1]->getConstantValue();
+    // Q = inputs[0].d[1]->getConstantValue();
 
-    print_log("Get output dimensions, P=%d, Q=%d", P, Q);
+    // print_log("Get output dimensions, P=%d, Q=%d", P, Q);
+    print_log("Get output dimensions, P=%d", P);
     nvinfer1::DimsExprs ret;
     ret.nbDims = 3;
     ret.d[0] = inputs[0].d[0];
-    ret.d[1] = exprBuilder.constant(P);
+    // ret.d[1] = exprBuilder.constant(P);
+    ret.d[1] = exprBuilder.constant(16);
     ret.d[2] = inputs[0].d[2];
     return ret;
 }
