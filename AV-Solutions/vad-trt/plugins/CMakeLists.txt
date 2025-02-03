@@ -17,13 +17,14 @@ cmake_minimum_required(VERSION 3.16)
 project(bev_deploy LANGUAGES C CXX CUDA)
 
 option(TARGET "x86_64")
-
+set(TARGET "x86_64")
+set(ARCH 86)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_FLAGS "-fPIC -O0 -g")
 set(CMAKE_CXX_FLAGS "-fPIC -O0 -g")
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS}")
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++14 --expt-relaxed-constexpr --compiler-options -fPIC -O2 -Xptxas=-v")
-
+message(STATUS "TARGET: ${TARGET}") # debug
 if(${TARGET} MATCHES "aarch64")
     set(CMAKE_C_COMPILER   /usr/bin/aarch64-linux-gnu-gcc)
     set(CMAKE_CXX_COMPILER /usr/bin/aarch64-linux-gnu-g++)
@@ -74,6 +75,7 @@ elseif(${TARGET} MATCHES "x86_64")
 else()
 endif()
 
+message(STATUS "ARCH: ${ARCH}")
 # uncomment macro DEBUG for more verbose logging information inside plugins
 # add_definitions(-DDEBUG)
 
@@ -86,9 +88,13 @@ set(plugins_cu_srcs ${CMAKE_CURRENT_SOURCE_DIR}/multi_scale_deform_attn/ms_defor
                     ${CMAKE_CURRENT_SOURCE_DIR}/rotate/rotateKernel.cu
                     ${CMAKE_CURRENT_SOURCE_DIR}/select_and_pad/select_and_pad_kernel.cu)
 
-cuda_add_library(plugins_cu ${plugins_cu_srcs} OPTIONS -arch=sm_${ARCH})
+# cuda_add_library(plugins_cu ${plugins_cu_srcs} OPTIONS -arch=sm_${ARCH})
+add_library(plugins_cu SHARED ${plugins_cu_srcs})
+set_property(TARGET plugins_cu PROPERTY CUDA_ARCHITECTURES -arch=sm_86)
 
-set_target_properties(plugins_cu PROPERTIES CUDA_ARCHITECTURES $ARCH)
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -arch=sm_86")
+
+set_target_properties(plugins_cu PROPERTIES CUDA_ARCHITECTURES 86)
 set_target_properties(plugins_cu PROPERTIES CUDA_STANDARD 14)
 set_target_properties(plugins_cu PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
