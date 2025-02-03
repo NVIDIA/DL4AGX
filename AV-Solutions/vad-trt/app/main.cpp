@@ -49,67 +49,127 @@ namespace fs = std::filesystem;
 #include "net.h"
 #include "visualize.hpp"  
 
-class TrajectoryPublisher : public rclcpp::Node 
+#include <rclcpp/rclcpp.hpp>
+#include <autoware_planning_msgs/msg/trajectory.hpp>
+#include <autoware_planning_msgs/msg/trajectory_point.hpp>
+#include <autoware_perception_msgs/msg/detected_objects.hpp>
+#include <autoware_perception_msgs/msg/detected_object.hpp>
+#include <sensor_msgs/msg/compressed_image.hpp>
+#include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/twist.hpp>
+
+class VADNode : public rclcpp::Node 
 {
 public:
-    TrajectoryPublisher() 
-        : Node("trajectory_publisher") 
+    VADNode() 
+        : Node("vad_node") 
     {
-        // トラジェクトリをパブリッシュするためのパブリッシャーを作成
+        // Publishers
         trajectory_publisher_ = this->create_publisher<autoware_planning_msgs::msg::Trajectory>(
             "/planning/vad/trajectory", 
             rclcpp::QoS(1));
+
+        objects_publisher_ = this->create_publisher<autoware_perception_msgs::msg::DetectedObjects>(
+            "/perception/object_recognition/detection/vad/objects",
+            rclcpp::QoS(1));
+
+        // Subscribers for each camera
+        for (int i = 0; i < 6; ++i) {
+            auto callback = [this, i](const sensor_msgs::msg::CompressedImage::SharedPtr msg) {
+                this->onImageReceived(msg, i);
+            };
+
+            camera_subscribers_.push_back(
+                this->create_subscription<sensor_msgs::msg::CompressedImage>(
+                    "/sensing/camera/camera" + std::to_string(i) + "/image/compressed",
+                    rclcpp::QoS(1),
+                    callback
+                )
+            );
+        }
+
+        RCLCPP_INFO(this->get_logger(), "VAD Node has been initialized");
     }
 
     void publishTrajectory(const std::vector<float>& planning) 
     {
         auto trajectory_msg = std::make_unique<autoware_planning_msgs::msg::Trajectory>();
         
-        // planningデータから軌道を生成
-        // planningは6点の2D位置 (x, y) を含む12要素の配列
         for (size_t i = 0; i < planning.size(); i += 2) 
         {
             autoware_planning_msgs::msg::TrajectoryPoint point;
             
-            // 位置の設定
             point.pose.position.x = planning[i];
             point.pose.position.y = planning[i + 1];
-            point.pose.position.z = 0.0;  // Z座標は0と仮定
+            point.pose.position.z = 0.0;
 
-            // 姿勢（回転）の設定
-            // 必要に応じて適切な方向を計算して設定
             if (i + 2 < planning.size()) {
-                // 次の点との差分から方向を計算
                 float dx = planning[i + 2] - planning[i];
                 float dy = planning[i + 3] - planning[i + 1];
                 float yaw = std::atan2(dy, dx);
-                
-                // quaternionに変換
                 point.pose.orientation = createQuaternionFromYaw(yaw);
             }
 
-            // 速度や加速度などの運動学的なパラメータを設定
-            // これらの値は実際のアプリケーションに応じて適切に設定する必要があります
-            point.longitudinal_velocity_mps = 0.0;  // 前進速度
-            point.lateral_velocity_mps = 0.0;       // 横方向速度
-            point.acceleration_mps2 = 0.0;          // 加速度
-            point.heading_rate_rps = 0.0;           // 回転速度
+            point.longitudinal_velocity_mps = 0.0;
+            point.lateral_velocity_mps = 0.0;
+            point.acceleration_mps2 = 0.0;
+            point.heading_rate_rps = 0.0;
 
             trajectory_msg->points.push_back(point);
         }
 
-        // ヘッダーの設定
         trajectory_msg->header.stamp = this->now();
-        trajectory_msg->header.frame_id = "map";  // 適切なフレームIDを設定
+        trajectory_msg->header.frame_id = "map";
 
-        // メッセージのパブリッシュ
         trajectory_publisher_->publish(std::move(trajectory_msg));
+    }
+
+    void publishDetectedObjects(const std::vector<std::vector<float>>& detections)
+    {
+        auto objects_msg = std::make_unique<autoware_perception_msgs::msg::DetectedObjects>();
+        objects_msg->header.stamp = this->now();
+        objects_msg->header.frame_id = "map";
+
+        for (const auto& det : detections)
+        {
+            // det format: x, y, z, w, l, h, yaw, vx, vy, label, score
+            autoware_perception_msgs::msg::DetectedObject object;
+
+            object.kinematics.pose_with_covariance.pose.position.x = det[0];
+            object.kinematics.pose_with_covariance.pose.position.y = det[1];
+            object.kinematics.pose_with_covariance.pose.position.z = det[2];
+
+            object.kinematics.pose_with_covariance.pose.orientation = createQuaternionFromYaw(det[6]);
+
+            object.shape.dimensions.x = det[3]; // width
+            object.shape.dimensions.y = det[4]; // length
+            object.shape.dimensions.z = det[5]; // height
+
+            object.kinematics.twist_with_covariance.twist.linear.x = det[7]; // vx
+            object.kinematics.twist_with_covariance.twist.linear.y = det[8]; // vy
+
+            autoware_perception_msgs::msg::ObjectClassification classification;
+            classification.label = static_cast<uint8_t>(det[9]);
+            classification.probability = det[10];
+            object.classification.push_back(classification);
+
+            objects_msg->objects.push_back(object);
+        }
+
+        objects_publisher_->publish(std::move(objects_msg));
     }
 
 private:
     rclcpp::Publisher<autoware_planning_msgs::msg::Trajectory>::SharedPtr trajectory_publisher_;
+    rclcpp::Publisher<autoware_perception_msgs::msg::DetectedObjects>::SharedPtr objects_publisher_;
+    std::vector<rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr> camera_subscribers_;
 
-    // yaw角からquaternionを生成するヘルパー関数
+    void onImageReceived(const sensor_msgs::msg::CompressedImage::SharedPtr msg, int camera_index)
+    {
+        // 現状は受信のみ
+        RCLCPP_DEBUG(this->get_logger(), "Received image from camera %d", camera_index);
+    }
+
     geometry_msgs::msg::Quaternion createQuaternionFromYaw(double yaw) 
     {
         geometry_msgs::msg::Quaternion q;
@@ -209,7 +269,7 @@ private:
 int main(int argc, char** argv) {
   // ROSの初期化
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<TrajectoryPublisher>();
+  auto node = std::make_shared<VADNode>();
   
   printf("nvinfer: %d.%d.%d\n", NV_TENSORRT_MAJOR, NV_TENSORRT_MINOR, NV_TENSORRT_PATCH);
   cudaSetDevice(0);
@@ -339,6 +399,7 @@ int main(int argc, char** argv) {
     }    
     frame.planning = planning;
     node->publishTrajectory(frame.planning);
+    node->publishDetectedObjects(frame.det);
     printf("publish trajectory");
     rclcpp::spin_some(node);
 
