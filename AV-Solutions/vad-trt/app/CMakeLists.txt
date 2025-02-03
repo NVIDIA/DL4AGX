@@ -11,6 +11,9 @@ set(CMAKE_CXX_FLAGS "-fPIC -g -O0")
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(autoware_perception_msgs REQUIRED)
+find_package(autoware_planning_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 # Find CUDA package first
 find_package(CUDA REQUIRED)
@@ -106,12 +109,18 @@ target_link_libraries(${APP}_app
     nlohmann_json::nlohmann_json
     ${rclcpp_LIBRARIES}
     ${sensor_msgs_LIBRARIES}
+    ${autoware_perception_msgs_LIBRARIES}
+    ${autoware_planning_msgs_LIBRARIES}
+    ${geometry_msgs_LIBRARIES}
 )
 
 # インクルードディレクトリの追加
 target_include_directories(${PROJECT_NAME} PUBLIC
     ${rclcpp_INCLUDE_DIRS}
     ${sensor_msgs_INCLUDE_DIRS}
+    ${autoware_perception_msgs_INCLUDE_DIRS}
+    ${autoware_planning_msgs_INCLUDE_DIRS}
+    ${geometry_msgs_INCLUDE_DIRS}
 )
 
 # インストール設定

@@ -34,14 +34,92 @@
 #include <stb/stb_image.h>
 #include <stb/stb_image_write.h>
 
+#include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <autoware_perception_msgs/msg/detected_objects.hpp>
+#include <autoware_planning_msgs/msg/trajectory.hpp>
+#include <autoware_planning_msgs/msg/trajectory_point.hpp>
+#include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/twist.hpp>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
 #include "net.h"
 #include "visualize.hpp"  
+
+class TrajectoryPublisher : public rclcpp::Node 
+{
+public:
+    TrajectoryPublisher() 
+        : Node("trajectory_publisher") 
+    {
+        // トラジェクトリをパブリッシュするためのパブリッシャーを作成
+        trajectory_publisher_ = this->create_publisher<autoware_planning_msgs::msg::Trajectory>(
+            "/planning/vad/trajectory", 
+            rclcpp::QoS(1));
+    }
+
+    void publishTrajectory(const std::vector<float>& planning) 
+    {
+        auto trajectory_msg = std::make_unique<autoware_planning_msgs::msg::Trajectory>();
+        
+        // planningデータから軌道を生成
+        // planningは6点の2D位置 (x, y) を含む12要素の配列
+        for (size_t i = 0; i < planning.size(); i += 2) 
+        {
+            autoware_planning_msgs::msg::TrajectoryPoint point;
+            
+            // 位置の設定
+            point.pose.position.x = planning[i];
+            point.pose.position.y = planning[i + 1];
+            point.pose.position.z = 0.0;  // Z座標は0と仮定
+
+            // 姿勢（回転）の設定
+            // 必要に応じて適切な方向を計算して設定
+            if (i + 2 < planning.size()) {
+                // 次の点との差分から方向を計算
+                float dx = planning[i + 2] - planning[i];
+                float dy = planning[i + 3] - planning[i + 1];
+                float yaw = std::atan2(dy, dx);
+                
+                // quaternionに変換
+                point.pose.orientation = createQuaternionFromYaw(yaw);
+            }
+
+            // 速度や加速度などの運動学的なパラメータを設定
+            // これらの値は実際のアプリケーションに応じて適切に設定する必要があります
+            point.longitudinal_velocity_mps = 0.0;  // 前進速度
+            point.lateral_velocity_mps = 0.0;       // 横方向速度
+            point.acceleration_mps2 = 0.0;          // 加速度
+            point.heading_rate_rps = 0.0;           // 回転速度
+
+            trajectory_msg->points.push_back(point);
+        }
+
+        // ヘッダーの設定
+        trajectory_msg->header.stamp = this->now();
+        trajectory_msg->header.frame_id = "map";  // 適切なフレームIDを設定
+
+        // メッセージのパブリッシュ
+        trajectory_publisher_->publish(std::move(trajectory_msg));
+    }
+
+private:
+    rclcpp::Publisher<autoware_planning_msgs::msg::Trajectory>::SharedPtr trajectory_publisher_;
+
+    // yaw角からquaternionを生成するヘルパー関数
+    geometry_msgs::msg::Quaternion createQuaternionFromYaw(double yaw) 
+    {
+        geometry_msgs::msg::Quaternion q;
+        q.x = 0.0;
+        q.y = 0.0;
+        q.z = std::sin(yaw * 0.5);
+        q.w = std::cos(yaw * 0.5);
+        return q;
+    }
+};
 
 // バイナリ画像データをROS CompressedImageに変換し、その後TensorRTのバインディングに渡す関数
 void processImageForInference(
@@ -129,6 +207,10 @@ private:
 };
 
 int main(int argc, char** argv) {
+  // ROSの初期化
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<TrajectoryPublisher>();
+  
   printf("nvinfer: %d.%d.%d\n", NV_TENSORRT_MAJOR, NV_TENSORRT_MINOR, NV_TENSORRT_PATCH);
   cudaSetDevice(0);
 
@@ -256,6 +338,9 @@ int main(int argc, char** argv) {
       planning[i * 2 + 1] += planning[(i-1) * 2 + 1];
     }    
     frame.planning = planning;
+    node->publishTrajectory(frame.planning);
+    printf("publish trajectory");
+    rclcpp::spin_some(node);
 
     std::vector<float> bbox_preds = nets["head"]->bindings["out.all_bbox_preds"]->cpu<float>();
     std::vector<float> cls_scores = nets["head"]->bindings["out.all_cls_scores"]->cpu<float>();
@@ -323,6 +408,8 @@ int main(int argc, char** argv) {
   cudaStreamSynchronize(stream);
   cudaStreamDestroy(stream);
 
+  // ROSのシャットダウン
+  rclcpp::shutdown();
   // dlclose(so_handle);
   return 0;
 }
