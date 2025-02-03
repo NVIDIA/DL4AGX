@@ -1,1 +1,5 @@
 internal/
+app/demo/vad_app
+app/demo/analyze
+*.engine
+*.deb
