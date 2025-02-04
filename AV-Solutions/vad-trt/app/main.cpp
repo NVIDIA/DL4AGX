@@ -399,7 +399,6 @@ int main(int argc, char** argv) {
     }    
     frame.planning = planning;
     node->publishTrajectory(frame.planning);
-    node->publishDetectedObjects(frame.det);
     printf("publish trajectory");
     rclcpp::spin_some(node);
 
@@ -431,18 +430,18 @@ int main(int argc, char** argv) {
           bbox_preds.begin() + d * 10 + 10);
         std::vector<float> ret(11);
         ret[0] = raw[0]; ret[1] = raw[1]; ret[2] = raw[4];
-        ret[3] = std::exp(raw[2]); 
-        ret[4] = std::exp(raw[3]); 
+        ret[3] = std::exp(raw[2]);
+        ret[4] = std::exp(raw[3]);
         ret[5] = std::exp(raw[5]);
         ret[6] = std::atan2(raw[6], raw[7]);
-        ret[7] = raw[8]; 
-        ret[8] = raw[9]; 
+        ret[7] = raw[8];
+        ret[8] = raw[9];
         ret[9] = (float)max_label;
         ret[10] = max_score;
         frame.det.push_back(ret);
       }    
     }
-
+    node->publishDetectedObjects(frame.det);
     nv::visualize(
       images, 
       frame,
