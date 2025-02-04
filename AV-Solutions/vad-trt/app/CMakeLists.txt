@@ -10,6 +10,10 @@ set(CMAKE_CXX_FLAGS "-fPIC -g -O0")
 # ROS2の依存関係を追加
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_eigen REQUIRED)
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(autoware_perception_msgs REQUIRED)
 find_package(autoware_planning_msgs REQUIRED)
@@ -109,6 +113,10 @@ target_link_libraries(${APP}_app
     nlohmann_json::nlohmann_json
     ${rclcpp_LIBRARIES}
     ${sensor_msgs_LIBRARIES}
+    ${tf2_ros_LIBRARIES}
+    ${tf2_eigen_LIBRARIES}
+    ${eigen3_cmake_module_LIBRARIES}
+    ${Eigen3_LIBRARIES}
     ${autoware_perception_msgs_LIBRARIES}
     ${autoware_planning_msgs_LIBRARIES}
     ${geometry_msgs_LIBRARIES}
@@ -118,6 +126,10 @@ target_link_libraries(${APP}_app
 target_include_directories(${PROJECT_NAME} PUBLIC
     ${rclcpp_INCLUDE_DIRS}
     ${sensor_msgs_INCLUDE_DIRS}
+    ${tf2_ros_INCLUDE_DIRS}
+    ${tf2_eigen_INCLUDE_DIRS}
+    ${eigen3_cmake_module_INCLUDE_DIRS}
+    ${Eigen3_INCLUDE_DIRS}
     ${autoware_perception_msgs_INCLUDE_DIRS}
     ${autoware_planning_msgs_INCLUDE_DIRS}
     ${geometry_msgs_INCLUDE_DIRS}
