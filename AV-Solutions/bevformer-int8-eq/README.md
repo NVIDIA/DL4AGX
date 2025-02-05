@@ -7,7 +7,7 @@ This repository contains an end-to-end example of deploying [BEVFormer](https://
 - ONNX-Runtime 1.18.x
 - onnx-graphsurgeon
 - onnsim
-- [ModelOpt toolkit](https://github.com/NVIDIA/TensorRT-Model-Optimizer) >= 0.15.0
+- [ModelOpt toolkit](https://github.com/NVIDIA/TensorRT-Model-Optimizer) 0.15.0
 - [BEVFormer_tensorrt](https://github.com/DerryHub/BEVFormer_tensorrt)
 
 ## Prepare dataset
@@ -72,7 +72,7 @@ This script does the following post-processing actions:
 1. Prepare the calibration data:  
 ```sh
 $ cd /workspace/BEVFormer_tensorrt
-$ python /mnt/tools/calib_data_prep.py configs/bevformer/plugin/bevformer_tiny_trt_p2.py \
+$ PYTHONPATH=$(pwd) python /mnt/tools/calib_data_prep.py configs/bevformer/plugin/bevformer_tiny_trt_p2.py \
     --onnx_path=/mnt/models/bevformer_tiny_epoch_24_cp2_op13_post_simp.onnx \
     --trt_plugins=$PLUGIN_PATH
 ```
