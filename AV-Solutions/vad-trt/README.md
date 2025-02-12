@@ -75,7 +75,7 @@ pip install <TensorRT Root>/python/tensorrt-<version>-cp38-none-linux_aarch64.wh
 ```bash
 export TRT_ROOT=<path to your tensorrt dir>
 cd /workspace/dl4agx/AV-Solutions/vad-trt/plugins/
-mkdir -p build && cd build
+mkdir build && cd build
 cmake .. 
 make
 ```
@@ -180,7 +180,7 @@ cd /workspace/dl4agx/AV-Solutions/vad-trt/
 cp -r export_eval/demo_data/ demo/data
 cp -r export_eval/scratch/vadv1.extract_img_feat/ demo/onnx_files
 cp -r export_eval/scratch/vadv1_prev.pts_bbox_head.forward/ demo/onnx_files
-mkdir -p /workspace/dl4agx/AV-Solutions/vad-trt/app/demo/engines
+mkdir /workspace/dl4agx/AV-Solutions/vad-trt/app/demo/engines
 ```
 
 Now the `demo` folder should be organized as:
