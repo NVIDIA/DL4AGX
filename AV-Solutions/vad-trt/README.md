@@ -94,7 +94,7 @@ trtexec --onnx=scratch/vadv1.extract_img_feat/sim_vadv1.extract_img_feat.onnx \
         --saveEngine=vadv1.extract_img_feat/vadv1.extract_img_feat.fp16.engine
 
 # build heads
-trtexec --onnx=scratch/vadv1.pts_bbox_head.forward/sim_vadv1_prev.pts_bbox_head.forward.onnx \
+trtexec --onnx=scratch/vadv1.pts_bbox_head.forward/sim_vadv1.pts_bbox_head.forward.onnx \
         --staticPlugins=../plugins/build/libplugins.so \
         --profilingVerbosity=detailed --dumpProfile \
         --separateProfileRun --useSpinWait --useManagedMemory \
