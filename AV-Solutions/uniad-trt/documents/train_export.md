@@ -20,12 +20,12 @@ Launch UniAD-tiny training and evaluation in a separate training docker containe
 Step 1: Create a separate training project from scratch: clone a UniAD Repo to a separate project and checkout, apply patch to support torch-1.12 training, borrow `third_party.uniad_mmdet3d`, copy tools and configs, and download weights
 ```
 cd uniad-trt
-mkdir UniAD_train
+mkdir UniAD_train && cd UniAD_train
 git clone https://github.com/OpenDriveLab/UniAD.git
 cd UniAD
 git checkout 02fa68c5
 git apply <path_to_uniad-trt/patch/uniad-tiny-training-support.patch>
-cp -r <path_to_deployment_project/third_party.uniad_mmdet3d> .
+cp -r <path_to_uniad-trt/UniAD/third_party> .
 cp <path_to_uniad-trt/tools/postprocess_bevformer_tiny_epoch_24_pth.py> ./tools/
 cp <path_to_uniad-trt/projects/configs/stage1_track_map/tiny_imgx0.25_track_map.py> ./projects/configs/stage1_track_map/
 cp <path_to_uniad-trt/projects/configs/stage2_e2e/tiny_imgx0.25_e2e.py> ./projects/configs/stage2_e2e/
