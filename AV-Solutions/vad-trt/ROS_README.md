@@ -4,6 +4,7 @@
 - [ ] can_busを追加(/tf, /sensing/imu/tamagawa/imu_raw, /localization/kinematic_stateから取得)
 - [ ] /tf_staticからlidar2imgを作る
 - [ ] pluginsのbuildとnodeのbuildを同時に実行できるようにCMakeLists.txtを変更
+- [ ] onnxからのengineのbuildを初回launch時に行う
 - [ ] /planning/mission_planning/routeの出力を使って，ego_hist_trajをダミーで作り，1フレーム目のego_hist_trajとして入力する
 - [ ] rangeを30m以遠にする
 - [ ] 現状(prev_bevをGPU->CPUに移し，CPU-> GPUに移している)の実装を修正し，「prev_bevをGPUに置いたままにする」実装に変える
