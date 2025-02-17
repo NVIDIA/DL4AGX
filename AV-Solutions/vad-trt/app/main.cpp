@@ -270,6 +270,53 @@ private:
   cudaEvent_t begin_ = nullptr, end_ = nullptr;
 };
 
+void releaseNetwork(std::unordered_map<std::string, std::shared_ptr<nv::Net>>& nets, 
+                   const std::string& name) {
+    if (nets.find(name) != nets.end()) {
+        // まずbindingsをクリア
+        nets[name]->bindings.clear();
+        cudaDeviceSynchronize();
+        
+        // 次にNetオブジェクトを解放
+        nets[name].reset();
+        nets.erase(name);
+        cudaDeviceSynchronize();
+    }
+}
+
+void loadHeadEngine(
+    std::unordered_map<std::string, std::shared_ptr<nv::Net>>& nets,
+    const json& cfg,
+    const std::string& cfg_dir,
+    nvinfer1::IRuntime* runtime,
+    cudaStream_t stream) {
+    
+    auto head_engine = std::find_if(cfg["nets"].begin(), cfg["nets"].end(),
+        [](const json& engine) { return engine["name"] == "head"; });
+    
+    std::string eng_file = (*head_engine)["file"];
+    std::string eng_pth = cfg_dir + "/" + eng_file;
+    printf("-> loading head engine: %s\n", eng_pth.c_str());
+    
+    std::unordered_map<std::string, std::shared_ptr<nv::Tensor>> ext;
+    auto inputs = (*head_engine)["inputs"];
+    for (auto it = inputs.begin(); it != inputs.end(); ++it) {
+        std::string k = it.key();
+        auto ext_map = it.value();      
+        std::string ext_net = ext_map["net"];
+        std::string ext_name = ext_map["name"];
+        printf("%s <- %s[%s]\n", k.c_str(), ext_net.c_str(), ext_name.c_str());
+        ext[k] = nets[ext_net]->bindings[ext_name];
+    }
+
+    nets["head"] = std::make_shared<nv::Net>(eng_pth, runtime, ext);
+
+    bool use_graph = (*head_engine)["use_graph"];
+    if (use_graph) {
+        nets["head"]->EnableCudaGraph(stream);
+    }
+}
+
 int main(int argc, char** argv) {
   // ROSの初期化
   rclcpp::init(argc, argv);
@@ -310,6 +357,10 @@ int main(int argc, char** argv) {
   // init engines
   std::unordered_map<std::string, std::shared_ptr<nv::Net>> nets;
   for( auto engine: cfg["nets"]) {
+    if (engine["name"] == "head") {
+      continue;  // headは後で初期化
+    }
+    
     std::string eng_name = engine["name"];
     std::string eng_file = engine["file"];
     std::string eng_pth = cfg_dir.string() + "/" + eng_file;
@@ -339,7 +390,7 @@ int main(int argc, char** argv) {
   printf("[INFO] warm_up=%d\n", warm_up);
   for( int iw=0; iw < warm_up; iw++ ) {
     nets["backbone"]->Enqueue(stream);
-    nets["head"]->Enqueue(stream);
+    nets["head_no_prev"]->Enqueue(stream);
     cudaStreamSynchronize(stream);
   }
 
@@ -347,6 +398,10 @@ int main(int argc, char** argv) {
   std::string data_dir = cfg_dir.string() + "/data/";
   int n_frames = cfg["n_frames"];
   printf("[INFO] n_frames=%d\n", n_frames);
+  std::shared_ptr<nv::Tensor> saved_prev_bev;
+  std::vector<float> lidar2img;
+  bool is_first_frame = true;
+
   for( int frame_id=1; frame_id < n_frames; frame_id++ ) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
     // nets["backbone"]->bindings["img"]->load(frame_dir + "img.bin");
@@ -362,13 +417,36 @@ int main(int argc, char** argv) {
         std::cerr << "Error processing image: " << e.what() << std::endl;
         return -1;
     }
-    nets["head"]->bindings["prev_bev"]->load(frame_dir + "prev_bev.bin");
-    nets["head"]->bindings["img_metas.0[shift]"]->load(frame_dir + "img_metas.0[shift].bin");
-    nets["head"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
-    nets["head"]->bindings["img_metas.0[can_bus]"]->load(frame_dir + "img_metas.0[can_bus].bin");
+    if (is_first_frame) {
+        nets["head_no_prev"]->bindings["img_metas.0[shift]"]->load(frame_dir + "img_metas.0[shift].bin");
+        nets["head_no_prev"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
+        nets["head_no_prev"]->bindings["img_metas.0[can_bus]"]->load(frame_dir + "img_metas.0[can_bus].bin");
+        nets["head_no_prev"]->Enqueue(stream);
+        
+        // prev_bevを保存
+        auto bev_embed = nets["head_no_prev"]->bindings["out.bev_embed"];
+        saved_prev_bev = std::make_shared<nv::Tensor>("prev_bev", bev_embed->dim, bev_embed->dtype);
+        cudaMemcpyAsync(saved_prev_bev->ptr, bev_embed->ptr, bev_embed->nbytes(), 
+                      cudaMemcpyDeviceToDevice, stream);
+        
+        // head_no_prevを解放
+        releaseNetwork(nets, "head_no_prev");
+        cudaStreamSynchronize(stream);  // メモリ解放を確実に
+        
+        // headをロード
+        loadHeadEngine(nets, cfg, cfg_dir.string(), runtime.get(), stream);
+        
+        is_first_frame = false;
+    }
+    else {
+        nets["head"]->bindings["prev_bev"] = saved_prev_bev;
+        nets["head"]->bindings["img_metas.0[shift]"]->load(frame_dir + "img_metas.0[shift].bin");
+        nets["head"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
+        nets["head"]->bindings["img_metas.0[can_bus]"]->load(frame_dir + "img_metas.0[can_bus].bin");
+        nets["head"]->Enqueue(stream);
+    }
 
     nets["backbone"]->Enqueue(stream);
-    nets["head"]->Enqueue(stream);
     cudaStreamSynchronize(stream);
 
     std::string viz_dir = cfg["viz"];

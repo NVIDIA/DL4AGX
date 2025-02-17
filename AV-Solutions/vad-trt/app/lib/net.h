@@ -87,6 +87,24 @@ struct Net {
   }
 
   ~Net() {
+      if (context) {
+          context->destroy();
+          context = nullptr;
+      }
+      if (engine) {
+          engine->destroy();
+          engine = nullptr;
+      }
+      if (use_cuda_graph) {
+          cudaGraphDestroy(graph);
+          cudaGraphExecDestroy(graph_exec);
+      }
+      
+      // bindingsの各Tensorのメモリを解放
+      for (auto& pair : bindings) {
+          pair.second.reset();
+      }
+      bindings.clear();
   }
 
   void EnableCudaGraph(cudaStream_t stream) {    

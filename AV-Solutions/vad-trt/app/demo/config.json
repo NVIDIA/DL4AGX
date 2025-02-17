@@ -26,6 +26,18 @@
         }
       },
       "outputs": {}
+    },
+    {
+      "name": "head_no_prev",
+      "file": "home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/engines/vadv1.pts_bbox_head.forward.engine",
+      "use_graph": true,
+      "inputs": {
+        "mlvl_feats.0": {
+          "net": "backbone",
+          "name": "out.0"
+        }
+      },
+      "outputs": {}
     }
   ],
   "viz": "home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/viz"
