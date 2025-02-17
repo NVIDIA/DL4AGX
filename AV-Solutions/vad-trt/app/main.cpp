@@ -273,6 +273,11 @@ private:
 void releaseNetwork(std::unordered_map<std::string, std::shared_ptr<nv::Net>>& nets, 
                    const std::string& name) {
     if (nets.find(name) != nets.end()) {
+        // まずbindingsをクリア
+        nets[name]->bindings.clear();
+        cudaDeviceSynchronize();
+        
+        // 次にNetオブジェクトを解放
         nets[name].reset();
         nets.erase(name);
         cudaDeviceSynchronize();
@@ -310,15 +315,6 @@ void loadHeadEngine(
     if (use_graph) {
         nets["head"]->EnableCudaGraph(stream);
     }
-}
-
-void printGPUMemoryUsage(const std::string& label) {
-    size_t free_memory, total_memory;
-    cudaMemGetInfo(&free_memory, &total_memory);
-    float used_memory_gb = (total_memory - free_memory) / 1024.0 / 1024.0 / 1024.0;
-    float total_memory_gb = total_memory / 1024.0 / 1024.0 / 1024.0;
-    printf("[GPU Memory %s] Used: %.2f GB / Total: %.2f GB\n", 
-           label.c_str(), used_memory_gb, total_memory_gb);
 }
 
 int main(int argc, char** argv) {
@@ -422,10 +418,10 @@ int main(int argc, char** argv) {
         return -1;
     }
     if (is_first_frame) {
-        printGPUMemoryUsage("Before head_no_prev inference");
+        nets["head_no_prev"]->bindings["img_metas.0[shift]"]->load(frame_dir + "img_metas.0[shift].bin");
+        nets["head_no_prev"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
+        nets["head_no_prev"]->bindings["img_metas.0[can_bus]"]->load(frame_dir + "img_metas.0[can_bus].bin");
         nets["head_no_prev"]->Enqueue(stream);
-        cudaStreamSynchronize(stream);
-        printGPUMemoryUsage("After head_no_prev inference");
         
         // prev_bevを保存
         auto bev_embed = nets["head_no_prev"]->bindings["out.bev_embed"];
@@ -435,12 +431,10 @@ int main(int argc, char** argv) {
         
         // head_no_prevを解放
         releaseNetwork(nets, "head_no_prev");
-        cudaStreamSynchronize(stream);
-        printGPUMemoryUsage("After head_no_prev release");
+        cudaStreamSynchronize(stream);  // メモリ解放を確実に
         
         // headをロード
         loadHeadEngine(nets, cfg, cfg_dir.string(), runtime.get(), stream);
-        printGPUMemoryUsage("After head load");
         
         is_first_frame = false;
     }
