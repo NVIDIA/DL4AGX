@@ -1,5 +1,7 @@
 # TODO
 
+https://github.com/Shin-kyoto/DL4AGX/blob/feat/ros/AV-Solutions/vad-trt/app/main.cpp#L25
+
 - [ ] trajectory, bboxの座標変換
 - [ ] can_busを追加(/tf, /sensing/imu/tamagawa/imu_raw, /localization/kinematic_stateから取得)
 - [ ] /tf_staticからlidar2imgを作る
