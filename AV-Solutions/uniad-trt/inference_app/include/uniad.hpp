@@ -41,7 +41,7 @@ namespace UniAD {
 struct KernelParams {
   std::string trt_engine;
   int num_inputs = 0;
-  std::unordered_map<std::string, std::vector<int>> input_max_shapes = {
+  std::unordered_map<std::string, std::vector<TRT_INT_TYPE>> input_max_shapes = {
     {"prev_track_intances0", {TRACK_INS_MAX, 512}},
     {"prev_track_intances1", {TRACK_INS_MAX, 3}},
     {"prev_track_intances3", {TRACK_INS_MAX}},
@@ -93,7 +93,7 @@ struct KernelParams {
     {"use_prev_bev", sizeof(int32_t)},
     {"max_obj_id", sizeof(int32_t)}
   };
-  std::unordered_map<std::string, std::vector<int>> output_max_shapes = {
+  std::unordered_map<std::string, std::vector<TRT_INT_TYPE>> output_max_shapes = {
     {"prev_track_intances0_out", {TRACK_INS_MAX, 512}},
     {"prev_track_intances1_out", {TRACK_INS_MAX, 3}},
     {"prev_track_intances3_out", {TRACK_INS_MAX}},
@@ -115,7 +115,8 @@ struct KernelParams {
     {"bbox_index", {TRACK_MAX}},
     {"obj_idxes", {TRACK_MAX}},
     {"max_obj_id_out", {1}},
-    {"outs_planning", {1, 6, 2}}
+    {"outs_planning", {1, 6, 2}},
+    {"seg_out", {1, 5, 1, 50, 50}}
   };
 };
 
@@ -171,7 +172,7 @@ struct KernelInput {
     {"use_prev_bev", use_prev_bev.data()},
     {"max_obj_id", max_obj_id.data()}
   };
-  std::unordered_map<std::string, std::vector<int>> input_shapes = {
+  std::unordered_map<std::string, std::vector<TRT_INT_TYPE>> input_shapes = {
     {"prev_track_intances0", {TRACK_INS_MIN, 512}},
     {"prev_track_intances1", {TRACK_INS_MIN, 3}},
     {"prev_track_intances3", {TRACK_INS_MIN}},
@@ -215,6 +216,7 @@ struct KernelOutput {
   std::vector<int32_t> obj_idxes = std::vector<int32_t>(TRACK_MAX);
   std::vector<int32_t> max_obj_id_out = std::vector<int32_t>(1);
   std::vector<float> outs_planning = std::vector<float>(1*6*2);
+  std::vector<int32_t> seg_out = std::vector<int32_t>(1*5*1*50*50);
 
   std::unordered_map<std::string, void*> data_ptrs = {
     {"prev_track_intances0_out", prev_track_intances0_out.data()},
@@ -238,9 +240,10 @@ struct KernelOutput {
     {"obj_idxes", obj_idxes.data()},
     {"max_obj_id_out", max_obj_id_out.data()},
     {"bev_embed", bev_embed.data()},
-    {"outs_planning", outs_planning.data()}
+    {"outs_planning", outs_planning.data()},
+    {"seg_out", seg_out.data()}
   };
-  std::unordered_map<std::string, std::vector<int>> output_shapes;
+  std::unordered_map<std::string, std::vector<TRT_INT_TYPE>> output_shapes;
   std::unordered_map<std::string, size_t> output_dsizes;
 };
 
@@ -264,7 +267,7 @@ private:
   KernelParams param_;
   nv::EventTimer timer_;
   std::shared_ptr<TensorRT::Engine> engine_;
-  std::vector<const void *> bindings_;
+  std::unordered_map<std::string, const void *> bindings_;
   std::vector<void *> inputs_device_;
   std::vector<void *> outputs_device_;
   std::vector<void *> inputs_host_;

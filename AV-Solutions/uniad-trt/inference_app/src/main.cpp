@@ -29,7 +29,7 @@
 #include "pre_process.hpp"
 #include "post_process.hpp"
 
-void readBinFileToVec(const std::string& filename, void* vec, std::vector<int>& vec_shape, const std::vector<int>& ref_shape, const std::size_t vec_dsize) {
+void readBinFileToVec(const std::string& filename, void* vec, std::vector<TRT_INT_TYPE>& vec_shape, const std::vector<TRT_INT_TYPE>& ref_shape, const std::size_t vec_dsize) {
     std::ifstream bin_file(filename, std::ios::binary);
     if (!bin_file) {
         printf("[ERROR] Could not read file at: %s\n", filename.c_str());
@@ -95,7 +95,7 @@ void load_input(const std::string& input_pth, std::vector<UniAD::KernelInput>& i
         "img_metas_can_bus", "img_metas_lidar2img"
     };
     std::vector<float> curr_scene = std::vector<float>(32, 0);
-    std::vector<int> scene_shape = std::vector<int>(1, 32);
+    std::vector<TRT_INT_TYPE> scene_shape = std::vector<TRT_INT_TYPE>(1, 32);
     const UniAD::KernelParams kernel_params_ref;
     for (int file_id=0; file_id<num_inputs; ++file_id) {
         UniAD::KernelInput input_instance;

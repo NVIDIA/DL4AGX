@@ -43,18 +43,18 @@ int KernelImplement::init(const KernelParams& param) {
     return -1;
   }
   // malloc the device and host memory, need to be free in deconstructor
-  int _shape_product;
+  TRT_INT_TYPE _shape_product;
   size_t _dsize;
   for (int ib=0; ib<engine_->num_bindings(); ++ib) {
     void *_ptr_device=nullptr;
     void *_ptr_host=nullptr;
-    std::vector<int> _shape;
+    std::vector<TRT_INT_TYPE> _shape;
     const std::string bindingName = engine_->get_binding_name(ib);
     if (engine_->is_input(ib)) {
       ++param_.num_inputs;
       // prepare input
       _shape = param_.input_max_shapes[bindingName];
-      _shape_product = std::accumulate(_shape.begin(), _shape.end(), 1, std::multiplies<int>());
+      _shape_product = std::accumulate(_shape.begin(), _shape.end(), 1, std::multiplies<TRT_INT_TYPE>());
       _dsize = sizeof(engine_->dtype(bindingName));
       checkRuntime(cudaMalloc(&_ptr_device, _shape_product * _dsize));
       checkRuntime(cudaMallocHost(&_ptr_host, _shape_product * _dsize));
@@ -63,29 +63,29 @@ int KernelImplement::init(const KernelParams& param) {
     } else {
       // prepare output
       _shape = param_.output_max_shapes[bindingName];
-      _shape_product = std::accumulate(_shape.begin(), _shape.end(), 1, std::multiplies<int>());
+      _shape_product = std::accumulate(_shape.begin(), _shape.end(), 1, std::multiplies<TRT_INT_TYPE>());
       _dsize = sizeof(engine_->dtype(bindingName));
       checkRuntime(cudaMalloc(&_ptr_device, _shape_product * _dsize));
       checkRuntime(cudaMallocHost(&_ptr_host, _shape_product * _dsize));
       outputs_device_.push_back(_ptr_device);
       outputs_host_.push_back(_ptr_host);
     }
-    bindings_.push_back(_ptr_device);
+    bindings_.emplace(std::make_pair(bindingName, _ptr_device));
   }
   return 0;
 }
 void KernelImplement::forward_timer(const UniAD::KernelInput& inputs, UniAD::KernelOutput& outputs, void *stream, bool enable_timer) {
   cudaStream_t _stream = static_cast<cudaStream_t>(stream);
-  std::vector<float> times;
-  int _shape_product;
+  TRT_INT_TYPE _shape_product;
   size_t _dsize;
+  std::unordered_map<std::string, std::vector<TRT_INT_TYPE>> DDSOutputShapes;
   // copy the cuda memory from host to device
   for (int ib=0; ib<engine_->num_bindings(); ++ib) {
     if (engine_->is_input(ib)) {
       // prepare input
       const std::string bindingName = engine_->get_binding_name(ib);
-      std::vector<int> _shape = inputs.input_shapes.at(bindingName);
-      _shape_product = std::accumulate(_shape.begin(), _shape.end(), 1, std::multiplies<int>());
+      std::vector<TRT_INT_TYPE> _shape = inputs.input_shapes.at(bindingName);
+      _shape_product = std::accumulate(_shape.begin(), _shape.end(), 1, std::multiplies<TRT_INT_TYPE>());
       _dsize = sizeof(engine_->dtype(bindingName));
       checkRuntime(cudaMemcpyAsync(inputs_host_[ib], inputs.data_ptrs.at(bindingName), _shape_product * _dsize, cudaMemcpyHostToHost, _stream));
       checkRuntime(cudaMemcpyAsync(inputs_device_[ib], inputs_host_[ib], _shape_product * _dsize, cudaMemcpyHostToDevice, _stream));
@@ -93,17 +93,20 @@ void KernelImplement::forward_timer(const UniAD::KernelInput& inputs, UniAD::Ker
       engine_->set_run_dims(bindingName, _shape);
     }
   }
-  if (enable_timer) timer_.start(_stream);
-  engine_->forward(bindings_, _stream);
-  if (enable_timer) times.emplace_back(timer_.stop("Inference"));
+  engine_->forward(bindings_, DDSOutputShapes, _stream, enable_timer, timer_);
   // copy the output back to host and post process
   for (int ib=0; ib<engine_->num_bindings(); ++ib) {
     if (!engine_->is_input(ib)) {
       // load output
       const std::string bindingName = engine_->get_binding_name(ib);
-      std::vector<int> _shape = engine_->run_dims(bindingName);
+      std::vector<TRT_INT_TYPE> _shape;
+      if (DDSOutputShapes.find(bindingName) != DDSOutputShapes.end()) {
+        _shape = DDSOutputShapes[bindingName];
+      } else {
+        _shape = engine_->run_dims(bindingName);
+      }
       outputs.output_shapes[bindingName] = _shape;
-      _shape_product = std::accumulate(_shape.begin(), _shape.end(), 1, std::multiplies<int>());
+      _shape_product = std::accumulate(_shape.begin(), _shape.end(), 1, std::multiplies<TRT_INT_TYPE>());
       if (outputs.output_dsizes.find(bindingName) != outputs.output_dsizes.cend()) _dsize = outputs.output_dsizes[bindingName];
       else {
         _dsize = sizeof(engine_->dtype(bindingName));
