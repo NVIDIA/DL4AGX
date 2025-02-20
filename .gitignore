@@ -2,4 +2,5 @@
 __pycache__/
 # The experiments space can be used to keep things you
 # don't want to push up but want to use the build system 
-experiments/ 
+experiments/
+AV-Solutions/common/dependencies/cuOSD/*

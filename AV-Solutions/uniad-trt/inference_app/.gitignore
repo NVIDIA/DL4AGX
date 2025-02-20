@@ -10,3 +10,4 @@ engine/
 *.tmp
 *.log
 *.ttf
+*.so
