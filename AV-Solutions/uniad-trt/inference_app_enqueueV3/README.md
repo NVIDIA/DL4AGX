@@ -1,4 +1,4 @@
-# C++ Inference Application
+# C++ Inference Application with TensorRT::enqueueV3
 
 ## Environment
 The inference application is tested on NVIDIA DRIVE Orin platform, NVIDIA DRIVE Thor platform, and X86 platform with `TensorRT 10.8`.
@@ -17,7 +17,7 @@ To deploy UniAD-tiny with TensorRT, we first need to compile TensorRT plugins fo
 
 Please run the following commands to compile:
 ```
-cd inference_app/
+cd inference_app_enqueueV3/
 mkdir ./build && cd ./build/
 cmake .. -DTENSORRT_PATH=<path_to_TensorRT> -DTARGET_GPU_SM=<GPU_compute_capability> && make -j$(nproc)
 ```
@@ -77,7 +77,7 @@ The ```uniad_trt_input``` folder is used as ```<input_path>```.
 
 
 ### Run inference
-Run the following command to run inference on the input data and generate output results. Notice that for the application to correctly locate and use the data, you need to call the application at the [root dir](../) of this repo.
+Run the following command to run inference on the input data and generate output results. Notice that for the application to correctly locate and use the data, you need to call the application at the [inference app dir](./) of this repo.
 ```
 LD_LIBRARY_PATH=<path_to_TensorRT>/lib/:$LD_LIBRARY_PATH ./build/uniad <engine_path> ./build/libuniad_plugin.so <input_path> <output_path> <number_frame>
 ```

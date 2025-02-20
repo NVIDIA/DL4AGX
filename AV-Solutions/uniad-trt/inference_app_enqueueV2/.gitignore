@@ -1,0 +1,12 @@
+build/
+data/
+onnxs/
+engines/
+
+.vscode
+*.ignore
+*.onnx
+*.nsys-rep
+*.tmp
+*.log
+*.ttf

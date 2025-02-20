@@ -33,7 +33,7 @@ For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny
 
 ### Inference Application <a name="inference_app"></a>
 
-The inference is showcased with a C++ sample application, it loads raw images and other data as input, runs inference with a built TensorRT engine, and outputs the results of tracking and planning with visualization. Please follow the instructions at [Inference Application](./inference_app/README.md) on how to build the TensorRT engine, compile and run the inference application.
+The inference is showcased with a C++ sample application, it loads raw images and other data as input, runs inference with a built TensorRT engine, and outputs the results of tracking and planning with visualization. Please follow the instructions at [Inference Application with TensorRT::enqueueV2](./inference_app_enqueueV2/README.md) or [Inference Application with TensorRT::enqueueV3](./inference_app_enqueueV3/README.md) on how to build the TensorRT engine, compile and run the inference application.
 
 
 ## Results <a name="results"></a>
