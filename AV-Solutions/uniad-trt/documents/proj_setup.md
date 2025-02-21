@@ -49,7 +49,7 @@ chmod +x ./tools/add_onnx_export_support.sh
 chmod +x ./UniAD/tools/*.sh
 ```
 
-Step 9: apply a patch to `BEVFormer_tensorrt` to support TensorRT plugins compilation in TensorRT-10
+Step 9: apply a patch to `BEVFormer_tensorrt/TensorRT` to support TensorRT plugins compilation in both TensorRT8 and TensorRT10
 ```
 cd ./dependencies/BEVFormer_tensorrt/TensorRT
 git apply --exclude='*.DS_Store' ../../../patch/plugins-trt10-support.patch

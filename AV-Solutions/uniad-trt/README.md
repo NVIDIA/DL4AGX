@@ -33,17 +33,22 @@ For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny
 
 ### Inference Application <a name="inference_app"></a>
 
-The inference is showcased with a C++ sample application, it loads raw images and other data as input, runs inference with a built TensorRT engine, and outputs the results of tracking and planning with visualization. Please follow the instructions at [Inference Application with TensorRT::enqueueV2](./inference_app_enqueueV2/README.md) or [Inference Application with TensorRT::enqueueV3](./inference_app_enqueueV3/README.md) on how to build the TensorRT engine, compile and run the inference application.
+The inference is showcased with a C++ sample application, it loads raw images and other data as input, runs inference with a built TensorRT engine, and outputs the results of tracking and planning with visualization. We have provided two inference examples, using TensorRT::enqueueV2 and TensorRT::enqueueV3, respectively. Please follow the instructions at [Inference Application with TensorRT::enqueueV2](./inference_app_enqueueV2/README.md) or [Inference Application with TensorRT::enqueueV3](./inference_app_enqueueV3/README.md) on how to build the TensorRT engine, compile and run the inference application.
 
 
 ## Results <a name="results"></a>
-### Inference Performance on Orin
+### Inference Performance
 
-| Model | Framework | Precision | DL model latency↓ | avg. L2↓ | avg. Col↓ |
-| :---:| :---: | :---: | :---: | :---: | :---: |
-| UniAD-tiny | Pytorch-1.12 | FP32 | 843.5172 ms | 0.9986  | 0.27 |
-| UniAD-tiny | TensorRT-10.7.0.23 | FP32 | 63.4498 ms | 0.9986 | 0.27 |
-| UniAD-tiny | TensorRT-10.7.0.23 | FP16 |  50.1014 ms | 1.0021 | 0.26 |
+| Model | Hardware | Framework | Precision | DL model latency↓ | avg. L2↓ | avg. Col↓ |
+| :---:| :---: | :---: | :---: | :---: | :---: | :---: |
+| UniAD-tiny | Orin-X | Pytorch-1.12 | FP32 | 843.5172 ms | 0.9986  | 0.27 |
+| UniAD-tiny | Orin-X | TensorRT-8.6.13.3 | FP32 | xx.xxxx ms | 0.xxxx | 0.xx |
+| UniAD-tiny | Orin-X | TensorRT-10.7.0.23 | FP32 | 63.4498 ms | 0.9986 | 0.27 |
+| UniAD-tiny | Orin-X | TensorRT-10.7.0.23 | FP16 |  50.1014 ms | 1.0021 | 0.26 |
+| UniAD-tiny | Thor-X | Pytorch-1.12 | FP32 | xxx.xxxx ms | 0.9986  | 0.27 |
+| UniAD-tiny | Thor-X | TensorRT-8.6.13.3 | FP32 | xx.xxxx ms | x.xxxx | 0.xx |
+| UniAD-tiny | Thor-X | TensorRT-10.7.0.23 | FP32 | 36.5013 ms | x.xxxx | 0.xx |
+| UniAD-tiny | Thor-X | TensorRT-10.7.0.23 | FP16 |  xx.xxxx ms | x.xxxx | 0.xx |
 
 ### Visualization
 The inference application will generate output visualizations to showcase the planning trajectory and dynamic object detection. Notice that post-processing such as collision correction is not implemented in the current sample. Raw planning trajectory and object detection results are visualized.

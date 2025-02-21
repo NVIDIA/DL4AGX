@@ -1,6 +1,8 @@
 # C++ Inference Application with TensorRT::enqueueV3
 
 ## Environment
+Since TensorRT::enqueueV2 is being deprecated, we demonstrate how to use TensorRT::enqueueV3 to run engine inference with inputs or outputs with data-dependent-shape (DDS).
+
 The inference application is tested on NVIDIA DRIVE Orin platform, NVIDIA DRIVE Thor platform, and X86 platform with `TensorRT 10.8`.
 ## Dependencies
 The inference application will use [cuOSD](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and [STB](https://github.com/nothings/stb) as submodules. Notice that since cuOSD do not have separate repo, we need to manually download it from [here](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and put it under [the dependencies folder](../../common/dependencies/), i.e.,
