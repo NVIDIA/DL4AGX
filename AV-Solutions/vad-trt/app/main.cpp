@@ -417,6 +417,7 @@ int main(int argc, char** argv) {
         std::cerr << "Error processing image: " << e.what() << std::endl;
         return -1;
     }
+    nets["backbone"]->Enqueue(stream);
     if (is_first_frame) {
         nets["head_no_prev"]->bindings["img_metas.0[shift]"]->load(frame_dir + "img_metas.0[shift].bin");
         nets["head_no_prev"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
@@ -446,7 +447,6 @@ int main(int argc, char** argv) {
         nets["head"]->Enqueue(stream);
     }
 
-    nets["backbone"]->Enqueue(stream);
     cudaStreamSynchronize(stream);
 
     std::string viz_dir = cfg["viz"];
