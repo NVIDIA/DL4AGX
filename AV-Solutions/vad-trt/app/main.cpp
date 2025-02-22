@@ -445,6 +445,11 @@ int main(int argc, char** argv) {
         nets["head"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
         nets["head"]->bindings["img_metas.0[can_bus]"]->load(frame_dir + "img_metas.0[can_bus].bin");
         nets["head"]->Enqueue(stream);
+        // prev_bevを保存
+        auto bev_embed = nets["head"]->bindings["out.bev_embed"];
+        saved_prev_bev = std::make_shared<nv::Tensor>("prev_bev", bev_embed->dim, bev_embed->dtype);
+        cudaMemcpyAsync(saved_prev_bev->ptr, bev_embed->ptr, bev_embed->nbytes(), 
+                      cudaMemcpyDeviceToDevice, stream);
     }
 
     cudaStreamSynchronize(stream);
