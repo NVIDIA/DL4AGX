@@ -4,7 +4,7 @@ import os
 import cv2
 # img.bin のパス
 bin_path = "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/data/demo_data/1/img.bin"
-
+# bin_path = "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/create_img_bin/reconstructed_img.bin"
 # 出力先のディレクトリ
 output_dir = "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/private/"
 

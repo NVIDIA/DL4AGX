@@ -1,0 +1,10 @@
+[project]
+name = "create-img-bin"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mmcv>=2.0.0",
+    "torch>=2.0.0",
+]
