@@ -37,9 +37,13 @@ def main():
     time_offsets_list = config.get("time_offsets", [])
     time_offsets = {entry["camera_index"]: entry["offset_ms"] for entry in time_offsets_list}
 
-    # ここでは、img.bin に保存されている画像データは (6, 3, 768, 1280) と仮定
-    target_h, target_w = 768, 1280
+    # ここでは、img.bin に保存されている画像データは (6, 3, 384, 640) と仮定
+    target_h, target_w = 384, 640
     num_cams = 6
+
+    # 画像の正規化パラメータ（NormalizeMultiviewImage の mean/std に基づく）
+    mean = np.array([103.530, 116.280, 123.675], dtype=np.float32)
+    std = np.array([1.0, 1.0, 1.0], dtype=np.float32)
 
     # rosbag2_py の SequentialWriter のセットアップ
     writer = rosbag2_py.SequentialWriter()
@@ -71,11 +75,11 @@ def main():
             print(f"Warning: {img_bin_path} does not exist, skipping frame {frame}")
             continue
 
-        # img.bin を読み込み、(6, 3, 768, 1280) の uint8 配列に変換
+        # img.bin を読み込み、(6, 3, 384, 640) の float32 配列に変換
         with open(img_bin_path, "rb") as f_img:
             raw_data = f_img.read()
         try:
-            arr = np.frombuffer(raw_data, dtype=np.uint8).reshape((num_cams, 3, target_h, target_w))
+            arr = np.frombuffer(raw_data, dtype=np.float32).reshape((num_cams, 3, target_h, target_w))
         except Exception as e:
             print(f"Frame {frame}: Error reshaping data: {e}")
             continue
@@ -94,9 +98,14 @@ def main():
 
             # arr から対象カメラの画像を抽出 → shape: (3, 768, 1280)
             cam_img = arr[vad_index]
+            # 正規化の逆変換（denormalization）
+            cam_img = cam_img * std[:, None, None] + mean[:, None, None]
+            # データの範囲を 0-255 にクリップし、uint8 に変換
+            cam_img = np.clip(cam_img, 0, 255).astype(np.uint8)
             # (3, H, W) → (H, W, 3)
             cam_img = cam_img.transpose(1, 2, 0)
-            # ここでは、学習パイプラインで to_rgb=True が適用されていると仮定し、保存された img.bin は RGB 順
+
+            # ここでは、学習パイプラインで to_rgb=False が適用されていると仮定し、保存された img.bin は BGR 順
             # JPEG 圧縮
             ret, jpeg_encoded = cv2.imencode(".jpg", cam_img)
             if not ret:
