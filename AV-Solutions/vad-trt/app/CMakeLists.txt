@@ -18,6 +18,9 @@ find_package(sensor_msgs REQUIRED)
 find_package(autoware_perception_msgs REQUIRED)
 find_package(autoware_planning_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(rosbag2_cpp REQUIRED)
+find_package(rosbag2_storage REQUIRED)
+find_package(rosbag2_storage_default_plugins REQUIRED)
 
 # Find CUDA package first
 find_package(CUDA REQUIRED)
@@ -94,6 +97,7 @@ target_compile_options(${APP}_cu PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:-arch=sm_86>
 )
 
+
 # Main application
 add_executable(${APP}_app 
     main.cpp 
@@ -120,6 +124,8 @@ target_link_libraries(${APP}_app
     ${autoware_perception_msgs_LIBRARIES}
     ${autoware_planning_msgs_LIBRARIES}
     ${geometry_msgs_LIBRARIES}
+    ${rosbag2_cpp_LIBRARIES}
+    ${rosbag2_storage_LIBRARIES}
 )
 
 # インクルードディレクトリの追加
@@ -133,6 +139,14 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${autoware_perception_msgs_INCLUDE_DIRS}
     ${autoware_planning_msgs_INCLUDE_DIRS}
     ${geometry_msgs_INCLUDE_DIRS}
+)
+
+# rosbag2関連のインクルードディレクトリを追加
+target_include_directories(${APP}_app PUBLIC
+    ${rclcpp_INCLUDE_DIRS}
+    ${rosbag2_cpp_INCLUDE_DIRS}
+    ${rosbag2_storage_INCLUDE_DIRS}
+    ${rosbag2_storage_default_plugins_INCLUDE_DIRS}
 )
 
 # インストール設定

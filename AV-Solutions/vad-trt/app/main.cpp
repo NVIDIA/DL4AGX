@@ -47,6 +47,18 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 
+#include <rosbag2_cpp/reader.hpp>
+#include <rosbag2_cpp/readers/sequential_reader.hpp>
+#include <rosbag2_storage/serialized_bag_message.hpp>
+
+#if __has_include(<rosbag2_storage_sqlite3/sqlite_statement_wrapper.hpp>)
+#include <rosbag2_storage_sqlite3/sqlite_statement_wrapper.hpp>
+#else
+#include <rosbag2_storage_default_plugins/sqlite/sqlite_statement_wrapper.hpp>
+#endif
+#include <rclcpp/serialization.hpp>
+#include <rclcpp/serialized_message.hpp>
+
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
@@ -187,7 +199,7 @@ private:
 
 // バイナリ画像データをROS CompressedImageに変換し、その後TensorRTのバインディングに渡す関数
 void processImageForInference(
-    const std::string& img_path,
+    const std::vector<sensor_msgs::msg::CompressedImage::SharedPtr>& frame_images,
     std::shared_ptr<nv::Net>& net,
     const std::string& binding_name,
     cudaStream_t stream) {
@@ -197,33 +209,28 @@ void processImageForInference(
         throw std::runtime_error("Binding not found: " + binding_name);
     }
 
-    // バイナリファイルを読み込む
-    std::ifstream file(img_path, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        throw std::runtime_error("Could not open image file: " + img_path);
+    // 画像の合計サイズを計算
+    size_t total_size = 0;
+    for (const auto& msg : frame_images) {
+        total_size += msg->data.size();
     }
+
+    // 画像データを連結
+    std::vector<uint8_t> concatenated_data;
+    concatenated_data.reserve(total_size);
     
-    // ファイルサイズを取得
-    std::streamsize size = file.tellg();
-    file.seekg(0, std::ios::beg);
-    
-    // データを読み込む
-    std::vector<char> buffer(size);
-    if (!file.read(buffer.data(), size)) {
-        throw std::runtime_error("Could not read image file");
+    // カメラの順序: {3, 2, 0, 4, 5, 1}
+    const std::vector<int> camera_order = {3, 2, 0, 4, 5, 1};
+    for (int camera_idx : camera_order) {
+        const auto& msg = frame_images[camera_idx];
+        concatenated_data.insert(concatenated_data.end(), msg->data.begin(), msg->data.end());
     }
-    
-    // ROSのCompressedImageメッセージを作成
-    auto compressed_msg = std::make_shared<sensor_msgs::msg::CompressedImage>();
-    compressed_msg->format = "jpeg";  // または適切なフォーマット
-    compressed_msg->data = std::vector<uint8_t>(buffer.begin(), buffer.end());
-    
+
     // TensorRTのバインディングにデータを渡す
-    // データ型に応じて適切なサイズでコピー
     cudaMemcpyAsync(
         tensor->ptr,                               // destination (GPU memory)
-        compressed_msg->data.data(),              // source (CPU memory)
-        tensor->volume * nv::getElementSize(tensor->dtype),  // size
+        concatenated_data.data(),                  // source (CPU memory)
+        concatenated_data.size(),                  // size
         cudaMemcpyHostToDevice,                   // direction
         stream                                    // CUDA stream
     );
@@ -317,6 +324,82 @@ void loadHeadEngine(
     }
 }
 
+std::unordered_map<int, std::vector<sensor_msgs::msg::CompressedImage::SharedPtr>> load_image_from_rosbag(
+    const std::string& bag_path, int n_frames) {
+    std::cout << "Opening rosbag: " << bag_path << std::endl;
+    
+    std::unordered_map<int, std::vector<sensor_msgs::msg::CompressedImage::SharedPtr>> subscribed_image_dict;
+    const std::vector<int> camera_order = {3, 2, 0, 4, 5, 1};
+    
+    try {
+        rosbag2_storage::StorageOptions storage_options;
+        storage_options.uri = bag_path;
+        storage_options.storage_id = "sqlite3";
+
+        rosbag2_cpp::ConverterOptions converter_options;
+        converter_options.input_serialization_format = "cdr";
+        converter_options.output_serialization_format = "cdr";
+
+        rosbag2_cpp::readers::SequentialReader reader;
+        reader.open(storage_options, converter_options);
+        
+        // フレームIDを1から開始
+        int current_frame_id = 1;
+        std::unordered_map<double, int> timestamp_to_frame;
+        
+        while (reader.has_next()) {
+            auto bag_message = reader.read_next();
+            
+            for (int i = 0; i < 6; ++i) {
+                std::string topic = "/sensing/camera/camera" + std::to_string(i) + "/image/compressed";
+                if (bag_message->topic_name == topic) {
+                    auto msg = std::make_shared<sensor_msgs::msg::CompressedImage>();
+                    rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                    rclcpp::Serialization<sensor_msgs::msg::CompressedImage>().deserialize_message(
+                        &serialized_msg, msg.get());
+                    
+                    double stamp_sec = msg->header.stamp.sec + msg->header.stamp.nanosec * 1e-9;
+                    
+                    // 新しいタイムスタンプの場合、新しいフレームIDを割り当て
+                    if (timestamp_to_frame.find(stamp_sec) == timestamp_to_frame.end()) {
+                        timestamp_to_frame[stamp_sec] = current_frame_id++;
+                    }
+                    
+                    int frame_id = timestamp_to_frame[stamp_sec];
+                    std::cout << "Timestamp: " << stamp_sec << " -> Frame ID: " << frame_id << std::endl;
+                    
+                    if (frame_id >= n_frames) continue;
+                    
+                    if (subscribed_image_dict.find(frame_id) == subscribed_image_dict.end()) {
+                        subscribed_image_dict[frame_id] = std::vector<sensor_msgs::msg::CompressedImage::SharedPtr>(6, nullptr);
+                    }
+                    
+                    for (size_t j = 0; j < camera_order.size(); ++j) {
+                        if (i == camera_order[j]) {
+                            subscribed_image_dict[frame_id][j] = msg;
+                            std::cout << "Stored image for frame " << frame_id << ", camera " << i << " at position " << j << std::endl;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        std::cout << "Total frames loaded: " << subscribed_image_dict.size() << std::endl;
+        for (const auto& [frame_id, images] : subscribed_image_dict) {
+            std::cout << "Frame " << frame_id << " has " << 
+                std::count_if(images.begin(), images.end(), [](const auto& ptr) { return ptr != nullptr; }) 
+                << " images" << std::endl;
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error in load_image_from_rosbag: " << e.what() << std::endl;
+        throw;
+    }
+    
+    return subscribed_image_dict;
+}
+
 int main(int argc, char** argv) {
   // ROSの初期化
   rclcpp::init(argc, argv);
@@ -402,13 +485,23 @@ int main(int argc, char** argv) {
   std::vector<float> lidar2img;
   bool is_first_frame = true;
 
+  auto subscribed_image_dict = load_image_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
+
   for( int frame_id=1; frame_id < n_frames; frame_id++ ) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
     // nets["backbone"]->bindings["img"]->load(frame_dir + "img.bin");
     // 画像処理と推論
     try {
+        std::cout << "Processing frame_id: " << frame_id << std::endl;
+        if (subscribed_image_dict.find(frame_id) == subscribed_image_dict.end()) {
+            std::cerr << "Frame " << frame_id << " not found in dictionary" << std::endl;
+            return -1;
+        }
+        std::cout << "Number of images in frame: " << 
+            std::count_if(subscribed_image_dict[frame_id].begin(), subscribed_image_dict[frame_id].end(),
+            [](const auto& ptr) { return ptr != nullptr; }) << std::endl;
         processImageForInference(
-            frame_dir + "img.bin",
+            subscribed_image_dict[frame_id],
             nets["backbone"],
             "img",
             stream
