@@ -20,7 +20,6 @@ find_package(autoware_planning_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rosbag2_cpp REQUIRED)
 find_package(rosbag2_storage REQUIRED)
-find_package(rosbag2_storage_default_plugins REQUIRED)
 
 # Find CUDA package first
 find_package(CUDA REQUIRED)
@@ -146,7 +145,6 @@ target_include_directories(${APP}_app PUBLIC
     ${rclcpp_INCLUDE_DIRS}
     ${rosbag2_cpp_INCLUDE_DIRS}
     ${rosbag2_storage_INCLUDE_DIRS}
-    ${rosbag2_storage_default_plugins_INCLUDE_DIRS}
 )
 
 # インストール設定

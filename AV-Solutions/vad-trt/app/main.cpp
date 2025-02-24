@@ -51,11 +51,6 @@
 #include <rosbag2_cpp/readers/sequential_reader.hpp>
 #include <rosbag2_storage/serialized_bag_message.hpp>
 
-#if __has_include(<rosbag2_storage_sqlite3/sqlite_statement_wrapper.hpp>)
-#include <rosbag2_storage_sqlite3/sqlite_statement_wrapper.hpp>
-#else
-#include <rosbag2_storage_default_plugins/sqlite/sqlite_statement_wrapper.hpp>
-#endif
 #include <rclcpp/serialization.hpp>
 #include <rclcpp/serialized_message.hpp>
 
