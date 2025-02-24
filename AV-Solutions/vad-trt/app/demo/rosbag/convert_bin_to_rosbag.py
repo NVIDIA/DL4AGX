@@ -5,7 +5,7 @@ import yaml
 import numpy as np
 import cv2
 
-from sensor_msgs.msg import CompressedImage
+from sensor_msgs.msg import CompressedImage, PointCloud2, PointField
 from std_msgs.msg import Header
 from rclpy.serialization import serialize_message
 import rosbag2_py
@@ -67,6 +67,14 @@ def main():
         )
         writer.create_topic(topic_metadata)
 
+    # LiDARトピックの作成
+    lidar_topic_metadata = rosbag2_py.TopicMetadata(
+        name="/sensing/lidar/concatenated/pointcloud",
+        type="sensor_msgs/msg/PointCloud2",
+        serialization_format="cdr"
+    )
+    writer.create_topic(lidar_topic_metadata)
+
     # 各フレームごとに処理
     for frame in range(1, n_frames + 1):
         frame_dir = os.path.join(input_dir, str(frame))
@@ -87,13 +95,28 @@ def main():
         # 基本タイムスタンプ（フレームごと）
         base_timestamp = init_time + (frame - 1) * (cycle_time_ms / 1000.0)
 
+        # dummyのlidar topicを作成．
+        lidar_msg = PointCloud2()
+        lidar_msg.header.stamp.sec = int(base_timestamp)
+        lidar_msg.header.stamp.nanosec = int((base_timestamp - int(base_timestamp)) * 1e9)
+        lidar_msg.header.frame_id = "lidar"
+        lidar_msg.height = 1
+        lidar_msg.width = 0
+        lidar_msg.fields = [
+            PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name="intensity", offset=12, datatype=PointField.FLOAT32, count=1),
+        ]
+        writer.write("/sensing/lidar/concatenated/pointcloud", serialize_message(lidar_msg), int(base_timestamp * 1e9))
+
         # 各カメラについてメッセージ作成
         for cam in cameras:
             vad_index = cam["vad"]
             autoware_index = cam["autoware"]
             topic_name = topics[vad_index]
-            # 時刻オフセットを加味（offset_ms は VAD index に対応）
-            offset_ms = time_offsets.get(vad_index, 0)
+            # 時刻オフセットを加味（offset_ms は autoware index に対応）
+            offset_ms = time_offsets[autoware_index]
             cam_timestamp = base_timestamp + (offset_ms / 1000.0)
 
             # arr から対象カメラの画像を抽出 → shape: (3, 768, 1280)
