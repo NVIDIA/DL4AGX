@@ -54,6 +54,7 @@
 #include <rclcpp/serialization.hpp>
 #include <rclcpp/serialized_message.hpp>
 
+
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
@@ -194,7 +195,7 @@ private:
 
 // バイナリ画像データをROS CompressedImageに変換し、その後TensorRTのバインディングに渡す関数
 void processImageForInference(
-    const std::vector<sensor_msgs::msg::CompressedImage::SharedPtr>& frame_images,
+    const std::vector<std::vector<float>>& frame_images,
     std::shared_ptr<nv::Net>& net,
     const std::string& binding_name,
     cudaStream_t stream) {
@@ -206,26 +207,26 @@ void processImageForInference(
 
     // 画像の合計サイズを計算
     size_t total_size = 0;
-    for (const auto& msg : frame_images) {
-        total_size += msg->data.size();
+    for (const auto& img_data : frame_images) {
+        total_size += img_data.size() * sizeof(float); // floatのサイズを考慮
     }
 
     // 画像データを連結
-    std::vector<uint8_t> concatenated_data;
-    concatenated_data.reserve(total_size);
-    
-    // カメラの順序: {3, 2, 0, 4, 5, 1}
-    const std::vector<int> camera_order = {3, 2, 0, 4, 5, 1};
+    std::vector<float> concatenated_data;
+    concatenated_data.reserve(total_size / sizeof(float)); // floatのサイズを考慮
+
+    // カメラの順序: {0, 1, 2, 3, 4, 5}
+    const std::vector<int> camera_order = {0, 1, 2, 3, 4, 5};
     for (int camera_idx : camera_order) {
-        const auto& msg = frame_images[camera_idx];
-        concatenated_data.insert(concatenated_data.end(), msg->data.begin(), msg->data.end());
+        const auto& img_data = frame_images[camera_idx];
+        concatenated_data.insert(concatenated_data.end(), img_data.begin(), img_data.end());
     }
 
     // TensorRTのバインディングにデータを渡す
     cudaMemcpyAsync(
         tensor->ptr,                               // destination (GPU memory)
         concatenated_data.data(),                  // source (CPU memory)
-        concatenated_data.size(),                  // size
+        concatenated_data.size() * sizeof(float),  // size (bytes)
         cudaMemcpyHostToDevice,                   // direction
         stream                                    // CUDA stream
     );
@@ -319,12 +320,22 @@ void loadHeadEngine(
     }
 }
 
-std::unordered_map<int, std::vector<sensor_msgs::msg::CompressedImage::SharedPtr>> load_image_from_rosbag(
+std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
     const std::string& bag_path, int n_frames) {
     std::cout << "Opening rosbag: " << bag_path << std::endl;
     
-    std::unordered_map<int, std::vector<sensor_msgs::msg::CompressedImage::SharedPtr>> subscribed_image_dict;
-    const std::vector<int> camera_order = {3, 2, 0, 4, 5, 1};
+    std::unordered_map<int, std::vector<std::vector<float>>> subscribed_image_dict;
+    std::unordered_map<int, std::vector<float>> frame_images_dict;
+    
+    // AutowareカメラインデックスからVADカメラインデックスへのマッピング
+    std::unordered_map<int, int> autoware_to_vad = {
+        {0, 0},  // FRONT
+        {4, 1},  // FRONT_RIGHT
+        {2, 2},  // FRONT_LEFT
+        {1, 3},  // BACK
+        {3, 4},  // BACK_LEFT
+        {5, 5}   // BACK_RIGHT
+    };
     
     try {
         rosbag2_storage::StorageOptions storage_options;
@@ -338,58 +349,95 @@ std::unordered_map<int, std::vector<sensor_msgs::msg::CompressedImage::SharedPtr
         rosbag2_cpp::readers::SequentialReader reader;
         reader.open(storage_options, converter_options);
         
-        // フレームIDを1から開始
         int current_frame_id = 1;
-        std::unordered_map<double, int> timestamp_to_frame;
         
-        while (reader.has_next()) {
+        while (reader.has_next() && current_frame_id <= n_frames) {
             auto bag_message = reader.read_next();
             
-            for (int i = 0; i < 6; ++i) {
-                std::string topic = "/sensing/camera/camera" + std::to_string(i) + "/image/compressed";
+            for (int autoware_idx = 0; autoware_idx < 6; ++autoware_idx) {
+                std::string topic = "/sensing/camera/camera" + std::to_string(autoware_idx) + "/image_rect_color/compressed";
                 if (bag_message->topic_name == topic) {
                     auto msg = std::make_shared<sensor_msgs::msg::CompressedImage>();
                     rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
                     rclcpp::Serialization<sensor_msgs::msg::CompressedImage>().deserialize_message(
                         &serialized_msg, msg.get());
                     
-                    double stamp_sec = msg->header.stamp.sec + msg->header.stamp.nanosec * 1e-9;
+                    int vad_idx = autoware_to_vad[autoware_idx];
                     
-                    // 新しいタイムスタンプの場合、新しいフレームIDを割り当て
-                    if (timestamp_to_frame.find(stamp_sec) == timestamp_to_frame.end()) {
-                        timestamp_to_frame[stamp_sec] = current_frame_id++;
+                    // 画像データの処理
+                    int width, height, channels;
+                    unsigned char* image_data = stbi_load_from_memory(
+                        msg->data.data(), static_cast<int>(msg->data.size()),
+                        &height, &width, &channels, STBI_rgb); // RGBとして読み込む
+                    if (image_data == nullptr) {
+                        std::cerr << "Failed to load image data" << std::endl;
+                        continue;
                     }
                     
-                    int frame_id = timestamp_to_frame[stamp_sec];
-                    std::cout << "Timestamp: " << stamp_sec << " -> Frame ID: " << frame_id << std::endl;
+                    // 正規化のパラメータ
+                    float mean[3] = {103.530f, 116.280f, 123.675f};
+                    float std[3] = {1.0f, 1.0f, 1.0f};
                     
-                    if (frame_id >= n_frames) continue;
-                    
-                    if (subscribed_image_dict.find(frame_id) == subscribed_image_dict.end()) {
-                        subscribed_image_dict[frame_id] = std::vector<sensor_msgs::msg::CompressedImage::SharedPtr>(6, nullptr);
-                    }
-                    
-                    for (size_t j = 0; j < camera_order.size(); ++j) {
-                        if (i == camera_order[j]) {
-                            subscribed_image_dict[frame_id][j] = msg;
-                            std::cout << "Stored image for frame " << frame_id << ", camera " << i << " at position " << j << std::endl;
-                            break;
+                    // RGBの順で読み込んだデータをBGRに変換して正規化
+                    std::vector<float> normalized_image_data;
+                    normalized_image_data.reserve(width * height * 3);
+
+                    for (int h = 0; h < height; ++h) {
+                        for (int w = 0; w < width; ++w) {
+                            int idx = (h * width + w) * 3;
+                            // unsigned char から float への明示的な変換
+                            float b = static_cast<float>(image_data[idx + 2]); // B (元はR)
+                            float g = static_cast<float>(image_data[idx + 1]); // G
+                            float r = static_cast<float>(image_data[idx + 0]); // R (元はB)
+
+                            // 正規化（BGRの順）
+                            normalized_image_data.push_back((r - mean[0]) / std[0]); // B
+                            normalized_image_data.push_back((g - mean[1]) / std[1]); // G
+                            normalized_image_data.push_back((b - mean[2]) / std[2]); // R
                         }
+                    }
+                    
+                    // 正規化された画像データを保存
+                    frame_images_dict[vad_idx] = normalized_image_data;
+                    
+                    // 6画像がそろった場合
+                    if (frame_images_dict.size() == 6) {
+                        std::vector<std::vector<float>> frame_images;
+                        frame_images.reserve(6);
+                        
+                        // 各カメラの画像を正しい順序で保存
+                        for (int i = 0; i < 6; ++i) {
+                            if (frame_images_dict.find(i) == frame_images_dict.end()) {
+                                std::cerr << "カメラ " << i << " の画像が見つかりません" << std::endl;
+                                throw std::runtime_error("Missing camera image");
+                            }
+                            frame_images.push_back(frame_images_dict[i]);
+                        }
+                        
+                        std::cout << "フレームID: " << current_frame_id << " の画像セットが完了" << std::endl;
+                        subscribed_image_dict[current_frame_id] = frame_images;
+                        
+                        // frame_images_dictをクリア
+                        frame_images_dict.clear();
+                        current_frame_id++;
                     }
                 }
             }
         }
         
         std::cout << "Total frames loaded: " << subscribed_image_dict.size() << std::endl;
-        for (const auto& [frame_id, images] : subscribed_image_dict) {
-            std::cout << "Frame " << frame_id << " has " << 
-                std::count_if(images.begin(), images.end(), [](const auto& ptr) { return ptr != nullptr; }) 
-                << " images" << std::endl;
-        }
         
     } catch (const std::exception& e) {
         std::cerr << "Error in load_image_from_rosbag: " << e.what() << std::endl;
         throw;
+    }
+    
+    // すべてのフレームが揃っているか確認
+    for (int frame_id = 1; frame_id <= n_frames; ++frame_id) {
+        if (subscribed_image_dict.find(frame_id) == subscribed_image_dict.end()) {
+            std::cerr << "Frame " << frame_id << " not found in dictionary" << std::endl;
+            throw std::runtime_error("Frame not found in dictionary");
+        }
     }
     
     return subscribed_image_dict;
@@ -492,9 +540,6 @@ int main(int argc, char** argv) {
             std::cerr << "Frame " << frame_id << " not found in dictionary" << std::endl;
             return -1;
         }
-        std::cout << "Number of images in frame: " << 
-            std::count_if(subscribed_image_dict[frame_id].begin(), subscribed_image_dict[frame_id].end(),
-            [](const auto& ptr) { return ptr != nullptr; }) << std::endl;
         processImageForInference(
             subscribed_image_dict[frame_id],
             nets["backbone"],
