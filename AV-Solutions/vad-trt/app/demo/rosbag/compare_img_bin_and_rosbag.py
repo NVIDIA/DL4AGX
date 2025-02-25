@@ -82,7 +82,7 @@ def main():
                 print(f"pixel value mismatch greater than 4.0 found")
                 print(f"Max difference: {np.max(diff)}")
                 print(f"Mean difference: {np.mean(diff)}")
-                # 差分が2.0を超える位置を特定
+                # 差分が4.0を超える位置を特定
                 large_diff_indices = np.where(diff > 4.0)
                 print(f"Indices with large difference:")
                 print(f"Channel: {large_diff_indices[0]}")
@@ -91,5 +91,12 @@ def main():
                 print(f"Values at these positions:")
                 print(f"img_bin values: {img_bin[i][large_diff_indices]}")
                 print(f"bag_images values: {bag_images[frame_id][i][large_diff_indices]}")
+                # max differenceのindexを探す
+                max_diff_index = np.argmax(diff)
+                # max differenceの位置を探す
+                max_diff_position = np.unravel_index(max_diff_index, diff.shape)
+                print(f"max difference position: {max_diff_position}")
+                print(f"img_bin value at max difference position: {img_bin[i][max_diff_position]}")
+                print(f"bag_images value at max difference position: {bag_images[frame_id][i][max_diff_position]}")
                 import pdb; pdb.set_trace()
 main()
