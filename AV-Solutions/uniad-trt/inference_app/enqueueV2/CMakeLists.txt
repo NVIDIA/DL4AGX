@@ -26,8 +26,8 @@ endif()
 
 set(TENSORRT_INCLUDE_DIRS ${TENSORRT_PATH}/include/)
 set(TENSORRT_LIBRARY_DIRS ${TENSORRT_PATH}/lib/)
-set(STB_LIB_PTH ../../common/dependencies/stb/)
-set(CUOSD_LIB_PTH ../../common/dependencies/cuOSD/)
+set(STB_LIB_PTH ../../../common/dependencies/stb/)
+set(CUOSD_LIB_PTH ../../../common/dependencies/cuOSD/)
 set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda)
 set(CUDA_INCLUDE_DIRS ${CUDA_TOOLKIT_ROOT_DIR}/include)
 set(CUDA_LIBRARY_DIRS ${CUDA_TOOLKIT_ROOT_DIR}/lib64)
@@ -96,7 +96,7 @@ include_directories(
   ${STB_LIB_PTH}
   ${CUOSD_LIB_PTH}/src
   ${TENSORRT_INCLUDE_DIRS}
-  ../dependencies/BEVFormer_tensorrt/TensorRT/common
+  ../../dependencies/BEVFormer_tensorrt/TensorRT/common
 )
 link_directories(${TENSORRT_LIBRARY_DIRS})
 
@@ -114,10 +114,10 @@ file(GLOB_RECURSE VISUALIZE_FILES
 )
 
 file(GLOB_RECURSE PLUGIN_FILES 
-  ../dependencies/BEVFormer_tensorrt/TensorRT/common/*.cpp 
-  ../dependencies/BEVFormer_tensorrt/TensorRT/common/*.cu 
-  ../dependencies/BEVFormer_tensorrt/TensorRT/plugin/*/*.cu 
-  ../dependencies/BEVFormer_tensorrt/TensorRT/plugin/*/*.cpp
+  ../../dependencies/BEVFormer_tensorrt/TensorRT/common/*.cpp 
+  ../../dependencies/BEVFormer_tensorrt/TensorRT/common/*.cu 
+  ../../dependencies/BEVFormer_tensorrt/TensorRT/plugin/*/*.cu 
+  ../../dependencies/BEVFormer_tensorrt/TensorRT/plugin/*/*.cpp
 )
 
 set(SHARED_TARGET uniad_plugin)

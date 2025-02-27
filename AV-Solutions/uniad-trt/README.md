@@ -7,6 +7,9 @@
 
 This repo demonstrates how to deploy UniAD on NVIDIA Drive Orin platform using TensorRT. Specifically, we trained a tiny version of UniAD (`UniAD-tiny`) and provide step by step workflow including model training, ONNX model export, and inference with a sample C++ application.
 
+## News
+- `[2025/02/27]` Inference application for TensorRT 10 with TensorRT::enqueueV3 is released.
+
 ## Table of Contents
 1. [Getting Started](#start)
    - [Project Setup](#proj_setup)
@@ -33,7 +36,7 @@ For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny
 
 ### Inference Application <a name="inference_app"></a>
 
-The inference is showcased with a C++ sample application, it loads raw images and other data as input, runs inference with a built TensorRT engine, and outputs the results of tracking and planning with visualization. We have provided two inference examples, using TensorRT::enqueueV2 and TensorRT::enqueueV3, respectively. Please follow the instructions at [Inference Application with TensorRT::enqueueV2](./inference_app_enqueueV2/README.md) or [Inference Application with TensorRT::enqueueV3](./inference_app_enqueueV3/README.md) on how to build the TensorRT engine, compile and run the inference application.
+The inference is showcased with a C++ sample application, it loads raw images and other data as input, runs inference with a built TensorRT engine, and outputs the results of tracking and planning with visualization. We have provided two inference examples, using TensorRT::enqueueV2 and TensorRT::enqueueV3, respectively. Please follow the instructions at [Inference Application](./inference_app/README.md) on how to build the TensorRT engine, compile and run the inference application.
 
 
 ## Results <a name="results"></a>

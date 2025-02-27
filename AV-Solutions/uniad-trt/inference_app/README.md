@@ -1,25 +1,25 @@
-# C++ Inference Application with TensorRT::enqueueV3
+# C++ Inference Application
 
 ## Environment
-Since TensorRT::enqueueV2 is being deprecated, we demonstrate how to use TensorRT::enqueueV3 to run engine inference with inputs or outputs with data-dependent-shape (DDS).
+The inference application with `TensorRT::enqueueV2` is tested on NVIDIA DRIVE platforms and X86 platform using `TensorRT 8.6`. 
 
-The inference application is tested on NVIDIA DRIVE Orin platform, NVIDIA DRIVE Thor platform, and X86 platform with `TensorRT 10.8`.
+Since `TensorRT::enqueueV2` is being deprecated, we also demonstrate how to use `TensorRT::enqueueV3` to run engine inference with inputs or outputs with data-dependent-shape (DDS). The inference application with `TensorRT::enqueueV3` is tested on NVIDIA DRIVE platforms and X86 platform using `TensorRT 10.8`.
 ## Dependencies
 The inference application will use [cuOSD](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and [STB](https://github.com/nothings/stb) as submodules. Notice that since cuOSD do not have separate repo, we need to manually download it from [here](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and put it under [the dependencies folder](../../common/dependencies/), i.e.,
 ```
 common/
-|──dependencies/
-|──|── stb/
-|──|── cuOSD/
+├── dependencies/
+│   ├── stb/
+│   ├── cuOSD/
 ```
 ## Build TensorRT plugins and the inference application
 
 ### Plugins and Application Compilation
 To deploy UniAD-tiny with TensorRT, we first need to compile TensorRT plugins for `MultiScaleDeformableAttnTRT`, `InverseTRT` and `RotateTRT` operators which are not supported by Native TensorRT, and then we need to build the C++ inference application. 
 
-Please run the following commands to compile:
+Please `cd` into `enqueueV2` or `enqueueV3` folder and run the following commands to compile:
 ```
-cd inference_app_enqueueV3/
+cd enqueueV<2 or 3>/
 mkdir ./build && cd ./build/
 cmake .. -DTENSORRT_PATH=<path_to_TensorRT> -DTARGET_GPU_SM=<GPU_compute_capability> && make -j$(nproc)
 ```
@@ -47,8 +47,7 @@ ${TRT_PATH}/bin/trtexec \
   --minShapes=${SHAPES//${MIN}/${MIN}} \
   --optShapes=${SHAPES//${MIN}/${OPT}} \
   --maxShapes=${SHAPES//${MIN}/${MAX}} \
-  --skipInference \
-  --builderOptimizationLevel=3
+  --skipInference
 ```
 
 ## Test inference application
@@ -79,7 +78,23 @@ The ```uniad_trt_input``` folder is used as ```<input_path>```.
 
 
 ### Run inference
-Run the following command to run inference on the input data and generate output results. Notice that for the application to correctly locate and use the data, you need to call the application at the [inference app dir](./) of this repo.
+Run the following command to run inference on the input data and to generate output results. Notice that for the application to correctly locate and use the data, you need to call the application at the [enqueueV2](./enqueueV2) or [enqueueV3](./enqueueV3) folder of this repo and to create a soft link of data folder under the [enqueueV2](./enqueueV2) or [enqueueV3](./enqueueV3) folder. The data soft link should be linking to:
+```
+enqueueV2/ or enqueueV3/
+├── data/
+│   ├── nuscenes/
+│   │   ├── can_bus/
+│   │   ├── maps/
+│   │   ├── samples/
+│   │   ├── sweeps/
+│   │   ├── v1.0-trainval/
+│   ├── infos/
+│   │   ├── nuscenes_infos_temporal_train.pkl
+│   │   ├── nuscenes_infos_temporal_val.pkl
+│   ├── others/
+│   │   ├── motion_anchor_infos_mode6.pkl
+```
+The inference command is:
 ```
 LD_LIBRARY_PATH=<path_to_TensorRT>/lib/:$LD_LIBRARY_PATH ./build/uniad <engine_path> ./build/libuniad_plugin.so <input_path> <output_path> <number_frame>
 ```
