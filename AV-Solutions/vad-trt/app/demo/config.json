@@ -1,7 +1,7 @@
 {
   "project": "vadv1",
   "warm_up": 20,
-  "n_frames": 15,
+  "n_frames": 30,
   "plugins": ["home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/libplugins.so"],
   "font_path": "home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/simhei.ttf",
   "images": [
