@@ -197,28 +197,22 @@ private:
 void processImageForInference(
     const std::vector<std::vector<float>>& frame_images,
     std::shared_ptr<nv::Net>& net,
-    const std::string& binding_name,
+    const std::string& tensor_name,
     cudaStream_t stream) {
     
-    auto tensor = net->bindings[binding_name];
-    if (!tensor) {
-        throw std::runtime_error("Binding not found: " + binding_name);
-    }
-
-    // 画像の合計サイズを計算
-    size_t total_size = 0;
-    for (const auto& img_data : frame_images) {
-        total_size += img_data.size() * sizeof(float); // floatのサイズを考慮
-    }
-
+    auto tensor = net->bindings[tensor_name];
+    
     // 画像データを連結
     std::vector<float> concatenated_data;
-    concatenated_data.reserve(total_size / sizeof(float)); // floatのサイズを考慮
+    size_t single_camera_size = 3 * 384 * 640;
+    concatenated_data.reserve(single_camera_size * 6);
 
     // カメラの順序: {0, 1, 2, 3, 4, 5}
-    const std::vector<int> camera_order = {0, 1, 2, 3, 4, 5};
-    for (int camera_idx : camera_order) {
+    for (int camera_idx = 0; camera_idx < 6; ++camera_idx) {
         const auto& img_data = frame_images[camera_idx];
+        if (img_data.size() != single_camera_size) {
+            throw std::runtime_error("画像サイズが不正です: " + std::to_string(camera_idx));
+        }
         concatenated_data.insert(concatenated_data.end(), img_data.begin(), img_data.end());
     }
 
@@ -378,22 +372,16 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
                     float mean[3] = {103.530f, 116.280f, 123.675f};
                     float std[3] = {1.0f, 1.0f, 1.0f};
                     
-                    // RGBの順で読み込んだデータをBGRに変換して正規化
-                    std::vector<float> normalized_image_data;
-                    normalized_image_data.reserve(width * height * 3);
-
-                    for (int h = 0; h < height; ++h) {
-                        for (int w = 0; w < width; ++w) {
-                            int idx = (h * width + w) * 3;
-                            // unsigned char から float への明示的な変換
-                            float b = static_cast<float>(image_data[idx + 2]); // B (元はR)
-                            float g = static_cast<float>(image_data[idx + 1]); // G
-                            float r = static_cast<float>(image_data[idx + 0]); // R (元はB)
-
-                            // 正規化（BGRの順）
-                            normalized_image_data.push_back((r - mean[0]) / std[0]); // B
-                            normalized_image_data.push_back((g - mean[1]) / std[1]); // G
-                            normalized_image_data.push_back((b - mean[2]) / std[2]); // R
+                    // BGRの順で処理
+                    std::vector<float> normalized_image_data(width * height * 3);
+                    for (int c = 0; c < 3; ++c) {
+                        for (int h = 0; h < height; ++h) {
+                            for (int w = 0; w < width; ++w) {
+                                int src_idx = (h * width + w) * 3 + (2 - c); // BGR -> RGB
+                                int dst_idx = c * height * width + h * width + w; // CHW形式
+                                float pixel_value = static_cast<float>(image_data[src_idx]);
+                                normalized_image_data[dst_idx] = (pixel_value - mean[c]) / std[c];
+                            }
                         }
                     }
                     
@@ -441,6 +429,66 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
     }
     
     return subscribed_image_dict;
+}
+
+void compare_with_reference(
+    const std::vector<std::vector<float>>& subscribed_images,
+    const std::string& reference_path) {
+    
+    // リファレンス画像データの読み込み
+    std::vector<float> reference_data;
+    std::ifstream ref_file(reference_path, std::ios::binary);
+    if (!ref_file) {
+        throw std::runtime_error("リファレンスファイルを開けません: " + reference_path);
+    }
+
+    // ファイルサイズを取得
+    ref_file.seekg(0, std::ios::end);
+    size_t file_size = ref_file.tellg();
+    ref_file.seekg(0, std::ios::beg);
+
+    // メモリを確保してデータを読み込み
+    reference_data.resize(file_size / sizeof(float));
+    ref_file.read(reinterpret_cast<char*>(reference_data.data()), file_size);
+
+    // リファレンスデータを6カメラ×(3, 384, 640)の形式に変換
+    size_t single_camera_size = 3 * 384 * 640;
+    if (reference_data.size() != single_camera_size * 6) {
+        throw std::runtime_error("リファレンスデータのサイズが不正です");
+    }
+
+    // 各カメラの画像データを比較
+    for (size_t cam_idx = 0; cam_idx < 6; ++cam_idx) {
+        const auto& subscribed_img = subscribed_images[cam_idx];
+        
+        // サイズチェック
+        if (subscribed_img.size() != single_camera_size) {
+            throw std::runtime_error("購読画像のサイズが不正です: カメラ " + std::to_string(cam_idx));
+        }
+
+        // 画素値の比較
+        size_t start_idx = cam_idx * single_camera_size;
+        float max_diff = 0.0f;
+        int diff_count = 0;
+        constexpr float tolerance = 4.0f; // Pythonコードと同じ許容誤差
+
+        for (size_t i = 0; i < single_camera_size; ++i) {
+            float diff = std::abs(subscribed_img[i] - reference_data[start_idx + i]);
+            if (diff > tolerance) {
+                diff_count++;
+                max_diff = std::max(max_diff, diff);
+            }
+        }
+
+        if (diff_count > 0) {
+            RCLCPP_WARN(rclcpp::get_logger("compare_images"),
+                "カメラ %zu: 許容誤差を超える差異が %d 箇所で検出されました (最大差: %f)",
+                cam_idx, diff_count, max_diff);
+        } else {
+            RCLCPP_INFO(rclcpp::get_logger("compare_images"),
+                "カメラ %zu: 画像データは許容誤差内で一致しています", cam_idx);
+        }
+    }
 }
 
 int main(int argc, char** argv) {
@@ -529,17 +577,18 @@ int main(int argc, char** argv) {
   bool is_first_frame = true;
 
   auto subscribed_image_dict = load_image_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
-
-  for( int frame_id=1; frame_id < n_frames; frame_id++ ) {
+  // img.binと値を比較
+  for (int frame_id = 1; frame_id < n_frames; frame_id++) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
-    // nets["backbone"]->bindings["img"]->load(frame_dir + "img.bin");
-    // 画像処理と推論
+    
     try {
-        std::cout << "Processing frame_id: " << frame_id << std::endl;
-        if (subscribed_image_dict.find(frame_id) == subscribed_image_dict.end()) {
-            std::cerr << "Frame " << frame_id << " not found in dictionary" << std::endl;
-            return -1;
-        }
+        // リファレンスデータとの比較を追加
+        compare_with_reference(
+            subscribed_image_dict[frame_id],
+            frame_dir + "img.bin"
+        );
+        
+        // 画像処理と推論
         processImageForInference(
             subscribed_image_dict[frame_id],
             nets["backbone"],
@@ -547,9 +596,10 @@ int main(int argc, char** argv) {
             stream
         );
     } catch (const std::exception& e) {
-        std::cerr << "Error processing image: " << e.what() << std::endl;
+        std::cerr << "エラー発生: " << e.what() << std::endl;
         return -1;
     }
+    
     nets["backbone"]->Enqueue(stream);
     if (is_first_frame) {
         nets["head_no_prev"]->bindings["img_metas.0[shift]"]->load(frame_dir + "img_metas.0[shift].bin");
