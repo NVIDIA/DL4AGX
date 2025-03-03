@@ -6,6 +6,7 @@ app/demo/onnx_files.tar.zst
 app/demo/engines
 app/demo/cyclonedds.log
 app/demo/rosbag/output.mcap
+app/demo/rosbag/output_can_bus.mcap
 app/demo/rosbag/output_bag
 app/demo/rosbag/private
 app/demo/rosbag/create_img_bin/.mmcv
