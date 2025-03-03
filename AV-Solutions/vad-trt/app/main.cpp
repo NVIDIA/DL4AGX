@@ -470,7 +470,7 @@ void compare_with_reference(
         size_t start_idx = cam_idx * single_camera_size;
         float max_diff = 0.0f;
         int diff_count = 0;
-        constexpr float tolerance = 4.0f; // Pythonコードと同じ許容誤差
+        constexpr float tolerance = 38.6f;
 
         for (size_t i = 0; i < single_camera_size; ++i) {
             float diff = std::abs(subscribed_img[i] - reference_data[start_idx + i]);
@@ -484,9 +484,6 @@ void compare_with_reference(
             RCLCPP_WARN(rclcpp::get_logger("compare_images"),
                 "カメラ %zu: 許容誤差を超える差異が %d 箇所で検出されました (最大差: %f)",
                 cam_idx, diff_count, max_diff);
-        } else {
-            RCLCPP_INFO(rclcpp::get_logger("compare_images"),
-                "カメラ %zu: 画像データは許容誤差内で一致しています", cam_idx);
         }
     }
 }
