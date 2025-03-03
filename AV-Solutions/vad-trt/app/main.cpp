@@ -404,19 +404,19 @@ int main(int argc, char** argv) {
 
   for( int frame_id=1; frame_id < n_frames; frame_id++ ) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
-    std::string reconstructed_frame_dir = "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/private/reconstructed_img/" + std::to_string(frame_id) + "/";
-    nets["backbone"]->bindings["img"]->load(reconstructed_frame_dir + "reconstructed_img.bin");    // 画像処理と推論
-    // try {
-    //     processImageForInference(
-    //         frame_dir + "img.bin",
-    //         nets["backbone"],
-    //         "img",
-    //         stream
-    //     );
-    // } catch (const std::exception& e) {
-    //     std::cerr << "Error processing image: " << e.what() << std::endl;
-    //     return -1;
-    // }
+    // nets["backbone"]->bindings["img"]->load(frame_dir + "img.bin");
+    // 画像処理と推論
+    try {
+        processImageForInference(
+            frame_dir + "img.bin",
+            nets["backbone"],
+            "img",
+            stream
+        );
+    } catch (const std::exception& e) {
+        std::cerr << "Error processing image: " << e.what() << std::endl;
+        return -1;
+    }
     nets["backbone"]->Enqueue(stream);
     if (is_first_frame) {
         nets["head_no_prev"]->bindings["img_metas.0[shift]"]->load(frame_dir + "img_metas.0[shift].bin");
