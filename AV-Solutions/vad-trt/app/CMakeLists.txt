@@ -135,7 +135,6 @@ target_include_directories(${APP}_app PUBLIC
     ${autoware_perception_msgs_INCLUDE_DIRS}
     ${autoware_planning_msgs_INCLUDE_DIRS}
     ${geometry_msgs_INCLUDE_DIRS}
-    ${rosbag2_storage_mcap_INCLUDE_DIRS}
     ${rosbag2_cpp_INCLUDE_DIRS}
 )
 
