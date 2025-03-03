@@ -1,5 +1,15 @@
 internal/
 app/demo/vad_app
 app/demo/analyze
+app/demo/onnx_files.desktop
+app/demo/onnx_files.tar.zst
+app/demo/engines
+app/demo/cyclonedds.log
+app/demo/rosbag/output.mcap
+app/demo/rosbag/output_bag
+app/demo/rosbag/private
+app/demo/rosbag/create_img_bin/.mmcv
+app/demo/rosbag/create_img_bin/create_img_bin.egg-info
+app/demo/rosbag/create_img_bin/reconstructed_img.bin
 *.engine
 *.deb
