@@ -1,0 +1,3 @@
+output_bags:
+  - uri: output_bag
+    storage_id: sqlite3
