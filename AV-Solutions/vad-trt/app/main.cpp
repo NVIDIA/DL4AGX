@@ -47,6 +47,14 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 
+#include <rosbag2_cpp/reader.hpp>
+#include <rosbag2_cpp/readers/sequential_reader.hpp>
+#include <rosbag2_storage/serialized_bag_message.hpp>
+
+#include <rclcpp/serialization.hpp>
+#include <rclcpp/serialized_message.hpp>
+
+
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
@@ -187,43 +195,32 @@ private:
 
 // バイナリ画像データをROS CompressedImageに変換し、その後TensorRTのバインディングに渡す関数
 void processImageForInference(
-    const std::string& img_path,
+    const std::vector<std::vector<float>>& frame_images,
     std::shared_ptr<nv::Net>& net,
-    const std::string& binding_name,
+    const std::string& tensor_name,
     cudaStream_t stream) {
     
-    auto tensor = net->bindings[binding_name];
-    if (!tensor) {
-        throw std::runtime_error("Binding not found: " + binding_name);
+    auto tensor = net->bindings[tensor_name];
+    
+    // 画像データを連結
+    std::vector<float> concatenated_data;
+    size_t single_camera_size = 3 * 384 * 640;
+    concatenated_data.reserve(single_camera_size * 6);
+
+    // カメラの順序: {0, 1, 2, 3, 4, 5}
+    for (int camera_idx = 0; camera_idx < 6; ++camera_idx) {
+        const auto& img_data = frame_images[camera_idx];
+        if (img_data.size() != single_camera_size) {
+            throw std::runtime_error("画像サイズが不正です: " + std::to_string(camera_idx));
+        }
+        concatenated_data.insert(concatenated_data.end(), img_data.begin(), img_data.end());
     }
 
-    // バイナリファイルを読み込む
-    std::ifstream file(img_path, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        throw std::runtime_error("Could not open image file: " + img_path);
-    }
-    
-    // ファイルサイズを取得
-    std::streamsize size = file.tellg();
-    file.seekg(0, std::ios::beg);
-    
-    // データを読み込む
-    std::vector<char> buffer(size);
-    if (!file.read(buffer.data(), size)) {
-        throw std::runtime_error("Could not read image file");
-    }
-    
-    // ROSのCompressedImageメッセージを作成
-    auto compressed_msg = std::make_shared<sensor_msgs::msg::CompressedImage>();
-    compressed_msg->format = "jpeg";  // または適切なフォーマット
-    compressed_msg->data = std::vector<uint8_t>(buffer.begin(), buffer.end());
-    
     // TensorRTのバインディングにデータを渡す
-    // データ型に応じて適切なサイズでコピー
     cudaMemcpyAsync(
         tensor->ptr,                               // destination (GPU memory)
-        compressed_msg->data.data(),              // source (CPU memory)
-        tensor->volume * nv::getElementSize(tensor->dtype),  // size
+        concatenated_data.data(),                  // source (CPU memory)
+        concatenated_data.size() * sizeof(float),  // size (bytes)
         cudaMemcpyHostToDevice,                   // direction
         stream                                    // CUDA stream
     );
@@ -317,6 +314,183 @@ void loadHeadEngine(
     }
 }
 
+std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
+    const std::string& bag_path, int n_frames) {
+    std::cout << "Opening rosbag: " << bag_path << std::endl;
+    
+    std::unordered_map<int, std::vector<std::vector<float>>> subscribed_image_dict;
+    std::unordered_map<int, std::vector<float>> frame_images_dict;
+    
+    // AutowareカメラインデックスからVADカメラインデックスへのマッピング
+    std::unordered_map<int, int> autoware_to_vad = {
+        {0, 0},  // FRONT
+        {4, 1},  // FRONT_RIGHT
+        {2, 2},  // FRONT_LEFT
+        {1, 3},  // BACK
+        {3, 4},  // BACK_LEFT
+        {5, 5}   // BACK_RIGHT
+    };
+    
+    try {
+        rosbag2_storage::StorageOptions storage_options;
+        storage_options.uri = bag_path;
+        storage_options.storage_id = "sqlite3";
+
+        rosbag2_cpp::ConverterOptions converter_options;
+        converter_options.input_serialization_format = "cdr";
+        converter_options.output_serialization_format = "cdr";
+
+        rosbag2_cpp::readers::SequentialReader reader;
+        reader.open(storage_options, converter_options);
+        
+        int current_frame_id = 1;
+        
+        while (reader.has_next() && current_frame_id <= n_frames) {
+            auto bag_message = reader.read_next();
+            
+            for (int autoware_idx = 0; autoware_idx < 6; ++autoware_idx) {
+                std::string topic = "/sensing/camera/camera" + std::to_string(autoware_idx) + "/image_rect_color/compressed";
+                if (bag_message->topic_name == topic) {
+                    auto msg = std::make_shared<sensor_msgs::msg::CompressedImage>();
+                    rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                    rclcpp::Serialization<sensor_msgs::msg::CompressedImage>().deserialize_message(
+                        &serialized_msg, msg.get());
+                    
+                    int vad_idx = autoware_to_vad[autoware_idx];
+                    
+                    // 画像データの処理
+                    int width, height, channels;
+                    unsigned char* image_data = stbi_load_from_memory(
+                        msg->data.data(), static_cast<int>(msg->data.size()),
+                        &height, &width, &channels, STBI_rgb); // RGBとして読み込む
+                    if (image_data == nullptr) {
+                        std::cerr << "Failed to load image data" << std::endl;
+                        continue;
+                    }
+                    
+                    // 正規化のパラメータ
+                    float mean[3] = {103.530f, 116.280f, 123.675f};
+                    float std[3] = {1.0f, 1.0f, 1.0f};
+                    
+                    // BGRの順で処理
+                    std::vector<float> normalized_image_data(width * height * 3);
+                    for (int c = 0; c < 3; ++c) {
+                        for (int h = 0; h < height; ++h) {
+                            for (int w = 0; w < width; ++w) {
+                                int src_idx = (h * width + w) * 3 + (2 - c); // BGR -> RGB
+                                int dst_idx = c * height * width + h * width + w; // CHW形式
+                                float pixel_value = static_cast<float>(image_data[src_idx]);
+                                normalized_image_data[dst_idx] = (pixel_value - mean[c]) / std[c];
+                            }
+                        }
+                    }
+                    
+                    // 正規化された画像データを保存
+                    frame_images_dict[vad_idx] = normalized_image_data;
+                    
+                    // 6画像がそろった場合
+                    if (frame_images_dict.size() == 6) {
+                        std::vector<std::vector<float>> frame_images;
+                        frame_images.reserve(6);
+                        
+                        // 各カメラの画像を正しい順序で保存
+                        for (int i = 0; i < 6; ++i) {
+                            if (frame_images_dict.find(i) == frame_images_dict.end()) {
+                                std::cerr << "カメラ " << i << " の画像が見つかりません" << std::endl;
+                                throw std::runtime_error("Missing camera image");
+                            }
+                            frame_images.push_back(frame_images_dict[i]);
+                        }
+                        
+                        std::cout << "フレームID: " << current_frame_id << " の画像セットが完了" << std::endl;
+                        subscribed_image_dict[current_frame_id] = frame_images;
+                        
+                        // frame_images_dictをクリア
+                        frame_images_dict.clear();
+                        current_frame_id++;
+                    }
+                }
+            }
+        }
+        
+        std::cout << "Total frames loaded: " << subscribed_image_dict.size() << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error in load_image_from_rosbag: " << e.what() << std::endl;
+        throw;
+    }
+    
+    // すべてのフレームが揃っているか確認
+    for (int frame_id = 1; frame_id <= n_frames; ++frame_id) {
+        if (subscribed_image_dict.find(frame_id) == subscribed_image_dict.end()) {
+            std::cerr << "Frame " << frame_id << " not found in dictionary" << std::endl;
+            throw std::runtime_error("Frame not found in dictionary");
+        }
+    }
+    
+    return subscribed_image_dict;
+}
+
+void compare_with_reference(
+    const std::vector<std::vector<float>>& subscribed_images,
+    const std::string& reference_path) {
+    
+    // リファレンス画像データの読み込み
+    std::vector<float> reference_data;
+    std::ifstream ref_file(reference_path, std::ios::binary);
+    if (!ref_file) {
+        throw std::runtime_error("リファレンスファイルを開けません: " + reference_path);
+    }
+
+    // ファイルサイズを取得
+    ref_file.seekg(0, std::ios::end);
+    size_t file_size = ref_file.tellg();
+    ref_file.seekg(0, std::ios::beg);
+
+    // メモリを確保してデータを読み込み
+    reference_data.resize(file_size / sizeof(float));
+    ref_file.read(reinterpret_cast<char*>(reference_data.data()), file_size);
+
+    // リファレンスデータを6カメラ×(3, 384, 640)の形式に変換
+    size_t single_camera_size = 3 * 384 * 640;
+    if (reference_data.size() != single_camera_size * 6) {
+        throw std::runtime_error("リファレンスデータのサイズが不正です");
+    }
+
+    // 各カメラの画像データを比較
+    for (size_t cam_idx = 0; cam_idx < 6; ++cam_idx) {
+        const auto& subscribed_img = subscribed_images[cam_idx];
+        
+        // サイズチェック
+        if (subscribed_img.size() != single_camera_size) {
+            throw std::runtime_error("購読画像のサイズが不正です: カメラ " + std::to_string(cam_idx));
+        }
+
+        // 画素値の比較
+        size_t start_idx = cam_idx * single_camera_size;
+        float max_diff = 0.0f;
+        int diff_count = 0;
+        constexpr float tolerance = 4.0f; // Pythonコードと同じ許容誤差
+
+        for (size_t i = 0; i < single_camera_size; ++i) {
+            float diff = std::abs(subscribed_img[i] - reference_data[start_idx + i]);
+            if (diff > tolerance) {
+                diff_count++;
+                max_diff = std::max(max_diff, diff);
+            }
+        }
+
+        if (diff_count > 0) {
+            RCLCPP_WARN(rclcpp::get_logger("compare_images"),
+                "カメラ %zu: 許容誤差を超える差異が %d 箇所で検出されました (最大差: %f)",
+                cam_idx, diff_count, max_diff);
+        } else {
+            RCLCPP_INFO(rclcpp::get_logger("compare_images"),
+                "カメラ %zu: 画像データは許容誤差内で一致しています", cam_idx);
+        }
+    }
+}
+
 int main(int argc, char** argv) {
   // ROSの初期化
   rclcpp::init(argc, argv);
@@ -402,21 +576,30 @@ int main(int argc, char** argv) {
   std::vector<float> lidar2img;
   bool is_first_frame = true;
 
-  for( int frame_id=1; frame_id < n_frames; frame_id++ ) {
+  auto subscribed_image_dict = load_image_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
+  // img.binと値を比較
+  for (int frame_id = 1; frame_id < n_frames; frame_id++) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
-    // nets["backbone"]->bindings["img"]->load(frame_dir + "img.bin");
-    // 画像処理と推論
+    
     try {
+        // リファレンスデータとの比較を追加
+        compare_with_reference(
+            subscribed_image_dict[frame_id],
+            frame_dir + "img.bin"
+        );
+        
+        // 画像処理と推論
         processImageForInference(
-            frame_dir + "img.bin",
+            subscribed_image_dict[frame_id],
             nets["backbone"],
             "img",
             stream
         );
     } catch (const std::exception& e) {
-        std::cerr << "Error processing image: " << e.what() << std::endl;
+        std::cerr << "エラー発生: " << e.what() << std::endl;
         return -1;
     }
+    
     nets["backbone"]->Enqueue(stream);
     if (is_first_frame) {
         nets["head_no_prev"]->bindings["img_metas.0[shift]"]->load(frame_dir + "img_metas.0[shift].bin");
