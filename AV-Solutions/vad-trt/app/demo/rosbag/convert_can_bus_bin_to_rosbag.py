@@ -7,12 +7,12 @@ import numpy as np
 # ROS2 関連のインポート
 from sensor_msgs.msg import Imu
 from geometry_msgs.msg import TransformStamped, Vector3, Quaternion
-from autoware_vehicle_msgs.msg import VelocityReport
 from tf2_msgs.msg import TFMessage
 from builtin_interfaces.msg import Time
 from rclpy.serialization import serialize_message, deserialize_message
 import rosbag2_py
 import rclpy
+from nav_msgs.msg import Odometry
 
 def convert_bin_to_tf(can_bus_data: np.ndarray, timestamp: Time, frame_id: str = "base_link", child_frame_id: str = "map") -> TFMessage:
     """
@@ -104,7 +104,7 @@ def convert_bin_to_imu(can_bus_data: np.ndarray, timestamp: Time, frame_id: str 
     
     return imu_msg
 
-def convert_bin_to_kinematic_state(can_bus_data: np.ndarray, timestamp: Time, frame_id: str = "base_link") -> VelocityReport:
+def convert_bin_to_kinematic_state(can_bus_data: np.ndarray, timestamp: Time, frame_id: str = "base_link") -> Odometry:
     """
     CAN busデータから/localization/kinematic_stateトピックへの変換
     
@@ -114,29 +114,44 @@ def convert_bin_to_kinematic_state(can_bus_data: np.ndarray, timestamp: Time, fr
         frame_id: フレームID
         
     Returns:
-        VelocityReport: 変換された運動学状態メッセージ
+        Odometry: 変換された運動学状態メッセージ
     """
+    # can_bus[0:3] = ego2global_translation
+    # can_bus[3:7] = ego2global_rotation
     # can_bus[12] = ego_w（yaw角速度）
     # can_bus[13:15] = ego_vx, ego_vy（x,y方向速度）
     
-    # 速度の取得（float型に明示的に変換）
-    vx = float(can_bus_data[13])
-    vy = float(can_bus_data[14])
+    # Odometryメッセージの作成
+    odom_msg = Odometry()
+    odom_msg.header.stamp = timestamp
+    odom_msg.header.frame_id = "map"
+    odom_msg.child_frame_id = frame_id
     
-    # 速度の大きさを計算
-    speed = float(np.sqrt(vx**2 + vy**2))
+    # 位置情報の設定
+    odom_msg.pose.pose.position.x = float(can_bus_data[0])
+    odom_msg.pose.pose.position.y = float(can_bus_data[1])
+    odom_msg.pose.pose.position.z = 0.0
     
-    # VelocityReportメッセージの作成
-    velocity_msg = VelocityReport()
-    velocity_msg.header.stamp = timestamp
-    velocity_msg.header.frame_id = frame_id
+    # 姿勢情報の設定（クォータニオン）
+    odom_msg.pose.pose.orientation.x = float(can_bus_data[3])
+    odom_msg.pose.pose.orientation.y = float(can_bus_data[4])
+    odom_msg.pose.pose.orientation.z = float(can_bus_data[5])
+    odom_msg.pose.pose.orientation.w = float(can_bus_data[6])
     
     # 速度情報の設定
-    velocity_msg.longitudinal_velocity = vx  # x方向速度
-    velocity_msg.lateral_velocity = vy      # y方向速度
-    velocity_msg.heading_rate = float(can_bus_data[12])  # yaw角速度
+    odom_msg.twist.twist.linear.x = float(can_bus_data[13])  # x方向速度
+    odom_msg.twist.twist.linear.y = float(can_bus_data[14])  # y方向速度
+    odom_msg.twist.twist.linear.z = 0.0
     
-    return velocity_msg
+    odom_msg.twist.twist.angular.x = 0.0
+    odom_msg.twist.twist.angular.y = 0.0
+    odom_msg.twist.twist.angular.z = float(can_bus_data[12])  # yaw角速度
+    
+    # 共分散行列の設定（不明な場合は大きな値を設定）
+    odom_msg.pose.covariance = [0.01] * 36  # 6x6行列
+    odom_msg.twist.covariance = [0.01] * 36  # 6x6行列
+    
+    return odom_msg
 
 def unix_to_ros_time(unix_time_sec: float) -> Time:
     """
@@ -205,9 +220,9 @@ def main():
     
     # メタデータの作成と登録
     topic_types = [
-        ("tf", "tf2_msgs/msg/TFMessage"),
+        ("/tf", "tf2_msgs/msg/TFMessage"),
         ("/sensing/imu/tamagawa/imu_raw", "sensor_msgs/msg/Imu"),
-        ("/localization/kinematic_state", "autoware_vehicle_msgs/msg/VelocityReport")
+        ("/localization/kinematic_state", "nav_msgs/msg/Odometry")
     ]
     
     # トピックの情報を登録
@@ -243,7 +258,7 @@ def main():
         # 各トピックへの変換と書き込み
         # 1. TFの変換と書き込み
         tf_msg = convert_bin_to_tf(can_bus_data, ros_timestamp)
-        write_to_rosbag(writer, "tf", tf_msg, ros_timestamp)
+        write_to_rosbag(writer, "/tf", tf_msg, ros_timestamp)
         
         # 2. IMUの変換と書き込み
         imu_msg = convert_bin_to_imu(can_bus_data, ros_timestamp)
@@ -318,7 +333,7 @@ def reconstruct_can_bus_from_rosbag(bag_file: str, init_time: float, cycle_time_
         if frame_id not in reconstructed_data:
             reconstructed_data[frame_id] = {}
         
-        if topic_name == "tf":
+        if topic_name == "/tf":
             msg = deserialize_message(data, TFMessage)
             transform = msg.transforms[0].transform
             reconstructed_data[frame_id]["translation"] = [
@@ -341,12 +356,12 @@ def reconstruct_can_bus_from_rosbag(bag_file: str, init_time: float, cycle_time_
             ]
         
         elif topic_name == "/localization/kinematic_state":
-            msg = deserialize_message(data, VelocityReport)
+            msg = deserialize_message(data, Odometry)
             reconstructed_data[frame_id]["velocity"] = [
-                msg.longitudinal_velocity,
-                msg.lateral_velocity
+                msg.twist.twist.linear.x,
+                msg.twist.twist.linear.y
             ]
-            reconstructed_data[frame_id]["yaw_rate"] = msg.heading_rate
+            reconstructed_data[frame_id]["yaw_rate"] = msg.twist.twist.angular.z
     
     # 各フレームのデータを can_bus 形式に変換
     for frame_id, data in reconstructed_data.items():
