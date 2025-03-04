@@ -7,7 +7,9 @@ app/demo/engines
 app/demo/cyclonedds.log
 app/demo/rosbag/output.mcap
 app/demo/rosbag/output_can_bus.mcap
+app/demo/rosbag/output_img.mcap
 app/demo/rosbag/output_bag
+app/demo/rosbag/output_bag_img
 app/demo/rosbag/private
 app/demo/rosbag/create_img_bin/.mmcv
 app/demo/rosbag/create_img_bin/create_img_bin.egg-info
