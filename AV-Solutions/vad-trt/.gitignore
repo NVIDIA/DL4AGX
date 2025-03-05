@@ -14,5 +14,9 @@ app/demo/rosbag/private
 app/demo/rosbag/create_img_bin/.mmcv
 app/demo/rosbag/create_img_bin/create_img_bin.egg-info
 app/demo/rosbag/create_img_bin/reconstructed_img.bin
+app/demo/time_sync/vad_mock/install
+app/demo/time_sync/vad_mock/build
+app/demo/time_sync/vad_mock/log
 *.engine
 *.deb
+cyclonedds.log
