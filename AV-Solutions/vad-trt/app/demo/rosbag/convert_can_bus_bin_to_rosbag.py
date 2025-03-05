@@ -14,6 +14,27 @@ import rosbag2_py
 import rclpy
 from nav_msgs.msg import Odometry
 
+point_cloud_range = [-15.0, -30.0, -2.0, 15.0, 30.0, 2.0]
+bev_h_ = 100
+bev_w_ = 100
+
+real_w = point_cloud_range[3] - point_cloud_range[0]
+real_h = point_cloud_range[4] - point_cloud_range[1]
+grid_length = [real_h / bev_h_, real_w / bev_w_]
+
+def calculate_shift(delta_x, delta_y, patch_angle_rad, grid_length=grid_length, bev_h=bev_h_, bev_w=bev_w_):
+    ego_angle = np.array(patch_angle_rad / np.pi * 180)
+
+    grid_length_y = grid_length[0]
+    grid_length_x = grid_length[1]
+
+    translation_length = np.sqrt(delta_x ** 2 + delta_y ** 2)
+    translation_angle = np.arctan2(delta_y, delta_x) / np.pi * 180
+    bev_angle = ego_angle - translation_angle
+    shift_y = translation_length * np.cos(bev_angle / 180 * np.pi) / grid_length_y / bev_h
+    shift_x = translation_length * np.sin(bev_angle / 180 * np.pi) / grid_length_x / bev_w
+
+    return [shift_x, shift_y]
 
 def convert_bin_to_imu(can_bus_data: np.ndarray, timestamp: Time, frame_id: str = "imu_link") -> Imu:
     """
@@ -194,12 +215,19 @@ def main():
     
     # 各フレームのデータ処理
     can_bus_data_dict: dict[int, np.ndarray] = {}
+    shift_data_dict: dict[int, np.ndarray] = {}
     for frame in range(1, n_frames + 1):
         frame_dir = os.path.join(input_dir, str(frame))
         can_bus_bin_path = os.path.join(frame_dir, "img_metas.0[can_bus].bin")
+
+        shift_bin_path = os.path.join(frame_dir, "img_metas.0[shift].bin")
         
         if not os.path.exists(can_bus_bin_path):
             print(f"Warning: {can_bus_bin_path} does not exist, skipping frame {frame}")
+            continue
+
+        if not os.path.exists(shift_bin_path):
+            print(f"Warning: {shift_bin_path} does not exist, skipping frame {frame}")
             continue
         
         # タイムスタンプの計算
@@ -208,11 +236,18 @@ def main():
         
         # バイナリファイルをバイト単位で読み込む
         with open(can_bus_bin_path, "rb") as f_can_bus:
-            data = f_can_bus.read()
-        
+            can_bus_binary = f_can_bus.read()
+
+        with open(shift_bin_path, "rb") as f_shift:
+            shift_binary = f_shift.read()
+
         # バイナリデータをnumpy配列に変換
-        can_bus_data = np.frombuffer(data, dtype=np.float32)
+        can_bus_data = np.frombuffer(can_bus_binary, dtype=np.float32)
         can_bus_data_dict[frame] = can_bus_data
+
+        shift_data = np.frombuffer(shift_binary, dtype=np.float32)
+        shift_data_dict[frame] = shift_data
+
         # 各トピックへの変換と書き込み        
         # 1. IMUの変換と書き込み
         imu_msg = convert_bin_to_imu(can_bus_data, ros_timestamp)
@@ -241,8 +276,16 @@ def main():
             if not np.array_equal(reconstructed_can_bus[frame_id][12:15], can_bus_data_dict[frame_id][12:15]):
                 print(f"Error: reconstructed_can_bus[{frame_id}] != can_bus_data[{frame_id}]")
                 break
-    else:
-        print("Success: reconstructed can_bus matches can_bus.bin")
+
+        delta_x, delta_y = reconstructed_can_bus[frame_id][0:2]
+        # TODO(Shin-kyoto): We should use reconstructed_can_bus[frame_id][-2]
+        patch_angle_rad = can_bus_data_dict[frame_id][-2]
+
+        if not np.allclose(calculate_shift(delta_x, delta_y, patch_angle_rad), shift_data_dict[frame_id], atol=0.0000001):
+            print(f"Error: calculated_shift on {frame_id} != shift_data_dict[{frame_id}]")
+            break
+
+    print("Success: reconstructed can_bus matches can_bus.bin")
 
 def reconstruct_can_bus_from_rosbag(bag_file: str, init_time: float, cycle_time_ms: float) -> dict[int, np.ndarray]:
     """
