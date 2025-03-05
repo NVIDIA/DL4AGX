@@ -13,14 +13,7 @@ from rclpy.serialization import serialize_message, deserialize_message
 import rosbag2_py
 from nav_msgs.msg import Odometry
 
-from convert_can_bus_bin_to_rosbag import convert_bin_to_imu, convert_bin_to_kinematic_state
-
-def write_to_rosbag(writer, topic: str, msg, timestamp: Time):
-    """
-    メッセージをROSバッグに書き込む
-    """
-    ros_timestamp = int(timestamp.sec * 1e9) + timestamp.nanosec
-    writer.write(topic, serialize_message(msg), ros_timestamp)
+from convert_can_bus_bin_to_rosbag import convert_bin_to_imu, convert_bin_to_kinematic_state, write_to_rosbag
 
 def main():
     parser = argparse.ArgumentParser(
