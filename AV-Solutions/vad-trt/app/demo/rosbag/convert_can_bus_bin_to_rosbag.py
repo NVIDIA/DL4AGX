@@ -14,48 +14,6 @@ import rosbag2_py
 import rclpy
 from nav_msgs.msg import Odometry
 
-def convert_bin_to_tf(can_bus_data: np.ndarray, timestamp: Time, frame_id: str = "base_link", child_frame_id: str = "map") -> TFMessage:
-    """
-    CAN busデータから/tfトピックへの変換
-    
-    Args:
-        can_bus_data: CANバスデータ
-        timestamp: メッセージのタイムスタンプ
-        frame_id: 親フレームID
-        child_frame_id: 子フレームID
-        
-    Returns:
-        TFMessage: 変換されたtfメッセージ
-    """
-    # can_bus[0:3] = ego2global_translation(の差分)
-    # can_bus[3:7] = ego2global_rotation(の差分?)
-    
-    # 変換ベクトルの取得（x, y, zは0と仮定）
-    delta_x = float(can_bus_data[0])
-    delta_y = float(can_bus_data[1])
-    z = 0.0  # z方向は0と仮定
-    
-    # 回転クォータニオンの取得
-    qx = float(can_bus_data[3])
-    qy = float(can_bus_data[4])
-    qz = float(can_bus_data[5])
-    qw = float(can_bus_data[6])
-    
-    # TransformStampedメッセージの作成
-    transform_stamped = TransformStamped()
-    transform_stamped.header.stamp = timestamp
-    transform_stamped.header.frame_id = frame_id
-    transform_stamped.child_frame_id = child_frame_id
-    
-    # 変換情報の設定
-    transform_stamped.transform.translation = Vector3(x=delta_x, y=delta_y, z=z)
-    transform_stamped.transform.rotation = Quaternion(x=qx, y=qy, z=qz, w=qw)
-    
-    # TFMessageの作成
-    tf_msg = TFMessage()
-    tf_msg.transforms = [transform_stamped]
-    
-    return tf_msg
 
 def convert_bin_to_imu(can_bus_data: np.ndarray, timestamp: Time, frame_id: str = "imu_link") -> Imu:
     """
@@ -75,12 +33,13 @@ def convert_bin_to_imu(can_bus_data: np.ndarray, timestamp: Time, frame_id: str 
     # 加速度の取得（float型に明示的に変換）
     accel_x = float(can_bus_data[7])
     accel_y = float(can_bus_data[8])
-    accel_z = 0.0
+    accel_z = float(can_bus_data[9])
     
     # 角速度の取得（float型に明示的に変換）
+    # TODO(Shin-kyoto): これで良いのかを確認する
     angular_velocity_z = float(can_bus_data[12])  # Yaw角速度
-    angular_velocity_x = 0.0
-    angular_velocity_y = 0.0
+    angular_velocity_x = float(can_bus_data[10])
+    angular_velocity_y = float(can_bus_data[11])
     
     # IMUメッセージの作成
     imu_msg = Imu()
@@ -130,7 +89,7 @@ def convert_bin_to_kinematic_state(can_bus_data: np.ndarray, timestamp: Time, fr
     # 位置情報の設定
     odom_msg.pose.pose.position.x = float(can_bus_data[0])
     odom_msg.pose.pose.position.y = float(can_bus_data[1])
-    odom_msg.pose.pose.position.z = 0.0
+    odom_msg.pose.pose.position.z = float(can_bus_data[2])
     
     # 姿勢情報の設定（クォータニオン）
     odom_msg.pose.pose.orientation.x = float(can_bus_data[3])
@@ -141,10 +100,10 @@ def convert_bin_to_kinematic_state(can_bus_data: np.ndarray, timestamp: Time, fr
     # 速度情報の設定
     odom_msg.twist.twist.linear.x = float(can_bus_data[13])  # x方向速度
     odom_msg.twist.twist.linear.y = float(can_bus_data[14])  # y方向速度
-    odom_msg.twist.twist.linear.z = 0.0
+    odom_msg.twist.twist.linear.z = float(can_bus_data[15])  # z方向速度
     
-    odom_msg.twist.twist.angular.x = 0.0
-    odom_msg.twist.twist.angular.y = 0.0
+    odom_msg.twist.twist.angular.x = float(can_bus_data[10])
+    odom_msg.twist.twist.angular.y = float(can_bus_data[11])
     odom_msg.twist.twist.angular.z = float(can_bus_data[12])  # yaw角速度
     
     # 共分散行列の設定（不明な場合は大きな値を設定）
@@ -220,7 +179,6 @@ def main():
     
     # メタデータの作成と登録
     topic_types = [
-        ("/tf", "tf2_msgs/msg/TFMessage"),
         ("/sensing/imu/tamagawa/imu_raw", "sensor_msgs/msg/Imu"),
         ("/localization/kinematic_state", "nav_msgs/msg/Odometry")
     ]
@@ -255,16 +213,12 @@ def main():
         # バイナリデータをnumpy配列に変換
         can_bus_data = np.frombuffer(data, dtype=np.float32)
         can_bus_data_dict[frame] = can_bus_data
-        # 各トピックへの変換と書き込み
-        # 1. TFの変換と書き込み
-        tf_msg = convert_bin_to_tf(can_bus_data, ros_timestamp)
-        write_to_rosbag(writer, "/tf", tf_msg, ros_timestamp)
-        
-        # 2. IMUの変換と書き込み
+        # 各トピックへの変換と書き込み        
+        # 1. IMUの変換と書き込み
         imu_msg = convert_bin_to_imu(can_bus_data, ros_timestamp)
         write_to_rosbag(writer, "/sensing/imu/tamagawa/imu_raw", imu_msg, ros_timestamp)
         
-        # 3. 運動学状態の変換と書き込み
+        # 2. 運動学状態の変換と書き込み
         kinematic_msg = convert_bin_to_kinematic_state(can_bus_data, ros_timestamp)
         write_to_rosbag(writer, "/localization/kinematic_state", kinematic_msg, ros_timestamp)
         
@@ -285,7 +239,6 @@ def main():
     for frame_id in reconstructed_can_bus.keys():
         if not np.array_equal(reconstructed_can_bus[frame_id][0:9], can_bus_data_dict[frame_id][0:9]):
             if not np.array_equal(reconstructed_can_bus[frame_id][12:15], can_bus_data_dict[frame_id][12:15]):
-                import pdb;pdb.set_trace()
                 print(f"Error: reconstructed_can_bus[{frame_id}] != can_bus_data[{frame_id}]")
                 break
     else:
@@ -333,35 +286,39 @@ def reconstruct_can_bus_from_rosbag(bag_file: str, init_time: float, cycle_time_
         if frame_id not in reconstructed_data:
             reconstructed_data[frame_id] = {}
         
-        if topic_name == "/tf":
-            msg = deserialize_message(data, TFMessage)
-            transform = msg.transforms[0].transform
+        if topic_name == "/localization/kinematic_state":
+            msg = deserialize_message(data, Odometry)
+            # 位置情報を取得
             reconstructed_data[frame_id]["translation"] = [
-                transform.translation.x,
-                transform.translation.y,
-                0.0  # z方向は0と仮定
+                msg.pose.pose.position.x,
+                msg.pose.pose.position.y,
+                msg.pose.pose.position.z
             ]
+            # 姿勢情報を取得
             reconstructed_data[frame_id]["rotation"] = [
-                transform.rotation.x,
-                transform.rotation.y,
-                transform.rotation.z,
-                transform.rotation.w
+                msg.pose.pose.orientation.x,
+                msg.pose.pose.orientation.y,
+                msg.pose.pose.orientation.z,
+                msg.pose.pose.orientation.w
             ]
+            # 速度情報を取得
+            reconstructed_data[frame_id]["velocity"] = [
+                msg.twist.twist.linear.x,
+                msg.twist.twist.linear.y
+            ]
+            
+            # 角速度情報を取得
+            reconstructed_data[frame_id]["roll_rate"] = msg.twist.twist.angular.x
+            reconstructed_data[frame_id]["pitch_rate"] = msg.twist.twist.angular.y
+            reconstructed_data[frame_id]["yaw_rate"] = msg.twist.twist.angular.z
         
         elif topic_name == "/sensing/imu/tamagawa/imu_raw":
             msg = deserialize_message(data, Imu)
             reconstructed_data[frame_id]["acceleration"] = [
                 msg.linear_acceleration.x,
-                msg.linear_acceleration.y
+                msg.linear_acceleration.y,
+                msg.linear_acceleration.z,
             ]
-        
-        elif topic_name == "/localization/kinematic_state":
-            msg = deserialize_message(data, Odometry)
-            reconstructed_data[frame_id]["velocity"] = [
-                msg.twist.twist.linear.x,
-                msg.twist.twist.linear.y
-            ]
-            reconstructed_data[frame_id]["yaw_rate"] = msg.twist.twist.angular.z
     
     # 各フレームのデータを can_bus 形式に変換
     for frame_id, data in reconstructed_data.items():
@@ -373,10 +330,12 @@ def reconstruct_can_bus_from_rosbag(bag_file: str, init_time: float, cycle_time_
         # rotation (3:7)
         can_bus[3:7] = data["rotation"]
         
-        # acceleration (7:9)
-        can_bus[7:9] = data["acceleration"]
+        # acceleration (7:10)
+        can_bus[7:10] = data["acceleration"]
         
-        # yaw_rate (12)
+        # angular velocity (10:12)
+        can_bus[10] = data["roll_rate"]
+        can_bus[11] = data["pitch_rate"]
         can_bus[12] = data["yaw_rate"]
         
         # velocity (13:15)

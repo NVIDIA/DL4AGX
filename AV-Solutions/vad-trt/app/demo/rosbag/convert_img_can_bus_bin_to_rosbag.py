@@ -7,99 +7,13 @@ import cv2
 
 from sensor_msgs.msg import CompressedImage, PointCloud2, PointField, Imu
 from std_msgs.msg import Header
-from geometry_msgs.msg import TransformStamped, Vector3, Quaternion
-from tf2_msgs.msg import TFMessage
+from geometry_msgs.msg import Vector3, Quaternion
 from builtin_interfaces.msg import Time
 from rclpy.serialization import serialize_message, deserialize_message
 import rosbag2_py
 from nav_msgs.msg import Odometry
 
-def convert_bin_to_tf(can_bus_data: np.ndarray, timestamp: Time, frame_id: str = "base_link", child_frame_id: str = "map") -> TFMessage:
-    """
-    CAN busデータから/tfトピックへの変換
-    """
-    delta_x = float(can_bus_data[0])
-    delta_y = float(can_bus_data[1])
-    z = 0.0
-    
-    qx = float(can_bus_data[3])
-    qy = float(can_bus_data[4])
-    qz = float(can_bus_data[5])
-    qw = float(can_bus_data[6])
-    
-    transform_stamped = TransformStamped()
-    transform_stamped.header.stamp = timestamp
-    transform_stamped.header.frame_id = frame_id
-    transform_stamped.child_frame_id = child_frame_id
-    
-    transform_stamped.transform.translation = Vector3(x=delta_x, y=delta_y, z=z)
-    transform_stamped.transform.rotation = Quaternion(x=qx, y=qy, z=qz, w=qw)
-    
-    tf_msg = TFMessage()
-    tf_msg.transforms = [transform_stamped]
-    
-    return tf_msg
-
-def convert_bin_to_imu(can_bus_data: np.ndarray, timestamp: Time, frame_id: str = "imu_link") -> Imu:
-    """
-    CAN busデータから/sensing/imu/tamagawa/imu_rawトピックへの変換
-    """
-    accel_x = float(can_bus_data[7])
-    accel_y = float(can_bus_data[8])
-    accel_z = 0.0
-    
-    angular_velocity_z = float(can_bus_data[12])
-    angular_velocity_x = 0.0
-    angular_velocity_y = 0.0
-    
-    imu_msg = Imu()
-    imu_msg.header.stamp = timestamp
-    imu_msg.header.frame_id = frame_id
-    
-    imu_msg.linear_acceleration.x = accel_x
-    imu_msg.linear_acceleration.y = accel_y
-    imu_msg.linear_acceleration.z = accel_z
-    
-    imu_msg.angular_velocity.x = angular_velocity_x
-    imu_msg.angular_velocity.y = angular_velocity_y
-    imu_msg.angular_velocity.z = angular_velocity_z
-    
-    imu_msg.linear_acceleration_covariance = [-1.0] * 9
-    imu_msg.angular_velocity_covariance = [-1.0] * 9
-    imu_msg.orientation_covariance = [-1.0] * 9
-    
-    return imu_msg
-
-def convert_bin_to_kinematic_state(can_bus_data: np.ndarray, timestamp: Time, frame_id: str = "base_link") -> Odometry:
-    """
-    CAN busデータから/localization/kinematic_stateトピックへの変換
-    """
-    odom_msg = Odometry()
-    odom_msg.header.stamp = timestamp
-    odom_msg.header.frame_id = "map"
-    odom_msg.child_frame_id = frame_id
-    
-    odom_msg.pose.pose.position.x = float(can_bus_data[0])
-    odom_msg.pose.pose.position.y = float(can_bus_data[1])
-    odom_msg.pose.pose.position.z = 0.0
-    
-    odom_msg.pose.pose.orientation.x = float(can_bus_data[3])
-    odom_msg.pose.pose.orientation.y = float(can_bus_data[4])
-    odom_msg.pose.pose.orientation.z = float(can_bus_data[5])
-    odom_msg.pose.pose.orientation.w = float(can_bus_data[6])
-    
-    odom_msg.twist.twist.linear.x = float(can_bus_data[13])
-    odom_msg.twist.twist.linear.y = float(can_bus_data[14])
-    odom_msg.twist.twist.linear.z = 0.0
-    
-    odom_msg.twist.twist.angular.x = 0.0
-    odom_msg.twist.twist.angular.y = 0.0
-    odom_msg.twist.twist.angular.z = float(can_bus_data[12])
-    
-    odom_msg.pose.covariance = [0.01] * 36
-    odom_msg.twist.covariance = [0.01] * 36
-    
-    return odom_msg
+from convert_can_bus_bin_to_rosbag import convert_bin_to_imu, convert_bin_to_kinematic_state
 
 def write_to_rosbag(writer, topic: str, msg, timestamp: Time):
     """
@@ -159,7 +73,6 @@ def main():
 
     # CANバス関連トピックの作成
     can_bus_topics = [
-        ("/tf", "tf2_msgs/msg/TFMessage"),
         ("/sensing/imu/tamagawa/imu_raw", "sensor_msgs/msg/Imu"),
         ("/localization/kinematic_state", "nav_msgs/msg/Odometry")
     ]
@@ -212,13 +125,11 @@ def main():
             nanosec=int((base_timestamp - int(base_timestamp)) * 1e9)
         )
 
-        # CANバスデータの処理
-        tf_msg = convert_bin_to_tf(can_bus_data, ros_timestamp)
-        write_to_rosbag(writer, "/tf", tf_msg, ros_timestamp)
-        
+        # IMUメッセージの処理
         imu_msg = convert_bin_to_imu(can_bus_data, ros_timestamp)
         write_to_rosbag(writer, "/sensing/imu/tamagawa/imu_raw", imu_msg, ros_timestamp)
         
+        # 運動学状態メッセージの処理
         kinematic_msg = convert_bin_to_kinematic_state(can_bus_data, ros_timestamp)
         write_to_rosbag(writer, "/localization/kinematic_state", kinematic_msg, ros_timestamp)
 
