@@ -56,6 +56,7 @@
 
 #include <sensor_msgs/msg/imu.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -653,6 +654,184 @@ load_can_bus_shift_from_rosbag(const std::string& bag_path, int n_frames) {
     return std::make_tuple(can_bus_dict, shift_dict);
 }
 
+std::unordered_map<int, std::vector<float>> 
+load_lidar2img_from_rosbag(const std::string& bag_path, int n_frames) {
+    std::unordered_map<int, std::vector<float>> result;
+    
+    // VADカメラIDからAutowareカメラIDへのマッピング
+    std::unordered_map<int, int> vad_to_autoware_camera = {
+        {0, 0},  // CAM_FRONT -> camera0
+        {1, 4},  // CAM_FRONT_RIGHT -> camera4
+        {2, 2},  // CAM_FRONT_LEFT -> camera2
+        {3, 1},  // CAM_BACK -> camera1
+        {4, 3},  // CAM_BACK_LEFT -> camera3
+        {5, 5}   // CAM_BACK_RIGHT -> camera5
+    };
+    
+    // Autowareカメラ名からVADカメラIDへの逆マッピング
+    std::unordered_map<int, int> autoware_to_vad_camera;
+    for (const auto& [vad_id, autoware_id] : vad_to_autoware_camera) {
+        autoware_to_vad_camera[autoware_id] = vad_id;
+    }
+
+    try {
+        // ROSバッグの設定
+        rosbag2_storage::StorageOptions storage_options;
+        storage_options.uri = bag_path;
+        storage_options.storage_id = "sqlite3";
+
+        rosbag2_cpp::ConverterOptions converter_options;
+        converter_options.input_serialization_format = "cdr";
+        converter_options.output_serialization_format = "cdr";
+
+        // カメラの内部パラメータを格納する辞書
+        std::unordered_map<int, Eigen::Matrix3f> cameras_intrinsics;
+
+        // ROSバッグリーダーの初期化
+        rosbag2_cpp::readers::SequentialReader reader;
+        reader.open(storage_options, converter_options);
+
+        // まずはすべてのカメラの内部パラメータを読み込む
+        while (reader.has_next()) {
+            auto bag_message = reader.read_next();
+            
+            if (bag_message->topic_name.find("/camera_info") != std::string::npos) {
+                // AutowareカメラIDを抽出
+                int autoware_camera_id = std::stoi(bag_message->topic_name.substr(
+                    bag_message->topic_name.find("/camera") + 7, 1));
+                
+                // CameraInfoメッセージをデシリアライズ
+                auto msg = std::make_shared<sensor_msgs::msg::CameraInfo>();
+                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                rclcpp::Serialization<sensor_msgs::msg::CameraInfo>().deserialize_message(
+                    &serialized_msg, msg.get());
+                
+                // カメラ行列Kを3x3行列として抽出
+                Eigen::Matrix3f k_matrix;
+                for (int i = 0; i < 3; ++i) {
+                    for (int j = 0; j < 3; ++j) {
+                        k_matrix(i, j) = msg->k[i * 3 + j];
+                    }
+                }
+                cameras_intrinsics[autoware_camera_id] = k_matrix;
+            }
+        }
+
+        // バッグファイルを再度開く
+        rosbag2_cpp::readers::SequentialReader reader2;
+        reader2.open(storage_options, converter_options);
+
+        int current_frame_id = 1;
+        while (reader2.has_next() && current_frame_id <= n_frames) {
+            auto bag_message = reader2.read_next();
+            
+            if (bag_message->topic_name == "/tf_static") {
+                // 現在のフレームのlidar2imgデータを格納する一時配列
+                std::vector<float> frame_lidar2img(16 * 6, 0.0f);  // 6カメラ分のスペースを確保
+                bool frame_complete = true;
+
+                // TFメッセージをデシリアライズ
+                auto msg = std::make_shared<tf2_msgs::msg::TFMessage>();
+                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                rclcpp::Serialization<tf2_msgs::msg::TFMessage>().deserialize_message(
+                    &serialized_msg, msg.get());
+
+                // 各カメラのTF変換を処理
+                for (const auto& transform : msg->transforms) {
+                    std::string child_frame_id = transform.child_frame_id;
+                    
+                    if (child_frame_id.find("camera") != std::string::npos && 
+                        child_frame_id.find("/optical_link") != std::string::npos) {
+                        // Autowareカメラ名からカメラIDを抽出
+                        int autoware_camera_id = std::stoi(child_frame_id.substr(
+                            child_frame_id.find("camera") + 6, 1));
+
+                        // VADカメラIDに変換
+                        if (autoware_to_vad_camera.find(autoware_camera_id) == autoware_to_vad_camera.end()) {
+                            continue;
+                        }
+                        int vad_camera_id = autoware_to_vad_camera[autoware_camera_id];
+
+                        // カメラの内部パラメータを確認
+                        if (cameras_intrinsics.find(autoware_camera_id) == cameras_intrinsics.end()) {
+                            std::cout << "Warning: No camera intrinsics for camera" << autoware_camera_id << std::endl;
+                            continue;
+                        }
+
+                        // 変換行列の構築
+                        Eigen::Vector3f translation(
+                            transform.transform.translation.x,
+                            transform.transform.translation.y,
+                            transform.transform.translation.z
+                        );
+
+                        Eigen::Quaternionf quaternion(
+                            transform.transform.rotation.w,
+                            transform.transform.rotation.x,
+                            transform.transform.rotation.y,
+                            transform.transform.rotation.z
+                        );
+
+                        // lidar2cam_rtを構築
+                        Eigen::Matrix4f lidar2cam_rt = Eigen::Matrix4f::Identity();
+                        lidar2cam_rt.block<3,3>(0,0) = quaternion.toRotationMatrix();
+                        lidar2cam_rt.block<3,1>(0,3) = translation;
+
+                        // lidar2cam_rt.Tを計算
+                        Eigen::Matrix4f lidar2cam_rt_T = lidar2cam_rt.transpose();
+
+                        // viewpadを作成
+                        Eigen::Matrix4f viewpad = Eigen::Matrix4f::Zero();
+                        viewpad.block<3,3>(0,0) = cameras_intrinsics[autoware_camera_id];
+                        viewpad(3,3) = 1.0f;
+
+                        // lidar2img = viewpad @ lidar2cam_rt.T を計算
+                        Eigen::Matrix4f lidar2img = viewpad * lidar2cam_rt_T;
+
+                        // 結果を格納
+                        std::vector<float> lidar2img_flat(16);
+                        Eigen::Map<Eigen::Matrix<float, 16, 1>>(lidar2img_flat.data()) = 
+                            Eigen::Map<Eigen::Matrix<float, 16, 1>>(lidar2img.data());
+
+                        // lidar2imgの計算後、VADカメラIDの位置に格納
+                        if (vad_camera_id >= 0 && vad_camera_id < 6) {
+                            std::copy(lidar2img_flat.begin(), 
+                                    lidar2img_flat.end(), 
+                                    frame_lidar2img.begin() + vad_camera_id * 16);
+                        }
+                    }
+                }
+
+                // すべてのカメラのデータが揃っているか確認
+                for (int i = 0; i < 6; i++) {
+                    bool camera_data_exists = false;
+                    for (int j = 0; j < 16; j++) {
+                        if (frame_lidar2img[i * 16 + j] != 0.0f) {
+                            camera_data_exists = true;
+                            break;
+                        }
+                    }
+                    if (!camera_data_exists) {
+                        frame_complete = false;
+                        break;
+                    }
+                }
+
+                if (frame_complete) {
+                    result[current_frame_id] = frame_lidar2img;
+                    current_frame_id++;
+                }
+            }
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "ROSバッグの読み込み中にエラーが発生: " << e.what() << std::endl;
+        throw;
+    }
+
+    return result;
+}
+
 int main(int argc, char** argv) {
   // ROSの初期化
   rclcpp::init(argc, argv);
@@ -740,6 +919,7 @@ int main(int argc, char** argv) {
 
   auto subscribed_image_dict = load_image_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
   auto [subscribed_can_bus_dict, subscribed_shift_dict] = load_can_bus_shift_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
+  auto subscribed_lidar2img_dict = load_lidar2img_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
   // img.binと値を比較
   for (int frame_id = 1; frame_id < n_frames; frame_id++) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
@@ -767,6 +947,7 @@ int main(int argc, char** argv) {
 
     std::vector<float> can_bus_data = subscribed_can_bus_dict[frame_id];
     std::vector<float> shift_data = subscribed_shift_dict[frame_id];
+    std::vector<float> lidar2img_data = subscribed_lidar2img_dict[frame_id];
     if (is_first_frame) {
         cudaMemcpyAsync(
             nets["head_no_prev"]->bindings["img_metas.0[shift]"]->ptr, // GPU のアドレス
@@ -776,7 +957,13 @@ int main(int argc, char** argv) {
             stream
         );
 
-        nets["head_no_prev"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
+        cudaMemcpyAsync(
+            nets["head_no_prev"]->bindings["img_metas.0[lidar2img]"]->ptr, // GPU のアドレス
+            lidar2img_data.data(),                                         // ホスト側のデータ
+            lidar2img_data.size() * sizeof(float),                         // 転送サイズ
+            cudaMemcpyHostToDevice,
+            stream
+        );
 
         cudaMemcpyAsync(
             nets["head_no_prev"]->bindings["img_metas.0[can_bus]"]->ptr,
@@ -811,7 +998,13 @@ int main(int argc, char** argv) {
             cudaMemcpyHostToDevice,
             stream
         );
-        nets["head"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
+        cudaMemcpyAsync(
+            nets["head"]->bindings["img_metas.0[lidar2img]"]->ptr, // GPU のアドレス
+            lidar2img_data.data(),                                         // ホスト側のデータ
+            lidar2img_data.size() * sizeof(float),                         // 転送サイズ
+            cudaMemcpyHostToDevice,
+            stream
+        );
         cudaMemcpyAsync(
             nets["head"]->bindings["img_metas.0[can_bus]"]->ptr,
             can_bus_data.data(),
