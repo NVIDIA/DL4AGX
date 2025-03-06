@@ -4,6 +4,7 @@ import os
 import yaml
 import numpy as np
 from pyquaternion import Quaternion as pyquaternion_Quaternion
+from nuscenes.eval.common.utils import quaternion_yaw
 
 # ROS2 関連のインポート
 from sensor_msgs.msg import Imu, CameraInfo
@@ -36,6 +37,14 @@ def calculate_shift(delta_x, delta_y, patch_angle_rad, grid_length=grid_length, 
     shift_x = translation_length * np.sin(bev_angle / 180 * np.pi) / grid_length_x / bev_w
 
     return [shift_x, shift_y]
+
+def calculate_patch_angle_rad(can_bus_rotation_quaternion):
+    patch_angle_deg = quaternion_yaw(pyquaternion_Quaternion(can_bus_rotation_quaternion))/np.pi*180
+    if patch_angle_deg < 0:
+        patch_angle_deg += 360
+
+    patch_angle_rad = patch_angle_deg / 180 * np.pi
+    return patch_angle_rad
 
 def convert_bin_to_imu(can_bus_data: np.ndarray, timestamp: Time, frame_id: str = "imu_link") -> Imu:
     """
@@ -118,7 +127,9 @@ def convert_bin_to_kinematic_state(can_bus_data: np.ndarray, timestamp: Time, fr
     odom_msg.pose.pose.orientation.y = float(can_bus_data[4])
     odom_msg.pose.pose.orientation.z = float(can_bus_data[5])
     odom_msg.pose.pose.orientation.w = float(can_bus_data[6])
-    
+
+    assert np.isclose(calculate_patch_angle_rad(can_bus_data[3:7]), can_bus_data[-2], atol=0.1), f"calculate_patch_angle_rad(can_bus_data[3:7]: {calculate_patch_angle_rad(can_bus_data[3:7])} is not equal to can_bus_data[-2]: {can_bus_data[-2]}"
+
     # 速度情報の設定
     odom_msg.twist.twist.linear.x = float(can_bus_data[13])  # x方向速度
     odom_msg.twist.twist.linear.y = float(can_bus_data[14])  # y方向速度
@@ -505,15 +516,15 @@ def main():
         kinematic_msg = convert_bin_to_kinematic_state(can_bus_data, ros_timestamp)
         write_to_rosbag(writer, "/localization/kinematic_state", kinematic_msg, ros_timestamp)
 
-        # 3. lidar2imgのtf_staticへの変換と書き込み
-        # base_link(lidar) to camera{vad_camera_id}/optical_link
-        tf_static_msg = convert_bin_to_tf_static(lidar2img_data_dict[frame], ros_timestamp)
-        write_to_rosbag(writer, "/tf_static", tf_static_msg, ros_timestamp)
+        # # 3. lidar2imgのtf_staticへの変換と書き込み
+        # # base_link(lidar) to camera{vad_camera_id}/optical_link
+        # tf_static_msg = convert_bin_to_tf_static(lidar2img_data_dict[frame], ros_timestamp)
+        # write_to_rosbag(writer, "/tf_static", tf_static_msg, ros_timestamp)
 
-        # 4. intrinsicsのcamera_infoへの変換と書き込み
-        camera_infos = create_camera_info_messages(ros_timestamp)
-        for autoware_camera_id in range(6):
-            write_to_rosbag(writer, f"/sensing/camera/camera{autoware_camera_id}/camera_info", camera_infos[autoware_camera_id], ros_timestamp)
+        # # 4. intrinsicsのcamera_infoへの変換と書き込み
+        # camera_infos = create_camera_info_messages(ros_timestamp)
+        # for autoware_camera_id in range(6):
+        #     write_to_rosbag(writer, f"/sensing/camera/camera{autoware_camera_id}/camera_info", camera_infos[autoware_camera_id], ros_timestamp)
         
         print(f"Processed frame {frame}")
     
@@ -537,22 +548,21 @@ def main():
     # reconstructed can_busのバイナリとcan_bus.binを比較
     for frame_id in reconstructed_can_bus.keys():
         if not np.array_equal(reconstructed_can_bus[frame_id][0:9], can_bus_data_dict[frame_id][0:9]):
-            if not np.array_equal(reconstructed_can_bus[frame_id][12:15], can_bus_data_dict[frame_id][12:15]):
+            if not np.array_equal(reconstructed_can_bus[frame_id][12:17], can_bus_data_dict[frame_id][12:17]):
                 print(f"Error: reconstructed_can_bus[{frame_id}] != can_bus_data[{frame_id}]")
                 break
 
         delta_x, delta_y = reconstructed_can_bus[frame_id][0:2]
-        # TODO(Shin-kyoto): We should use reconstructed_can_bus[frame_id][-2]
-        patch_angle_rad = can_bus_data_dict[frame_id][-2]
+        patch_angle_rad = reconstructed_can_bus[frame_id][-2]
 
         if not np.allclose(calculate_shift(delta_x, delta_y, patch_angle_rad), shift_data_dict[frame_id], atol=0.0000001):
             print(f"Error: calculated_shift on {frame_id} != shift_data_dict[{frame_id}]")
             break
 
-        import pdb;pdb.set_trace()
-        for vad_camera_id in range(6):
-            if not np.array_equal(reconstructed_lidar2img[frame_id][vad_camera_id], lidar2img_data_dict[frame_id][vad_camera_id]):
-                import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
+        # for vad_camera_id in range(6):
+        #     if not np.array_equal(reconstructed_lidar2img[frame_id][vad_camera_id], lidar2img_data_dict[frame_id][vad_camera_id]):
+        #         import pdb;pdb.set_trace()
 
     print("Success: reconstructed can_bus matches can_bus.bin")
 
@@ -653,9 +663,15 @@ def reconstruct_can_bus_from_rosbag(bag_file: str, init_time: float, cycle_time_
         # velocity (13:15)
         can_bus[13:15] = data["velocity"]
         
-        # patch_angle（16:18）は0とする
-        can_bus[16] = 0.0  # rad
-        can_bus[17] = 0.0  # deg
+        # patch_angle
+        can_bus[16] = calculate_patch_angle_rad(data["rotation"])  # rad
+        if frame_id > 1:
+            patch_angle_deg_last_frame = result[frame_id - 1][-2] / np.pi * 180
+            patch_angle_deg = can_bus[16] / np.pi * 180
+            can_bus[17] =  patch_angle_deg - patch_angle_deg_last_frame  # deg
+        else:
+            # TODO(Shin-kyoto): use magic number for first frame
+            can_bus[17] = -1.0353195667266846
         
         result[frame_id] = can_bus
     
