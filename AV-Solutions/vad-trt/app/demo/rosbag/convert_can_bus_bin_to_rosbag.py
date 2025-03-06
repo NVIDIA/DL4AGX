@@ -235,13 +235,51 @@ def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: T
         assert np.allclose(viewpad @ lidar2cam_rt.T, lidar2img_matrix, atol=1e-5)
         
         # 回転行列からクォータニオンへの変換
-        # TODO: ValueError: Matrix must be orthogonal, i.e. its transpose should be its inverse
-        import pdb;pdb.set_trace()
-        quaternion = Quaternion(matrix=rotation_matrix)
-        qx = quaternion.x
-        qy = quaternion.y
-        qz = quaternion.z
-        qw = quaternion.w
+        # rotation_matrixを正規化
+        def normalize_rotation_matrix(matrix):
+            """回転行列を正規直交行列に正規化"""
+            # SVD分解を使用して最も近い正規直交行列を見つける
+            u, _, vh = np.linalg.svd(matrix)
+            return np.dot(u, vh)
+
+        # 回転行列とクォータニオンの変換部分を修正
+        rotation_matrix = normalize_rotation_matrix(rotation_matrix)
+        
+        # 回転行列からクォータニオンへの変換（独自実装）
+        def rotation_matrix_to_quaternion(R):
+            """
+            回転行列からクォータニオンへの変換
+            Returns: [x, y, z, w]
+            """
+            tr = np.trace(R)
+            if tr > 0:
+                S = np.sqrt(tr + 1.0) * 2
+                qw = 0.25 * S
+                qx = (R[2,1] - R[1,2]) / S
+                qy = (R[0,2] - R[2,0]) / S
+                qz = (R[1,0] - R[0,1]) / S
+            elif R[0,0] > R[1,1] and R[0,0] > R[2,2]:
+                S = np.sqrt(1.0 + R[0,0] - R[1,1] - R[2,2]) * 2
+                qw = (R[2,1] - R[1,2]) / S
+                qx = 0.25 * S
+                qy = (R[0,1] + R[1,0]) / S
+                qz = (R[0,2] + R[2,0]) / S
+            elif R[1,1] > R[2,2]:
+                S = np.sqrt(1.0 + R[1,1] - R[0,0] - R[2,2]) * 2
+                qw = (R[0,2] - R[2,0]) / S
+                qx = (R[0,1] + R[1,0]) / S
+                qy = 0.25 * S
+                qz = (R[1,2] + R[2,1]) / S
+            else:
+                S = np.sqrt(1.0 + R[2,2] - R[0,0] - R[1,1]) * 2
+                qw = (R[1,0] - R[0,1]) / S
+                qx = (R[0,2] + R[2,0]) / S
+                qy = (R[1,2] + R[2,1]) / S
+                qz = 0.25 * S
+            return np.array([qx, qy, qz, qw])
+
+        # Quaternionクラスの代わりに独自の変換関数を使用
+        qx, qy, qz, qw = rotation_matrix_to_quaternion(rotation_matrix)
         
         # AutowareのカメラIDを取得
         autoware_camera_id = vad_to_autoware_camera_map[vad_camera_id]
@@ -516,15 +554,15 @@ def main():
         kinematic_msg = convert_bin_to_kinematic_state(can_bus_data, ros_timestamp)
         write_to_rosbag(writer, "/localization/kinematic_state", kinematic_msg, ros_timestamp)
 
-        # # 3. lidar2imgのtf_staticへの変換と書き込み
-        # # base_link(lidar) to camera{vad_camera_id}/optical_link
-        # tf_static_msg = convert_bin_to_tf_static(lidar2img_data_dict[frame], ros_timestamp)
-        # write_to_rosbag(writer, "/tf_static", tf_static_msg, ros_timestamp)
+        # 3. lidar2imgのtf_staticへの変換と書き込み
+        # base_link(lidar) to camera{vad_camera_id}/optical_link
+        tf_static_msg = convert_bin_to_tf_static(lidar2img_data_dict[frame], ros_timestamp)
+        write_to_rosbag(writer, "/tf_static", tf_static_msg, ros_timestamp)
 
-        # # 4. intrinsicsのcamera_infoへの変換と書き込み
-        # camera_infos = create_camera_info_messages(ros_timestamp)
-        # for autoware_camera_id in range(6):
-        #     write_to_rosbag(writer, f"/sensing/camera/camera{autoware_camera_id}/camera_info", camera_infos[autoware_camera_id], ros_timestamp)
+        # 4. intrinsicsのcamera_infoへの変換と書き込み
+        camera_infos = create_camera_info_messages(ros_timestamp)
+        for autoware_camera_id in range(6):
+            write_to_rosbag(writer, f"/sensing/camera/camera{autoware_camera_id}/camera_info", camera_infos[autoware_camera_id], ros_timestamp)
         
         print(f"Processed frame {frame}")
     
@@ -559,10 +597,9 @@ def main():
             print(f"Error: calculated_shift on {frame_id} != shift_data_dict[{frame_id}]")
             break
 
-        # import pdb;pdb.set_trace()
-        # for vad_camera_id in range(6):
-        #     if not np.array_equal(reconstructed_lidar2img[frame_id][vad_camera_id], lidar2img_data_dict[frame_id][vad_camera_id]):
-        #         import pdb;pdb.set_trace()
+        for vad_camera_id in range(6):
+            if not np.array_equal(reconstructed_lidar2img[frame_id][vad_camera_id], lidar2img_data_dict[frame_id][vad_camera_id]):
+                import pdb;pdb.set_trace()
 
     print("Success: reconstructed can_bus matches can_bus.bin")
 

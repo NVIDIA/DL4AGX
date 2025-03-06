@@ -5,15 +5,12 @@ import yaml
 import numpy as np
 import cv2
 
-from sensor_msgs.msg import CompressedImage, PointCloud2, PointField, Imu
+from sensor_msgs.msg import CompressedImage, PointCloud2, PointField
 from std_msgs.msg import Header
-from geometry_msgs.msg import Vector3, Quaternion
 from builtin_interfaces.msg import Time
-from rclpy.serialization import serialize_message, deserialize_message
 import rosbag2_py
-from nav_msgs.msg import Odometry
 
-from convert_can_bus_bin_to_rosbag import convert_bin_to_imu, convert_bin_to_kinematic_state, write_to_rosbag
+from convert_can_bus_bin_to_rosbag import convert_bin_to_imu, convert_bin_to_kinematic_state, write_to_rosbag, convert_bin_to_tf_static, create_camera_info_messages
 
 def main():
     parser = argparse.ArgumentParser(
@@ -86,6 +83,23 @@ def main():
     )
     writer.create_topic(lidar_topic_metadata)
 
+    # tf_staticトピックの作成
+    tf_static_topic_metadata = rosbag2_py.TopicMetadata(
+        name="/tf_static",
+        type="tf2_msgs/msg/TFMessage",
+        serialization_format="cdr"
+    )
+    writer.create_topic(tf_static_topic_metadata)
+
+    # camera_infoトピックの作成
+    for autoware_camera_id in range(6):
+        camera_info_topic_metadata = rosbag2_py.TopicMetadata(
+            name=f"/sensing/camera/camera{autoware_camera_id}/camera_info",
+            type="sensor_msgs/msg/CameraInfo",
+            serialization_format="cdr"
+        )
+        writer.create_topic(camera_info_topic_metadata)
+
     for frame in range(1, n_frames + 1):
         frame_dir = os.path.join(input_dir, str(frame))
         
@@ -139,6 +153,27 @@ def main():
             PointField(name="intensity", offset=12, datatype=PointField.FLOAT32, count=1),
         ]
         write_to_rosbag(writer, "/sensing/lidar/concatenated/pointcloud", lidar_msg, ros_timestamp)
+
+        # lidar2imgのtf_staticへの変換と書き込み
+        lidar2img_bin_path = os.path.join(frame_dir, "img_metas.0[lidar2img].bin")
+        if os.path.exists(lidar2img_bin_path):
+            with open(lidar2img_bin_path, "rb") as f_lidar2img:
+                lidar2img_data = np.frombuffer(f_lidar2img.read(), dtype=np.float32)
+            
+            lidar2img_dict = {}
+            for vad_camera_id in range(6):
+                lidar2img_dict[vad_camera_id] = lidar2img_data[16*vad_camera_id:16*(vad_camera_id+1)]
+            
+            tf_static_msg = convert_bin_to_tf_static(lidar2img_dict, ros_timestamp)
+            write_to_rosbag(writer, "/tf_static", tf_static_msg, ros_timestamp)
+
+        # camera_infoメッセージの作成と書き込み
+        camera_infos = create_camera_info_messages(ros_timestamp)
+        for autoware_camera_id in range(6):
+            write_to_rosbag(writer, 
+                          f"/sensing/camera/camera{autoware_camera_id}/camera_info", 
+                          camera_infos[autoware_camera_id], 
+                          ros_timestamp)
 
         # 画像データの処理
         for cam in cameras:
