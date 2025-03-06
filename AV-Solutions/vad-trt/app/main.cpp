@@ -54,6 +54,8 @@
 #include <rclcpp/serialization.hpp>
 #include <rclcpp/serialized_message.hpp>
 
+#include <sensor_msgs/msg/imu.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -488,6 +490,169 @@ void compare_with_reference(
     }
 }
 
+
+std::vector<float> calculateShift(float delta_x, float delta_y, float patch_angle_rad) {
+    const float point_cloud_range[] = {-15.0, -30.0, -2.0, 15.0, 30.0, 2.0};
+    const int bev_h_ = 100;
+    const int bev_w_ = 100;
+    
+    float real_w = point_cloud_range[3] - point_cloud_range[0];
+    float real_h = point_cloud_range[4] - point_cloud_range[1];
+    float grid_length[] = {real_h / bev_h_, real_w / bev_w_};
+    
+    float ego_angle = patch_angle_rad / M_PI * 180.0;
+    float grid_length_y = grid_length[0];
+    float grid_length_x = grid_length[1];
+    
+    float translation_length = std::sqrt(delta_x * delta_x + delta_y * delta_y);
+    float translation_angle = std::atan2(delta_y, delta_x) / M_PI * 180.0;
+    float bev_angle = ego_angle - translation_angle;
+    
+    float shift_y = translation_length * std::cos(bev_angle / 180.0 * M_PI) / grid_length_y / bev_h_;
+    float shift_x = translation_length * std::sin(bev_angle / 180.0 * M_PI) / grid_length_x / bev_w_;
+    
+    return {shift_x, shift_y};
+}
+
+std::tuple<std::unordered_map<int, std::vector<float>>, std::unordered_map<int, std::vector<float>>> 
+load_can_bus_shift_from_rosbag(const std::string& bag_path, int n_frames) {
+    std::unordered_map<int, std::vector<float>> can_bus_dict;
+    std::unordered_map<int, std::vector<float>> shift_dict;
+    int current_frame_id = 1;
+    
+    try {
+        // ROSバッグの設定
+        rosbag2_storage::StorageOptions storage_options;
+        storage_options.uri = bag_path;
+        storage_options.storage_id = "sqlite3";
+
+        rosbag2_cpp::ConverterOptions converter_options;
+        converter_options.input_serialization_format = "cdr";
+        converter_options.output_serialization_format = "cdr";
+
+        rosbag2_cpp::readers::SequentialReader reader;
+        reader.open(storage_options, converter_options);
+
+        // フレームごとのデータを一時保存する構造体
+        struct FrameData {
+            bool has_kinematic = false;
+            bool has_imu = false;
+            std::vector<float> translation;
+            std::vector<float> rotation;
+            std::vector<float> acceleration;
+            std::vector<float> angular_velocity;
+            std::vector<float> velocity;
+        };
+        
+        FrameData current_frame;
+        
+        while (reader.has_next() && current_frame_id <= n_frames) {
+            auto bag_message = reader.read_next();
+            
+            if (bag_message->topic_name == "/localization/kinematic_state") {
+                auto msg = std::make_shared<nav_msgs::msg::Odometry>();
+                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                rclcpp::Serialization<nav_msgs::msg::Odometry>().deserialize_message(
+                    &serialized_msg, msg.get());
+                
+                current_frame.has_kinematic = true;
+                current_frame.translation.clear();
+                current_frame.translation.push_back(static_cast<float>(msg->pose.pose.position.x));
+                current_frame.translation.push_back(static_cast<float>(msg->pose.pose.position.y));
+                current_frame.translation.push_back(static_cast<float>(msg->pose.pose.position.z));
+
+                current_frame.rotation.clear();
+                current_frame.rotation.push_back(static_cast<float>(msg->pose.pose.orientation.x));
+                current_frame.rotation.push_back(static_cast<float>(msg->pose.pose.orientation.y));
+                current_frame.rotation.push_back(static_cast<float>(msg->pose.pose.orientation.z));
+                current_frame.rotation.push_back(static_cast<float>(msg->pose.pose.orientation.w));
+
+                current_frame.velocity.clear();
+                current_frame.velocity.push_back(static_cast<float>(msg->twist.twist.linear.x));
+                current_frame.velocity.push_back(static_cast<float>(msg->twist.twist.linear.y));
+                current_frame.velocity.push_back(static_cast<float>(msg->twist.twist.linear.z));
+
+                current_frame.angular_velocity.clear();
+                current_frame.angular_velocity.push_back(static_cast<float>(msg->twist.twist.angular.x));
+                current_frame.angular_velocity.push_back(static_cast<float>(msg->twist.twist.angular.y));
+                current_frame.angular_velocity.push_back(static_cast<float>(msg->twist.twist.angular.z));
+            }
+            else if (bag_message->topic_name == "/sensing/imu/tamagawa/imu_raw") {
+                auto msg = std::make_shared<sensor_msgs::msg::Imu>();
+                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                rclcpp::Serialization<sensor_msgs::msg::Imu>().deserialize_message(
+                    &serialized_msg, msg.get());
+                
+                current_frame.has_imu = true;
+                current_frame.acceleration.clear();
+                current_frame.acceleration.push_back(static_cast<float>(msg->linear_acceleration.x));
+                current_frame.acceleration.push_back(static_cast<float>(msg->linear_acceleration.y));
+                current_frame.acceleration.push_back(static_cast<float>(msg->linear_acceleration.z));
+            }
+            
+            // kinematicとimuの両方のデータが揃った場合
+            if (current_frame.has_kinematic && current_frame.has_imu) {
+                // can_busデータの構築（18次元ベクトル）
+                std::vector<float> can_bus(18, 0.0f);
+                
+                // translation (0:3)
+                std::copy(current_frame.translation.begin(), current_frame.translation.end(), can_bus.begin());
+                
+                // rotation (3:7)
+                std::copy(current_frame.rotation.begin(), current_frame.rotation.end(), can_bus.begin() + 3);
+                
+                // acceleration (7:10)
+                std::copy(current_frame.acceleration.begin(), current_frame.acceleration.end(), can_bus.begin() + 7);
+                
+                // angular velocity (10:13)
+                std::copy(current_frame.angular_velocity.begin(), current_frame.angular_velocity.end(), can_bus.begin() + 10);
+                
+                // velocity (13:16)
+                std::copy(current_frame.velocity.begin(), current_frame.velocity.begin() + 2, can_bus.begin() + 13);
+                can_bus[15] = 0.0f;  // z方向の速度は0とする
+                
+                // patch_angle[rad]の計算 (16)
+                double yaw = std::atan2(
+                    2.0 * (can_bus[6] * can_bus[5] + can_bus[3] * can_bus[4]),
+                    1.0 - 2.0 * (can_bus[4] * can_bus[4] + can_bus[5] * can_bus[5])
+                );
+                if (yaw < 0) yaw += 2 * M_PI;
+                can_bus[16] = static_cast<float>(yaw);
+                
+                // patch_angle[deg]の計算 (17)
+                if (current_frame_id > 1 && can_bus_dict.find(current_frame_id - 1) != can_bus_dict.end()) {
+                    float prev_angle = can_bus_dict[current_frame_id - 1][16];
+                    can_bus[17] = (yaw - prev_angle) * 180.0f / M_PI;
+                } else {
+                    can_bus[17] = -1.0353195667266846f;  // 最初のフレームのデフォルト値
+                }
+                
+                can_bus_dict[current_frame_id] = can_bus;
+                
+                // シフトデータの計算
+                if (current_frame_id > 1) {
+                    const auto& prev_translation = can_bus_dict[current_frame_id - 1];
+                    float delta_x = current_frame.translation[0] - prev_translation[0];
+                    float delta_y = current_frame.translation[1] - prev_translation[1];
+                    
+                    std::vector<float> shift = calculateShift(delta_x, delta_y, yaw);
+                    shift_dict[current_frame_id] = shift;
+                }
+                
+                // 次のフレームの準備
+                current_frame = FrameData();
+                current_frame_id++;
+            }
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "ROSバッグの読み込み中にエラーが発生: " << e.what() << std::endl;
+        throw;
+    }
+    
+    return std::make_tuple(can_bus_dict, shift_dict);
+}
+
 int main(int argc, char** argv) {
   // ROSの初期化
   rclcpp::init(argc, argv);
@@ -574,6 +739,7 @@ int main(int argc, char** argv) {
   bool is_first_frame = true;
 
   auto subscribed_image_dict = load_image_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
+  auto [subscribed_can_bus_dict, subscribed_shift_dict] = load_can_bus_shift_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
   // img.binと値を比較
   for (int frame_id = 1; frame_id < n_frames; frame_id++) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
@@ -598,10 +764,27 @@ int main(int argc, char** argv) {
     }
     
     nets["backbone"]->Enqueue(stream);
+
+    std::vector<float> can_bus_data = subscribed_can_bus_dict[frame_id];
+    std::vector<float> shift_data = subscribed_shift_dict[frame_id];
     if (is_first_frame) {
-        nets["head_no_prev"]->bindings["img_metas.0[shift]"]->load(frame_dir + "img_metas.0[shift].bin");
+        cudaMemcpyAsync(
+            nets["head_no_prev"]->bindings["img_metas.0[shift]"]->ptr, // GPU のアドレス
+            shift_data.data(),                                         // ホスト側のデータ
+            shift_data.size() * sizeof(float),                         // 転送サイズ
+            cudaMemcpyHostToDevice,
+            stream
+        );
+
         nets["head_no_prev"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
-        nets["head_no_prev"]->bindings["img_metas.0[can_bus]"]->load(frame_dir + "img_metas.0[can_bus].bin");
+
+        cudaMemcpyAsync(
+            nets["head_no_prev"]->bindings["img_metas.0[can_bus]"]->ptr,
+            can_bus_data.data(),
+            can_bus_data.size() * sizeof(float),
+            cudaMemcpyHostToDevice,
+            stream
+        );
         nets["head_no_prev"]->Enqueue(stream);
         
         // prev_bevを保存
@@ -621,9 +804,21 @@ int main(int argc, char** argv) {
     }
     else {
         nets["head"]->bindings["prev_bev"] = saved_prev_bev;
-        nets["head"]->bindings["img_metas.0[shift]"]->load(frame_dir + "img_metas.0[shift].bin");
+        cudaMemcpyAsync(
+            nets["head"]->bindings["img_metas.0[shift]"]->ptr, // GPU のアドレス
+            shift_data.data(),                                         // ホスト側のデータ
+            shift_data.size() * sizeof(float),                         // 転送サイズ
+            cudaMemcpyHostToDevice,
+            stream
+        );
         nets["head"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
-        nets["head"]->bindings["img_metas.0[can_bus]"]->load(frame_dir + "img_metas.0[can_bus].bin");
+        cudaMemcpyAsync(
+            nets["head"]->bindings["img_metas.0[can_bus]"]->ptr,
+            can_bus_data.data(),
+            can_bus_data.size() * sizeof(float),
+            cudaMemcpyHostToDevice,
+            stream
+        );
         nets["head"]->Enqueue(stream);
         // prev_bevを保存
         auto bev_embed = nets["head"]->bindings["out.bev_embed"];
