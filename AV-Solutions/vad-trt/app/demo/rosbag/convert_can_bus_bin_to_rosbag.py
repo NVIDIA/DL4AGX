@@ -3,12 +3,12 @@ import argparse
 import os
 import yaml
 import numpy as np
-from pyquaternion import Quaternion as pyquaternion_Quaternion
+from pyquaternion import Quaternion
 from nuscenes.eval.common.utils import quaternion_yaw
 
 # ROS2 関連のインポート
 from sensor_msgs.msg import Imu, CameraInfo
-from geometry_msgs.msg import TransformStamped, Vector3, Quaternion
+from geometry_msgs.msg import TransformStamped
 from tf2_msgs.msg import TFMessage
 from builtin_interfaces.msg import Time
 from rclpy.serialization import serialize_message, deserialize_message
@@ -39,7 +39,7 @@ def calculate_shift(delta_x, delta_y, patch_angle_rad, grid_length=grid_length, 
     return [shift_x, shift_y]
 
 def calculate_patch_angle_rad(can_bus_rotation_quaternion):
-    patch_angle_deg = quaternion_yaw(pyquaternion_Quaternion(can_bus_rotation_quaternion))/np.pi*180
+    patch_angle_deg = quaternion_yaw(Quaternion(can_bus_rotation_quaternion))/np.pi*180
     if patch_angle_deg < 0:
         patch_angle_deg += 360
 
@@ -237,7 +237,7 @@ def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: T
         # 回転行列からクォータニオンへの変換
         # TODO: ValueError: Matrix must be orthogonal, i.e. its transpose should be its inverse
         import pdb;pdb.set_trace()
-        quaternion = pyquaternion_Quaternion(matrix=rotation_matrix)
+        quaternion = Quaternion(matrix=rotation_matrix)
         qx = quaternion.x
         qy = quaternion.y
         qz = quaternion.z
