@@ -204,18 +204,23 @@ def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: T
     # TFメッセージの作成
     tf_msg = TFMessage()
     
+    # スケーリングを元に戻すための逆スケールファクター
+    inv_scale_factor = np.eye(4)
+    inv_scale_factor[0, 0] = 1.0 / 0.4  # x軸のスケールを元に戻す
+    inv_scale_factor[1, 1] = 1.0 / 0.4  # y軸のスケールを元に戻す
+
     # 各カメラの変換を処理
     for vad_camera_id, lidar2img in lidar2img_data.items():
         # 4x4の変換行列に変形
-        lidar2img_matrix = lidar2img.reshape(4, 4)
+        lidar2img_matrx_scaled = lidar2img.reshape(4, 4)
+        lidar2img_matrix = inv_scale_factor @ lidar2img_matrx_scaled
         
         # カメラの内部パラメータを取得
         intrinsic = cameras_intrinsics[vad_camera_id]
         
         # intrinsicからviewpadを作成
-        viewpad = np.zeros((4, 4), dtype=np.float32)
+        viewpad = np.eye(4, dtype=np.float32)
         viewpad[:3, :3] = intrinsic
-        viewpad[3, 3] = 1.0
         
         # lidar2img = viewpad @ lidar2cam_rt.T から lidar2cam_rt を復元
         # lidar2cam_rt.T = viewpad^(-1) @ lidar2img
@@ -273,10 +278,9 @@ def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: T
         tf_msg.transforms.append(transform_stamped)
 
         def get_reconstructed_lidar2img(translation, quaternion, viewpad):
-            reconstruted_lidar2cam_rt = np.zeros((4, 4), dtype=np.float32)
+            reconstruted_lidar2cam_rt = np.eye(4, dtype=np.float32)
             reconstruted_lidar2cam_rt[:3, :3] = quaternion.rotation_matrix
             reconstruted_lidar2cam_rt[3, :3] = translation
-            reconstruted_lidar2cam_rt[3, 3] = 1.0
 
             reconstruted_lidar2img = viewpad @ reconstruted_lidar2cam_rt.T
             return reconstruted_lidar2img
@@ -348,9 +352,8 @@ def create_camera_info_messages(timestamp: Time) -> dict[int, CameraInfo]:
         autoware_camera_id = vad_to_autoware_camera_map[vad_camera_id]
         
         # intrinsicからviewpadを作成
-        viewpad = np.zeros((4, 4), dtype=np.float32)
+        viewpad = np.eye(4, dtype=np.float32)
         viewpad[:3, :3] = intrinsic
-        viewpad[3, 3] = 1.0
         
         # CameraInfoメッセージの作成
         camera_info = CameraInfo()
@@ -520,21 +523,13 @@ def main():
         shift_data = np.frombuffer(shift_binary, dtype=np.float32)
         shift_data_dict[frame] = shift_data
 
-        # スケーリングを元に戻すための逆スケールファクター
-        inv_scale_factor = np.eye(4)
-        inv_scale_factor[0, 0] = 1.0 / 0.4  # x軸のスケールを元に戻す
-        inv_scale_factor[1, 1] = 1.0 / 0.4  # y軸のスケールを元に戻す
-
         lidar2img_data = np.frombuffer(lidar2img_binary, dtype=np.float32)
         for vad_camera_id in range(6):
             # 16要素の1次元配列を取得
             lidar2img_flat = lidar2img_data[16*vad_camera_id:16*(vad_camera_id+1)]
             
-            # スケーリングを元に戻す（1/0.4倍）
-            unscaled_lidar2img = inv_scale_factor @ lidar2img_flat.reshape(4, 4)
-            
             # 再度平坦化して保存
-            lidar2img_data_dict[frame][vad_camera_id] = unscaled_lidar2img.flatten()
+            lidar2img_data_dict[frame][vad_camera_id] = lidar2img_flat
 
 
         # 各トピックへの変換と書き込み        
@@ -714,7 +709,7 @@ def reconstruct_can_bus_from_rosbag(bag_file: str, init_time: float, cycle_time_
 #     # AutowareカメラIDを抽出
 #     autoware_camera_id = int(child_frame_id.split("/")[0].split("camera")[-1])
 
-def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_time_ms: float) -> dict[int, dict[int, np.ndarray]]:
+def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_time_ms: float, scale: float = 0.4) -> dict[int, dict[int, np.ndarray]]:
     """
     ROSバッグからlidar2imgデータを再構築する
 
@@ -783,10 +778,10 @@ def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_tim
     # 結果を格納する辞書
     result: dict[int, dict[int, np.ndarray]] = {}
     
-    # スケールファクターを作成（TensorRTのbinファイルは0.4倍されている）
+    # スケールファクターを作成（TensorRTのbinファイルはscale倍されている）
     scale_factor = np.eye(4)
-    scale_factor[0, 0] = 0.4
-    scale_factor[1, 1] = 0.4
+    scale_factor[0, 0] = scale
+    scale_factor[1, 1] = scale
 
     # tf_staticメッセージを読み込む
     while reader.has_next():
@@ -853,9 +848,8 @@ def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_tim
                     intrinsic = cameras_intrinsics[autoware_camera_id]
                     
                     # intrinsicからviewpadを作成
-                    viewpad = np.zeros((4, 4), dtype=np.float32)
+                    viewpad = np.eye(4, dtype=np.float32)
                     viewpad[:3, :3] = intrinsic
-                    viewpad[3, 3] = 1.0
                     
                     # lidar2img = viewpad @ lidar2cam_rt.T を計算
                     lidar2img = np.dot(viewpad, lidar2cam_rt_T)
@@ -864,7 +858,7 @@ def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_tim
                     scaled_lidar2img = scale_factor @ lidar2img
                     
                     # 平坦化して保存
-                    result[frame_id][vad_camera_id] = lidar2img.flatten()
+                    result[frame_id][vad_camera_id] = scaled_lidar2img.flatten()
     
     return result
 
