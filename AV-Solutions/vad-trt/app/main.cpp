@@ -319,7 +319,6 @@ void loadHeadEngine(
 
 std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
     const std::string& bag_path, int n_frames) {
-    std::cout << "Opening rosbag: " << bag_path << std::endl;
     
     std::unordered_map<int, std::vector<std::vector<float>>> subscribed_image_dict;
     std::unordered_map<int, std::vector<float>> frame_images_dict;
@@ -405,7 +404,6 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
                             frame_images.push_back(frame_images_dict[i]);
                         }
                         
-                        std::cout << "フレームID: " << current_frame_id << " の画像セットが完了" << std::endl;
                         subscribed_image_dict[current_frame_id] = frame_images;
                         
                         // frame_images_dictをクリア
@@ -415,9 +413,7 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
                 }
             }
         }
-        
-        std::cout << "Total frames loaded: " << subscribed_image_dict.size() << std::endl;
-        
+                
     } catch (const std::exception& e) {
         std::cerr << "Error in load_image_from_rosbag: " << e.what() << std::endl;
         throw;
@@ -654,8 +650,21 @@ load_can_bus_shift_from_rosbag(const std::string& bag_path, int n_frames) {
     return std::make_tuple(can_bus_dict, shift_dict);
 }
 
+int extract_autoware_camera_id(
+    const std::string& topic_name,
+    const std::unordered_map<int, int>& vad_to_autoware_camera) {
+    
+    for (const auto& [vad_id, autoware_id] : vad_to_autoware_camera) {
+        std::string camera_topic = "/sensing/camera/camera" + std::to_string(autoware_id) + "/camera_info";
+        if (topic_name == camera_topic) {
+            return autoware_id;
+        }
+    }
+    return -1;
+}
+
 std::unordered_map<int, std::vector<float>> 
-load_lidar2img_from_rosbag(const std::string& bag_path, int n_frames) {
+load_lidar2img_from_rosbag(const std::string& bag_path, int n_frames, float scale) {
     std::unordered_map<int, std::vector<float>> result;
     
     // VADカメラIDからAutowareカメラIDへのマッピング
@@ -697,23 +706,26 @@ load_lidar2img_from_rosbag(const std::string& bag_path, int n_frames) {
             
             if (bag_message->topic_name.find("/camera_info") != std::string::npos) {
                 // AutowareカメラIDを抽出
-                int autoware_camera_id = std::stoi(bag_message->topic_name.substr(
-                    bag_message->topic_name.find("/camera") + 7, 1));
-                
-                // CameraInfoメッセージをデシリアライズ
-                auto msg = std::make_shared<sensor_msgs::msg::CameraInfo>();
-                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
-                rclcpp::Serialization<sensor_msgs::msg::CameraInfo>().deserialize_message(
-                    &serialized_msg, msg.get());
-                
-                // カメラ行列Kを3x3行列として抽出
-                Eigen::Matrix3f k_matrix;
-                for (int i = 0; i < 3; ++i) {
-                    for (int j = 0; j < 3; ++j) {
-                        k_matrix(i, j) = msg->k[i * 3 + j];
+                int autoware_camera_id = extract_autoware_camera_id(bag_message->topic_name, vad_to_autoware_camera);
+
+                if (autoware_camera_id != -1) {
+                    // CameraInfoメッセージをデシリアライズ
+                    auto msg = std::make_shared<sensor_msgs::msg::CameraInfo>();
+                    rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                    rclcpp::Serialization<sensor_msgs::msg::CameraInfo>().deserialize_message(
+                        &serialized_msg, msg.get());
+
+                    // カメラ行列Kを3x3行列として抽出
+                    Eigen::Matrix3f k_matrix;
+                    for (int i = 0; i < 3; ++i) {
+                        for (int j = 0; j < 3; ++j) {
+                            k_matrix(i, j) = msg->k[i * 3 + j];
+                        }
                     }
+                    cameras_intrinsics[autoware_camera_id] = k_matrix;
+                } else {
+                    std::cerr << "Warning: Could not extract Autoware camera ID from topic name: " << bag_message->topic_name << std::endl;
                 }
-                cameras_intrinsics[autoware_camera_id] = k_matrix;
             }
         }
 
@@ -775,7 +787,7 @@ load_lidar2img_from_rosbag(const std::string& bag_path, int n_frames) {
                         // lidar2cam_rtを構築
                         Eigen::Matrix4f lidar2cam_rt = Eigen::Matrix4f::Identity();
                         lidar2cam_rt.block<3,3>(0,0) = quaternion.toRotationMatrix();
-                        lidar2cam_rt.block<3,1>(0,3) = translation;
+                        lidar2cam_rt.block<1,3>(3,0) = translation;
 
                         // lidar2cam_rt.Tを計算
                         Eigen::Matrix4f lidar2cam_rt_T = lidar2cam_rt.transpose();
@@ -788,10 +800,20 @@ load_lidar2img_from_rosbag(const std::string& bag_path, int n_frames) {
                         // lidar2img = viewpad @ lidar2cam_rt.T を計算
                         Eigen::Matrix4f lidar2img = viewpad * lidar2cam_rt_T;
 
+                        // スケーリングを適用
+                        Eigen::Matrix4f scale_matrix = Eigen::Matrix4f::Identity();
+                        scale_matrix(0, 0) = scale;
+                        scale_matrix(1, 1) = scale;
+                        lidar2img = scale_matrix * lidar2img;
+
                         // 結果を格納
                         std::vector<float> lidar2img_flat(16);
-                        Eigen::Map<Eigen::Matrix<float, 16, 1>>(lidar2img_flat.data()) = 
-                            Eigen::Map<Eigen::Matrix<float, 16, 1>>(lidar2img.data());
+                        int k = 0;
+                        for (int i = 0; i < 4; ++i) {
+                            for (int j = 0; j < 4; ++j) {
+                                lidar2img_flat[k++] = lidar2img(i, j);
+                            }
+                        }
 
                         // lidar2imgの計算後、VADカメラIDの位置に格納
                         if (vad_camera_id >= 0 && vad_camera_id < 6) {
@@ -820,6 +842,9 @@ load_lidar2img_from_rosbag(const std::string& bag_path, int n_frames) {
                 if (frame_complete) {
                     result[current_frame_id] = frame_lidar2img;
                     current_frame_id++;
+                } else {
+                    std::cerr << "Frame " << current_frame_id << " is incomplete. Aborting." << std::endl;
+                    throw std::runtime_error("Incomplete frame");
                 }
             }
         }
@@ -830,6 +855,42 @@ load_lidar2img_from_rosbag(const std::string& bag_path, int n_frames) {
     }
 
     return result;
+}
+
+void compare_with_reference_lidar2img(
+    const std::vector<float>& lidar2img_data,
+    const std::string& reference_file_path
+) {
+    std::ifstream file(reference_file_path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        std::cerr << "参照ファイルを開けませんでした: " << reference_file_path << std::endl;
+        throw std::runtime_error("参照ファイルを開けませんでした");
+    }
+
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    if (size != lidar2img_data.size() * sizeof(float)) {
+        std::cerr << "参照ファイルのサイズが一致しません: " << reference_file_path << std::endl;
+        std::cerr << "期待されるサイズ: " << lidar2img_data.size() << " バイト, 実際のサイズ: " << size << " バイト" << std::endl;
+        throw std::runtime_error("参照ファイルのサイズが一致しません");
+    }
+
+    std::vector<float> reference_data(lidar2img_data.size());
+    if (!file.read(reinterpret_cast<char*>(reference_data.data()), size)) {
+        std::cerr << "参照ファイルの読み込みに失敗しました: " << reference_file_path << std::endl;
+        throw std::runtime_error("参照ファイルの読み込みに失敗しました");
+    }
+
+    for (size_t i = 0; i < lidar2img_data.size(); ++i) {
+        if (std::abs(lidar2img_data[i] - reference_data[i]) > 1e-3) {
+            std::cerr << "値が一致しません: " << reference_file_path << " のインデックス " << i << std::endl;
+            std::cerr << "binファイルの値: " << reference_data[i] << ", lidar2imgの値: " << lidar2img_data[i] << std::endl;
+            throw std::runtime_error("値が一致しません");
+        }
+    }
+
+    std::cout << "lidar2imgデータは参照ファイルと一致しています: " << reference_file_path << std::endl;
 }
 
 int main(int argc, char** argv) {
@@ -919,17 +980,22 @@ int main(int argc, char** argv) {
 
   auto subscribed_image_dict = load_image_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
   auto [subscribed_can_bus_dict, subscribed_shift_dict] = load_can_bus_shift_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
-  auto subscribed_lidar2img_dict = load_lidar2img_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
+  auto subscribed_lidar2img_dict = load_lidar2img_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames, 0.4f);
   // img.binと値を比較
   for (int frame_id = 1; frame_id < n_frames; frame_id++) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
     
     try {
         // リファレンスデータとの比較を追加
-        compare_with_reference(
-            subscribed_image_dict[frame_id],
-            frame_dir + "img.bin"
-        );
+        // compare_with_reference(
+        //     subscribed_image_dict[frame_id],
+        //     frame_dir + "img.bin"
+        // );
+
+        // compare_with_reference_lidar2img(
+        //     subscribed_lidar2img_dict[frame_id],
+        //     file_path1
+        // );
         
         // 画像処理と推論
         processImageForInference(
