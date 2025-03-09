@@ -204,18 +204,23 @@ def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: T
     # TFメッセージの作成
     tf_msg = TFMessage()
     
+    # スケーリングを元に戻すための逆スケールファクター
+    inv_scale_factor = np.eye(4)
+    inv_scale_factor[0, 0] = 1.0 / 0.4  # x軸のスケールを元に戻す
+    inv_scale_factor[1, 1] = 1.0 / 0.4  # y軸のスケールを元に戻す
+
     # 各カメラの変換を処理
     for vad_camera_id, lidar2img in lidar2img_data.items():
         # 4x4の変換行列に変形
-        lidar2img_matrix = lidar2img.reshape(4, 4)
+        lidar2img_matrx_scaled = lidar2img.reshape(4, 4)
+        lidar2img_matrix = inv_scale_factor @ lidar2img_matrx_scaled
         
         # カメラの内部パラメータを取得
         intrinsic = cameras_intrinsics[vad_camera_id]
         
         # intrinsicからviewpadを作成
-        viewpad = np.zeros((4, 4), dtype=np.float32)
+        viewpad = np.eye(4, dtype=np.float32)
         viewpad[:3, :3] = intrinsic
-        viewpad[3, 3] = 1.0
         
         # lidar2img = viewpad @ lidar2cam_rt.T から lidar2cam_rt を復元
         # lidar2cam_rt.T = viewpad^(-1) @ lidar2img
@@ -231,18 +236,24 @@ def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: T
         
         # 回転行列と平行移動ベクトルを抽出
         rotation_matrix = lidar2cam_rt[:3, :3]
-        translation = lidar2cam_rt[:3, 3]
+        translation = lidar2cam_rt[3, :3]
         assert np.allclose(viewpad @ lidar2cam_rt.T, lidar2img_matrix, atol=1e-5)
         
         # 回転行列からクォータニオンへの変換
-        # TODO: ValueError: Matrix must be orthogonal, i.e. its transpose should be its inverse
-        import pdb;pdb.set_trace()
-        quaternion = Quaternion(matrix=rotation_matrix)
-        qx = quaternion.x
-        qy = quaternion.y
-        qz = quaternion.z
-        qw = quaternion.w
-        
+        # rotation_matrixを正規化
+        def normalize_rotation_matrix(matrix):
+            """回転行列を正規直交行列に正規化"""
+            # SVD分解を使用して最も近い正規直交行列を見つける
+            u, _, vh = np.linalg.svd(matrix)
+            return np.dot(u, vh)
+
+        # 回転行列とクォータニオンの変換部分を修正
+        rotation_matrix_normalized = normalize_rotation_matrix(rotation_matrix)
+
+        # pyquaternionのQuaternionクラスを使用して回転行列からクォータニオンへ変換
+        quaternion = Quaternion(matrix=rotation_matrix_normalized)
+        assert np.allclose(rotation_matrix, quaternion.rotation_matrix, atol=0.1)
+
         # AutowareのカメラIDを取得
         autoware_camera_id = vad_to_autoware_camera_map[vad_camera_id]
         
@@ -258,13 +269,23 @@ def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: T
         transform_stamped.transform.translation.z = float(translation[2])
         
         # 回転の設定（クォータニオン）
-        transform_stamped.transform.rotation.x = float(qx)
-        transform_stamped.transform.rotation.y = float(qy)
-        transform_stamped.transform.rotation.z = float(qz)
-        transform_stamped.transform.rotation.w = float(qw)
+        transform_stamped.transform.rotation.x = float(quaternion.x)
+        transform_stamped.transform.rotation.y = float(quaternion.y)
+        transform_stamped.transform.rotation.z = float(quaternion.z)
+        transform_stamped.transform.rotation.w = float(quaternion.w)
         
         # TFMessageに追加
         tf_msg.transforms.append(transform_stamped)
+
+        def get_reconstructed_lidar2img(translation, quaternion, viewpad):
+            reconstruted_lidar2cam_rt = np.eye(4, dtype=np.float32)
+            reconstruted_lidar2cam_rt[:3, :3] = quaternion.rotation_matrix
+            reconstruted_lidar2cam_rt[3, :3] = translation
+
+            reconstruted_lidar2img = viewpad @ reconstruted_lidar2cam_rt.T
+            return reconstruted_lidar2img
+
+        assert np.allclose(lidar2img_matrix, get_reconstructed_lidar2img(translation, quaternion, viewpad), atol=0.001)
     
     return tf_msg
 
@@ -331,9 +352,8 @@ def create_camera_info_messages(timestamp: Time) -> dict[int, CameraInfo]:
         autoware_camera_id = vad_to_autoware_camera_map[vad_camera_id]
         
         # intrinsicからviewpadを作成
-        viewpad = np.zeros((4, 4), dtype=np.float32)
+        viewpad = np.eye(4, dtype=np.float32)
         viewpad[:3, :3] = intrinsic
-        viewpad[3, 3] = 1.0
         
         # CameraInfoメッセージの作成
         camera_info = CameraInfo()
@@ -505,7 +525,12 @@ def main():
 
         lidar2img_data = np.frombuffer(lidar2img_binary, dtype=np.float32)
         for vad_camera_id in range(6):
-            lidar2img_data_dict[frame][vad_camera_id] = lidar2img_data[16*vad_camera_id:16*(vad_camera_id+1)]
+            # 16要素の1次元配列を取得
+            lidar2img_flat = lidar2img_data[16*vad_camera_id:16*(vad_camera_id+1)]
+            
+            # 再度平坦化して保存
+            lidar2img_data_dict[frame][vad_camera_id] = lidar2img_flat
+
 
         # 各トピックへの変換と書き込み        
         # 1. IMUの変換と書き込み
@@ -516,15 +541,15 @@ def main():
         kinematic_msg = convert_bin_to_kinematic_state(can_bus_data, ros_timestamp)
         write_to_rosbag(writer, "/localization/kinematic_state", kinematic_msg, ros_timestamp)
 
-        # # 3. lidar2imgのtf_staticへの変換と書き込み
-        # # base_link(lidar) to camera{vad_camera_id}/optical_link
-        # tf_static_msg = convert_bin_to_tf_static(lidar2img_data_dict[frame], ros_timestamp)
-        # write_to_rosbag(writer, "/tf_static", tf_static_msg, ros_timestamp)
+        # 3. lidar2imgのtf_staticへの変換と書き込み
+        # base_link(lidar) to camera{vad_camera_id}/optical_link
+        tf_static_msg = convert_bin_to_tf_static(lidar2img_data_dict[frame], ros_timestamp)
+        write_to_rosbag(writer, "/tf_static", tf_static_msg, ros_timestamp)
 
-        # # 4. intrinsicsのcamera_infoへの変換と書き込み
-        # camera_infos = create_camera_info_messages(ros_timestamp)
-        # for autoware_camera_id in range(6):
-        #     write_to_rosbag(writer, f"/sensing/camera/camera{autoware_camera_id}/camera_info", camera_infos[autoware_camera_id], ros_timestamp)
+        # 4. intrinsicsのcamera_infoへの変換と書き込み
+        camera_infos = create_camera_info_messages(ros_timestamp)
+        for autoware_camera_id in range(6):
+            write_to_rosbag(writer, f"/sensing/camera/camera{autoware_camera_id}/camera_info", camera_infos[autoware_camera_id], ros_timestamp)
         
         print(f"Processed frame {frame}")
     
@@ -559,10 +584,9 @@ def main():
             print(f"Error: calculated_shift on {frame_id} != shift_data_dict[{frame_id}]")
             break
 
-        # import pdb;pdb.set_trace()
-        # for vad_camera_id in range(6):
-        #     if not np.array_equal(reconstructed_lidar2img[frame_id][vad_camera_id], lidar2img_data_dict[frame_id][vad_camera_id]):
-        #         import pdb;pdb.set_trace()
+        for vad_camera_id in range(6):
+            if not np.allclose(reconstructed_lidar2img[frame_id][vad_camera_id], lidar2img_data_dict[frame_id][vad_camera_id], atol=1e-5):
+                import pdb;pdb.set_trace()
 
     print("Success: reconstructed can_bus matches can_bus.bin")
 
@@ -685,7 +709,7 @@ def reconstruct_can_bus_from_rosbag(bag_file: str, init_time: float, cycle_time_
 #     # AutowareカメラIDを抽出
 #     autoware_camera_id = int(child_frame_id.split("/")[0].split("camera")[-1])
 
-def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_time_ms: float) -> dict[int, dict[int, np.ndarray]]:
+def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_time_ms: float, scale: float = 0.4) -> dict[int, dict[int, np.ndarray]]:
     """
     ROSバッグからlidar2imgデータを再構築する
 
@@ -754,6 +778,11 @@ def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_tim
     # 結果を格納する辞書
     result: dict[int, dict[int, np.ndarray]] = {}
     
+    # スケールファクターを作成（TensorRTのbinファイルはscale倍されている）
+    scale_factor = np.eye(4)
+    scale_factor[0, 0] = scale
+    scale_factor[1, 1] = scale
+
     # tf_staticメッセージを読み込む
     while reader.has_next():
         topic_name, data, timestamp_ns = reader.read_next()
@@ -798,20 +827,19 @@ def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_tim
                     ])
                     
                     # クォータニオンを取得
-                    quaternion = np.array([
-                        transform.transform.rotation.x,
-                        transform.transform.rotation.y,
-                        transform.transform.rotation.z,
-                        transform.transform.rotation.w
-                    ])
+                    qx = transform.transform.rotation.x
+                    qy = transform.transform.rotation.y
+                    qz = transform.transform.rotation.z
+                    qw = transform.transform.rotation.w
                     
-                    # クォータニオンから回転行列への変換
-                    rotation_matrix = quaternion_to_rotation_matrix(quaternion)
+                    # pyquaternionのQuaternionクラスを使用して回転行列に変換
+                    q = Quaternion(w=qw, x=qx, y=qy, z=qz)
+                    rotation_matrix = q.rotation_matrix
                     
                     # lidar2cam_rtを構築
                     lidar2cam_rt = np.eye(4, dtype=np.float32)
                     lidar2cam_rt[:3, :3] = rotation_matrix
-                    lidar2cam_rt[:3, 3] = translation
+                    lidar2cam_rt[3, :3] = translation
                     
                     # lidar2cam_rt.Tを計算
                     lidar2cam_rt_T = lidar2cam_rt.T
@@ -820,42 +848,19 @@ def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_tim
                     intrinsic = cameras_intrinsics[autoware_camera_id]
                     
                     # intrinsicからviewpadを作成
-                    viewpad = np.zeros((4, 4), dtype=np.float32)
+                    viewpad = np.eye(4, dtype=np.float32)
                     viewpad[:3, :3] = intrinsic
-                    viewpad[3, 3] = 1.0
                     
                     # lidar2img = viewpad @ lidar2cam_rt.T を計算
                     lidar2img = np.dot(viewpad, lidar2cam_rt_T)
+
+                    # 0.4倍のスケーリングを適用して、binファイルと同じフォーマットにする
+                    scaled_lidar2img = scale_factor @ lidar2img
                     
                     # 平坦化して保存
-                    result[frame_id][vad_camera_id] = lidar2img.flatten()
+                    result[frame_id][vad_camera_id] = scaled_lidar2img.flatten()
     
     return result
-
-def quaternion_to_rotation_matrix(q: np.ndarray) -> np.ndarray:
-    """
-    クォータニオンから回転行列への変換
-
-    Args:
-        q: クォータニオン [x, y, z, w]
-
-    Returns:
-        np.ndarray: 3x3回転行列
-    """
-    # クォータニオンを正規化
-    q = q / np.linalg.norm(q)
-    
-    # クォータニオンの要素を展開
-    x, y, z, w = q
-    
-    # 回転行列を計算
-    rotation_matrix = np.array([
-        [1 - 2*y*y - 2*z*z,     2*x*y - 2*z*w,     2*x*z + 2*y*w],
-        [    2*x*y + 2*z*w, 1 - 2*x*x - 2*z*z,     2*y*z - 2*x*w],
-        [    2*x*z - 2*y*w,     2*y*z + 2*x*w, 1 - 2*x*x - 2*y*y]
-    ], dtype=np.float32)
-    
-    return rotation_matrix
 
 if __name__ == "__main__":
     main()

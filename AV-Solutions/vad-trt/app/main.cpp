@@ -25,6 +25,7 @@
 #include <cmath>
 #include <filesystem>
 #include <nlohmann/json.hpp>
+#include <optional>
 
 #include <cuda_fp16.h>
 #include <cuda_runtime_api.h>
@@ -56,6 +57,7 @@
 
 #include <sensor_msgs/msg/imu.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -88,7 +90,7 @@ public:
             rclcpp::QoS(1));
 
         // Subscribers for each camera
-        for (int i = 0; i < 6; ++i) {
+        for (int32_t i = 0; i < 6; ++i) {
             auto callback = [this, i](const sensor_msgs::msg::CompressedImage::SharedPtr msg) {
                 this->onImageReceived(msg, i);
             };
@@ -178,7 +180,7 @@ private:
     rclcpp::Publisher<autoware_perception_msgs::msg::DetectedObjects>::SharedPtr objects_publisher_;
     std::vector<rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr> camera_subscribers_;
 
-    void onImageReceived(const sensor_msgs::msg::CompressedImage::SharedPtr msg, int camera_index)
+    void onImageReceived(const sensor_msgs::msg::CompressedImage::SharedPtr msg, int32_t camera_index)
     {
         // 現状は受信のみ
         RCLCPP_DEBUG(this->get_logger(), "Received image from camera %d", camera_index);
@@ -317,8 +319,7 @@ void loadHeadEngine(
 }
 
 std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
-    const std::string& bag_path, int n_frames) {
-    std::cout << "Opening rosbag: " << bag_path << std::endl;
+    const std::string& bag_path, int32_t n_frames) {
     
     std::unordered_map<int, std::vector<std::vector<float>>> subscribed_image_dict;
     std::unordered_map<int, std::vector<float>> frame_images_dict;
@@ -345,7 +346,7 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
         rosbag2_cpp::readers::SequentialReader reader;
         reader.open(storage_options, converter_options);
         
-        int current_frame_id = 1;
+        int32_t current_frame_id = 1;
         
         while (reader.has_next() && current_frame_id <= n_frames) {
             auto bag_message = reader.read_next();
@@ -358,10 +359,10 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
                     rclcpp::Serialization<sensor_msgs::msg::CompressedImage>().deserialize_message(
                         &serialized_msg, msg.get());
                     
-                    int vad_idx = autoware_to_vad[autoware_idx];
+                    int32_t vad_idx = autoware_to_vad[autoware_idx];
                     
                     // 画像データの処理
-                    int width, height, channels;
+                    int32_t width, height, channels;
                     unsigned char* image_data = stbi_load_from_memory(
                         msg->data.data(), static_cast<int>(msg->data.size()),
                         &height, &width, &channels, STBI_rgb); // RGBとして読み込む
@@ -379,8 +380,8 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
                     for (int c = 0; c < 3; ++c) {
                         for (int h = 0; h < height; ++h) {
                             for (int w = 0; w < width; ++w) {
-                                int src_idx = (h * width + w) * 3 + (2 - c); // BGR -> RGB
-                                int dst_idx = c * height * width + h * width + w; // CHW形式
+                                int32_t src_idx = (h * width + w) * 3 + (2 - c); // BGR -> RGB
+                                int32_t dst_idx = c * height * width + h * width + w; // CHW形式
                                 float pixel_value = static_cast<float>(image_data[src_idx]);
                                 normalized_image_data[dst_idx] = (pixel_value - mean[c]) / std[c];
                             }
@@ -404,7 +405,6 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
                             frame_images.push_back(frame_images_dict[i]);
                         }
                         
-                        std::cout << "フレームID: " << current_frame_id << " の画像セットが完了" << std::endl;
                         subscribed_image_dict[current_frame_id] = frame_images;
                         
                         // frame_images_dictをクリア
@@ -414,9 +414,7 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
                 }
             }
         }
-        
-        std::cout << "Total frames loaded: " << subscribed_image_dict.size() << std::endl;
-        
+                
     } catch (const std::exception& e) {
         std::cerr << "Error in load_image_from_rosbag: " << e.what() << std::endl;
         throw;
@@ -471,7 +469,7 @@ void compare_with_reference(
         // 画素値の比較
         size_t start_idx = cam_idx * single_camera_size;
         float max_diff = 0.0f;
-        int diff_count = 0;
+        int32_t diff_count = 0;
         constexpr float tolerance = 38.6f;
 
         for (size_t i = 0; i < single_camera_size; ++i) {
@@ -493,8 +491,8 @@ void compare_with_reference(
 
 std::vector<float> calculateShift(float delta_x, float delta_y, float patch_angle_rad) {
     const float point_cloud_range[] = {-15.0, -30.0, -2.0, 15.0, 30.0, 2.0};
-    const int bev_h_ = 100;
-    const int bev_w_ = 100;
+    const int32_t bev_h_ = 100;
+    const int32_t bev_w_ = 100;
     
     float real_w = point_cloud_range[3] - point_cloud_range[0];
     float real_h = point_cloud_range[4] - point_cloud_range[1];
@@ -515,10 +513,10 @@ std::vector<float> calculateShift(float delta_x, float delta_y, float patch_angl
 }
 
 std::tuple<std::unordered_map<int, std::vector<float>>, std::unordered_map<int, std::vector<float>>> 
-load_can_bus_shift_from_rosbag(const std::string& bag_path, int n_frames) {
+load_can_bus_shift_from_rosbag(const std::string& bag_path, int32_t n_frames) {
     std::unordered_map<int, std::vector<float>> can_bus_dict;
     std::unordered_map<int, std::vector<float>> shift_dict;
-    int current_frame_id = 1;
+    int32_t current_frame_id = 1;
     
     try {
         // ROSバッグの設定
@@ -653,6 +651,250 @@ load_can_bus_shift_from_rosbag(const std::string& bag_path, int n_frames) {
     return std::make_tuple(can_bus_dict, shift_dict);
 }
 
+std::optional<int> extract_autoware_camera_id(
+    const std::string& topic_name,
+    const std::unordered_map<int, int>& vad_to_autoware_camera) {
+    
+    for (const auto& [vad_id, autoware_id] : vad_to_autoware_camera) {
+        std::string camera_topic = "/sensing/camera/camera" + std::to_string(autoware_id) + "/camera_info";
+        if (topic_name == camera_topic) {
+            return autoware_id;
+        }
+    }
+    return std::nullopt;
+}
+
+std::unordered_map<int, std::vector<float>> 
+load_lidar2img_from_rosbag(const std::string& bag_path, int32_t n_frames, float scale) {
+    std::unordered_map<int, std::vector<float>> result;
+    
+    // VADカメラIDからAutowareカメラIDへのマッピング
+    std::unordered_map<int, int> vad_to_autoware_camera = {
+        {0, 0},  // CAM_FRONT -> camera0
+        {1, 4},  // CAM_FRONT_RIGHT -> camera4
+        {2, 2},  // CAM_FRONT_LEFT -> camera2
+        {3, 1},  // CAM_BACK -> camera1
+        {4, 3},  // CAM_BACK_LEFT -> camera3
+        {5, 5}   // CAM_BACK_RIGHT -> camera5
+    };
+    
+    // Autowareカメラ名からVADカメラIDへの逆マッピング
+    std::unordered_map<int, int> autoware_to_vad_camera;
+    for (const auto& [vad_id, autoware_id] : vad_to_autoware_camera) {
+        autoware_to_vad_camera[autoware_id] = vad_id;
+    }
+
+    try {
+        // ROSバッグの設定
+        rosbag2_storage::StorageOptions storage_options;
+        storage_options.uri = bag_path;
+        storage_options.storage_id = "sqlite3";
+
+        rosbag2_cpp::ConverterOptions converter_options;
+        converter_options.input_serialization_format = "cdr";
+        converter_options.output_serialization_format = "cdr";
+
+        // カメラの内部パラメータを格納する辞書
+        std::unordered_map<int, Eigen::Matrix3f> cameras_intrinsics;
+
+        // ROSバッグリーダーの初期化
+        rosbag2_cpp::readers::SequentialReader reader;
+        reader.open(storage_options, converter_options);
+
+        // まずはすべてのカメラの内部パラメータを読み込む
+        while (reader.has_next()) {
+            auto bag_message = reader.read_next();
+            
+            if (bag_message->topic_name.find("/camera_info") != std::string::npos) {
+                // AutowareカメラIDを抽出
+                std::optional<int> autoware_camera_id = extract_autoware_camera_id(bag_message->topic_name, vad_to_autoware_camera);
+
+                if (autoware_camera_id.has_value()) {
+                    // CameraInfoメッセージをデシリアライズ
+                    auto msg = std::make_shared<sensor_msgs::msg::CameraInfo>();
+                    rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                    rclcpp::Serialization<sensor_msgs::msg::CameraInfo>().deserialize_message(
+                        &serialized_msg, msg.get());
+
+                    // カメラ行列Kを3x3行列として抽出
+                    Eigen::Matrix3f k_matrix;
+                    for (int i = 0; i < 3; ++i) {
+                        for (int j = 0; j < 3; ++j) {
+                            k_matrix(i, j) = msg->k[i * 3 + j];
+                        }
+                    }
+                    cameras_intrinsics[autoware_camera_id.value()] = k_matrix;
+                } else {
+                    RCLCPP_ERROR(rclcpp::get_logger("load_lidar2img_from_rosbag"),
+                        "Could not extract Autoware camera ID from topic name: %s", bag_message->topic_name.c_str());
+                }
+            }
+        }
+
+        // バッグファイルを再度開く
+        rosbag2_cpp::readers::SequentialReader reader2;
+        reader2.open(storage_options, converter_options);
+
+        int32_t current_frame_id = 1;
+        while (reader2.has_next() && current_frame_id <= n_frames) {
+            auto bag_message = reader2.read_next();
+            
+            if (bag_message->topic_name == "/tf_static") {
+                // 現在のフレームのlidar2imgデータを格納する一時配列
+                std::vector<float> frame_lidar2img(16 * 6, 0.0f);  // 6カメラ分のスペースを確保
+                bool frame_complete = true;
+
+                // TFメッセージをデシリアライズ
+                auto msg = std::make_shared<tf2_msgs::msg::TFMessage>();
+                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                rclcpp::Serialization<tf2_msgs::msg::TFMessage>().deserialize_message(
+                    &serialized_msg, msg.get());
+
+                // 各カメラのTF変換を処理
+                for (const auto& transform : msg->transforms) {
+                    std::string child_frame_id = transform.child_frame_id;
+                    
+                    if (child_frame_id.find("camera") != std::string::npos && 
+                        child_frame_id.find("/optical_link") != std::string::npos) {
+                        // Autowareカメラ名からカメラIDを抽出
+                        int32_t autoware_camera_id = std::stoi(child_frame_id.substr(
+                            child_frame_id.find("camera") + 6, 1));
+
+                        // VADカメラIDに変換
+                        if (autoware_to_vad_camera.find(autoware_camera_id) == autoware_to_vad_camera.end()) {
+                            continue;
+                        }
+                        int32_t vad_camera_id = autoware_to_vad_camera[autoware_camera_id];
+
+                        // カメラの内部パラメータを確認
+                        if (cameras_intrinsics.find(autoware_camera_id) == cameras_intrinsics.end()) {
+                            std::cout << "Warning: No camera intrinsics for camera" << autoware_camera_id << std::endl;
+                            continue;
+                        }
+
+                        // 変換行列の構築
+                        Eigen::Vector3f translation(
+                            transform.transform.translation.x,
+                            transform.transform.translation.y,
+                            transform.transform.translation.z
+                        );
+
+                        Eigen::Quaternionf quaternion(
+                            transform.transform.rotation.w,
+                            transform.transform.rotation.x,
+                            transform.transform.rotation.y,
+                            transform.transform.rotation.z
+                        );
+
+                        // lidar2cam_rtを構築
+                        Eigen::Matrix4f lidar2cam_rt = Eigen::Matrix4f::Identity();
+                        lidar2cam_rt.block<3,3>(0,0) = quaternion.toRotationMatrix();
+                        lidar2cam_rt.block<1,3>(3,0) = translation;
+
+                        // lidar2cam_rt.Tを計算
+                        Eigen::Matrix4f lidar2cam_rt_T = lidar2cam_rt.transpose();
+
+                        // viewpadを作成
+                        Eigen::Matrix4f viewpad = Eigen::Matrix4f::Zero();
+                        viewpad.block<3,3>(0,0) = cameras_intrinsics[autoware_camera_id];
+                        viewpad(3,3) = 1.0f;
+
+                        // lidar2img = viewpad @ lidar2cam_rt.T を計算
+                        Eigen::Matrix4f lidar2img = viewpad * lidar2cam_rt_T;
+
+                        // スケーリングを適用
+                        Eigen::Matrix4f scale_matrix = Eigen::Matrix4f::Identity();
+                        scale_matrix(0, 0) = scale;
+                        scale_matrix(1, 1) = scale;
+                        lidar2img = scale_matrix * lidar2img;
+
+                        // 結果を格納
+                        std::vector<float> lidar2img_flat(16);
+                        int32_t k = 0;
+                        for (int i = 0; i < 4; ++i) {
+                            for (int j = 0; j < 4; ++j) {
+                                lidar2img_flat[k++] = lidar2img(i, j);
+                            }
+                        }
+
+                        // lidar2imgの計算後、VADカメラIDの位置に格納
+                        if (vad_camera_id >= 0 && vad_camera_id < 6) {
+                            std::copy(lidar2img_flat.begin(), 
+                                    lidar2img_flat.end(), 
+                                    frame_lidar2img.begin() + vad_camera_id * 16);
+                        }
+                    }
+                }
+
+                // すべてのカメラのデータが揃っているか確認
+                for (int i = 0; i < 6; i++) {
+                    bool camera_data_exists = false;
+                    for (int j = 0; j < 16; j++) {
+                        if (frame_lidar2img[i * 16 + j] != 0.0f) {
+                            camera_data_exists = true;
+                            break;
+                        }
+                    }
+                    if (!camera_data_exists) {
+                        frame_complete = false;
+                        break;
+                    }
+                }
+
+                if (frame_complete) {
+                    result[current_frame_id] = frame_lidar2img;
+                    current_frame_id++;
+                } else {
+                    std::cerr << "Frame " << current_frame_id << " is incomplete. Aborting." << std::endl;
+                    throw std::runtime_error("Incomplete frame");
+                }
+            }
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "ROSバッグの読み込み中にエラーが発生: " << e.what() << std::endl;
+        throw;
+    }
+
+    return result;
+}
+
+void compare_with_reference_lidar2img(
+    const std::vector<float>& lidar2img_data,
+    const std::string& reference_file_path
+) {
+    std::ifstream file(reference_file_path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        std::cerr << "参照ファイルを開けませんでした: " << reference_file_path << std::endl;
+        throw std::runtime_error("参照ファイルを開けませんでした");
+    }
+
+    std::streamsize size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    if (size != lidar2img_data.size() * sizeof(float)) {
+        std::cerr << "参照ファイルのサイズが一致しません: " << reference_file_path << std::endl;
+        std::cerr << "期待されるサイズ: " << lidar2img_data.size() << " バイト, 実際のサイズ: " << size << " バイト" << std::endl;
+        throw std::runtime_error("参照ファイルのサイズが一致しません");
+    }
+
+    std::vector<float> reference_data(lidar2img_data.size());
+    if (!file.read(reinterpret_cast<char*>(reference_data.data()), size)) {
+        std::cerr << "参照ファイルの読み込みに失敗しました: " << reference_file_path << std::endl;
+        throw std::runtime_error("参照ファイルの読み込みに失敗しました");
+    }
+
+    for (size_t i = 0; i < lidar2img_data.size(); ++i) {
+        if (std::abs(lidar2img_data[i] - reference_data[i]) > 1e-3) {
+            std::cerr << "値が一致しません: " << reference_file_path << " のインデックス " << i << std::endl;
+            std::cerr << "binファイルの値: " << reference_data[i] << ", lidar2imgの値: " << lidar2img_data[i] << std::endl;
+            throw std::runtime_error("値が一致しません");
+        }
+    }
+
+    std::cout << "lidar2imgデータは参照ファイルと一致しています: " << reference_file_path << std::endl;
+}
+
 int main(int argc, char** argv) {
   // ROSの初期化
   rclcpp::init(argc, argv);
@@ -722,9 +964,9 @@ int main(int argc, char** argv) {
     }
   }
   
-  int warm_up = cfg["warm_up"];
+  int32_t warm_up = cfg["warm_up"];
   printf("[INFO] warm_up=%d\n", warm_up);
-  for( int iw=0; iw < warm_up; iw++ ) {
+  for( int32_t iw=0; iw < warm_up; iw++ ) {
     nets["backbone"]->Enqueue(stream);
     nets["head_no_prev"]->Enqueue(stream);
     cudaStreamSynchronize(stream);
@@ -732,7 +974,7 @@ int main(int argc, char** argv) {
 
   EventTimer timer;
   std::string data_dir = cfg_dir.string() + "/data/";
-  int n_frames = cfg["n_frames"];
+  int32_t n_frames = cfg["n_frames"];
   printf("[INFO] n_frames=%d\n", n_frames);
   std::shared_ptr<nv::Tensor> saved_prev_bev;
   std::vector<float> lidar2img;
@@ -740,16 +982,22 @@ int main(int argc, char** argv) {
 
   auto subscribed_image_dict = load_image_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
   auto [subscribed_can_bus_dict, subscribed_shift_dict] = load_can_bus_shift_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
+  auto subscribed_lidar2img_dict = load_lidar2img_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames, 0.4f);
   // img.binと値を比較
   for (int frame_id = 1; frame_id < n_frames; frame_id++) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
     
     try {
         // リファレンスデータとの比較を追加
-        compare_with_reference(
-            subscribed_image_dict[frame_id],
-            frame_dir + "img.bin"
-        );
+        // compare_with_reference(
+        //     subscribed_image_dict[frame_id],
+        //     frame_dir + "img.bin"
+        // );
+
+        // compare_with_reference_lidar2img(
+        //     subscribed_lidar2img_dict[frame_id],
+        //     file_path1
+        // );
         
         // 画像処理と推論
         processImageForInference(
@@ -767,6 +1015,7 @@ int main(int argc, char** argv) {
 
     std::vector<float> can_bus_data = subscribed_can_bus_dict[frame_id];
     std::vector<float> shift_data = subscribed_shift_dict[frame_id];
+    std::vector<float> lidar2img_data = subscribed_lidar2img_dict[frame_id];
     if (is_first_frame) {
         cudaMemcpyAsync(
             nets["head_no_prev"]->bindings["img_metas.0[shift]"]->ptr, // GPU のアドレス
@@ -776,7 +1025,13 @@ int main(int argc, char** argv) {
             stream
         );
 
-        nets["head_no_prev"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
+        cudaMemcpyAsync(
+            nets["head_no_prev"]->bindings["img_metas.0[lidar2img]"]->ptr, // GPU のアドレス
+            lidar2img_data.data(),                                         // ホスト側のデータ
+            lidar2img_data.size() * sizeof(float),                         // 転送サイズ
+            cudaMemcpyHostToDevice,
+            stream
+        );
 
         cudaMemcpyAsync(
             nets["head_no_prev"]->bindings["img_metas.0[can_bus]"]->ptr,
@@ -811,7 +1066,13 @@ int main(int argc, char** argv) {
             cudaMemcpyHostToDevice,
             stream
         );
-        nets["head"]->bindings["img_metas.0[lidar2img]"]->load(frame_dir + "img_metas.0[lidar2img].bin");
+        cudaMemcpyAsync(
+            nets["head"]->bindings["img_metas.0[lidar2img]"]->ptr, // GPU のアドレス
+            lidar2img_data.data(),                                         // ホスト側のデータ
+            lidar2img_data.size() * sizeof(float),                         // 転送サイズ
+            cudaMemcpyHostToDevice,
+            stream
+        );
         cudaMemcpyAsync(
             nets["head"]->bindings["img_metas.0[can_bus]"]->ptr,
             can_bus_data.data(),
@@ -836,7 +1097,7 @@ int main(int argc, char** argv) {
     for( std::string image_name: cfg["images"]) {    
       std::string image_pth = data_dir + std::to_string(frame_id) + "/" + image_name;
       
-      int width, height, channels;
+      int32_t width, height, channels;
       images.push_back(stbi_load(image_pth.c_str(), &width, &height, &channels, 0));
     }
     std::string font_path = cfg_dir.string() + "/" + cfg["font_path"].get<std::string>();
@@ -855,7 +1116,7 @@ int main(int argc, char** argv) {
       ego_fut_preds.begin() + frame.cmd * 12, 
       ego_fut_preds.begin() + (frame.cmd + 1) * 12);
     // cumsum to build trajectory in 3d space
-    for( int i=1; i<6; i++) {
+    for( int32_t i=1; i<6; i++) {
       planning[i * 2    ] += planning[(i-1) * 2    ];
       planning[i * 2 + 1] += planning[(i-1) * 2 + 1];
     }    
@@ -868,15 +1129,15 @@ int main(int argc, char** argv) {
     std::vector<float> cls_scores = nets["head"]->bindings["out.all_cls_scores"]->cpu<float>();
 
     // det to frame.det
-    constexpr int N_MAX_DET = 300;
-    for( int d=0; d<N_MAX_DET; d++ ) {
+    constexpr int32_t N_MAX_DET = 300;
+    for( int32_t d=0; d<N_MAX_DET; d++ ) {
       // 3, 1, 100, 10
       std::vector<float> box_score(
         cls_scores.begin() + d * 10, 
         cls_scores.begin() + d * 10 + 10);
       float max_score = -1;
-      int max_label = -1;
-      for( int l=0; l<10; l++ ) {
+      int32_t max_label = -1;
+      for( int32_t l=0; l<10; l++ ) {
         // sigmoid
         float this_score = 1.0f / (1.0f + std::exp(-box_score[l]));
         if( this_score > max_score ) {
@@ -914,11 +1175,11 @@ int main(int argc, char** argv) {
     printf("[INFO] %d, cmd=%d finished\n", frame_id, frame.cmd);
   }
 
-  int perf_loop = cfg.value("perf_loop", 0);
+  int32_t perf_loop = cfg.value("perf_loop", 0);
   if( perf_loop > 0 ) {
     printf("[INFO] running %d rounds of perf_loop\n", perf_loop);
   }
-  for( int i=0; i < perf_loop; i++ ) {
+  for( int32_t i=0; i < perf_loop; i++ ) {
     timer.start(stream);
     nets["backbone"]->Enqueue(stream);
     nets["head"]->Enqueue(stream);
