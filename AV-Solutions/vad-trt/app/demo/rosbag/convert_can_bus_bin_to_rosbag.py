@@ -701,14 +701,6 @@ def reconstruct_can_bus_from_rosbag(bag_file: str, init_time: float, cycle_time_
     
     return result
 
-# if "/camera_info" in topic_name:
-#     # AutowareカメラIDを抽出
-#     autoware_camera_id = int(topic_name.split("/camera")[-2])
-
-# if "camera" in child_frame_id and "/optical_link" in child_frame_id:
-#     # AutowareカメラIDを抽出
-#     autoware_camera_id = int(child_frame_id.split("/")[0].split("camera")[-1])
-
 def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_time_ms: float, scale: float = 0.4) -> dict[int, dict[int, np.ndarray]]:
     """
     ROSバッグからlidar2imgデータを再構築する
