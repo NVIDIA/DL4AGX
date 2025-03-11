@@ -76,6 +76,22 @@ namespace fs = std::filesystem;
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 
+// Convert Autoware coordinates to nuScenes coordinates
+std::pair<float, float> aw2ns_xy(float aw_x, float aw_y) {
+    float ns_x = -aw_y;
+    float ns_y = aw_x;
+    return {ns_x, ns_y};
+}
+
+// Convert a quaternion from Autoware to nuScenes coordinate system
+Eigen::Quaternionf aw2ns_quaternion(const Eigen::Quaternionf& q_aw) {
+    // Create a -90-degree rotation around Z-axis (Autoware -> nuScenes)
+    Eigen::Quaternionf q_rotation(Eigen::AngleAxisf(-M_PI/2, Eigen::Vector3f::UnitZ()));
+    
+    // Apply the rotation
+    return q_rotation * q_aw;
+}
+
 class VADNode : public rclcpp::Node 
 {
 public:
@@ -601,25 +617,45 @@ load_can_bus_shift_from_rosbag(const std::string& bag_path, int32_t n_frames) {
                     &serialized_msg, msg.get());
                 
                 current_frame.has_kinematic = true;
+                
+                // Apply Autoware to nuScenes coordinate transformation to position
+                auto [ns_x, ns_y] = aw2ns_xy(msg->pose.pose.position.x, msg->pose.pose.position.y);
+                
                 current_frame.translation.clear();
-                current_frame.translation.push_back(static_cast<float>(msg->pose.pose.position.x));
-                current_frame.translation.push_back(static_cast<float>(msg->pose.pose.position.y));
+                current_frame.translation.push_back(ns_x);
+                current_frame.translation.push_back(ns_y);
                 current_frame.translation.push_back(static_cast<float>(msg->pose.pose.position.z));
 
+                // Apply Autoware to nuScenes coordinate transformation to orientation
+                Eigen::Quaternionf q_aw(
+                    msg->pose.pose.orientation.w,
+                    msg->pose.pose.orientation.x,
+                    msg->pose.pose.orientation.y,
+                    msg->pose.pose.orientation.z
+                );
+                
+                Eigen::Quaternionf q_ns = aw2ns_quaternion(q_aw);
+                
                 current_frame.rotation.clear();
-                current_frame.rotation.push_back(static_cast<float>(msg->pose.pose.orientation.x));
-                current_frame.rotation.push_back(static_cast<float>(msg->pose.pose.orientation.y));
-                current_frame.rotation.push_back(static_cast<float>(msg->pose.pose.orientation.z));
-                current_frame.rotation.push_back(static_cast<float>(msg->pose.pose.orientation.w));
+                current_frame.rotation.push_back(q_ns.x());
+                current_frame.rotation.push_back(q_ns.y());
+                current_frame.rotation.push_back(q_ns.z());
+                current_frame.rotation.push_back(q_ns.w());
 
+                // Apply Autoware to nuScenes coordinate transformation to velocity
+                auto [ns_vx, ns_vy] = aw2ns_xy(msg->twist.twist.linear.x, msg->twist.twist.linear.y);
+                
                 current_frame.velocity.clear();
-                current_frame.velocity.push_back(static_cast<float>(msg->twist.twist.linear.x));
-                current_frame.velocity.push_back(static_cast<float>(msg->twist.twist.linear.y));
+                current_frame.velocity.push_back(ns_vx);
+                current_frame.velocity.push_back(ns_vy);
                 current_frame.velocity.push_back(static_cast<float>(msg->twist.twist.linear.z));
 
+                // Apply Autoware to nuScenes coordinate transformation to angular velocity
+                auto [ns_wx, ns_wy] = aw2ns_xy(msg->twist.twist.angular.x, msg->twist.twist.angular.y);
+                
                 current_frame.angular_velocity.clear();
-                current_frame.angular_velocity.push_back(static_cast<float>(msg->twist.twist.angular.x));
-                current_frame.angular_velocity.push_back(static_cast<float>(msg->twist.twist.angular.y));
+                current_frame.angular_velocity.push_back(ns_wx);
+                current_frame.angular_velocity.push_back(ns_wy);
                 current_frame.angular_velocity.push_back(static_cast<float>(msg->twist.twist.angular.z));
             }
             else if (bag_message->topic_name == "/sensing/imu/tamagawa/imu_raw") {
@@ -629,9 +665,13 @@ load_can_bus_shift_from_rosbag(const std::string& bag_path, int32_t n_frames) {
                     &serialized_msg, msg.get());
                 
                 current_frame.has_imu = true;
+                
+                // Apply Autoware to nuScenes coordinate transformation to acceleration
+                auto [ns_ax, ns_ay] = aw2ns_xy(msg->linear_acceleration.x, msg->linear_acceleration.y);
+                
                 current_frame.acceleration.clear();
-                current_frame.acceleration.push_back(static_cast<float>(msg->linear_acceleration.x));
-                current_frame.acceleration.push_back(static_cast<float>(msg->linear_acceleration.y));
+                current_frame.acceleration.push_back(ns_ax);
+                current_frame.acceleration.push_back(ns_ay);
                 current_frame.acceleration.push_back(static_cast<float>(msg->linear_acceleration.z));
             }
             
@@ -820,23 +860,30 @@ load_lidar2img_from_rosbag(const std::string& bag_path, int32_t n_frames, float 
                         }
 
                         // 変換行列の構築
-                        Eigen::Vector3f translation(
+                        Eigen::Vector3f aw_translation(
                             transform.transform.translation.x,
                             transform.transform.translation.y,
                             transform.transform.translation.z
                         );
+                        
+                        // Apply Autoware to nuScenes coordinate transformation to translation
+                        auto [ns_x, ns_y] = aw2ns_xy(aw_translation[0], aw_translation[1]);
+                        Eigen::Vector3f ns_translation(ns_x, ns_y, aw_translation[2]);
 
-                        Eigen::Quaternionf quaternion(
+                        Eigen::Quaternionf q_aw(
                             transform.transform.rotation.w,
                             transform.transform.rotation.x,
                             transform.transform.rotation.y,
                             transform.transform.rotation.z
                         );
+                        
+                        // Apply Autoware to nuScenes coordinate transformation to quaternion
+                        Eigen::Quaternionf q_ns = aw2ns_quaternion(q_aw);
 
-                        // lidar2cam_rtを構築
+                        // lidar2cam_rtを構築 (nuScenes座標系)
                         Eigen::Matrix4f lidar2cam_rt = Eigen::Matrix4f::Identity();
-                        lidar2cam_rt.block<3,3>(0,0) = quaternion.toRotationMatrix();
-                        lidar2cam_rt.block<1,3>(3,0) = translation;
+                        lidar2cam_rt.block<3,3>(0,0) = q_ns.toRotationMatrix();
+                        lidar2cam_rt.block<3,1>(0,3) = ns_translation;
 
                         // lidar2cam_rt.Tを計算
                         Eigen::Matrix4f lidar2cam_rt_T = lidar2cam_rt.transpose();
