@@ -115,7 +115,8 @@ struct KernelParams {
     {"bbox_index", {TRACK_MAX}},
     {"obj_idxes", {TRACK_MAX}},
     {"max_obj_id_out", {1}},
-    {"outs_planning", {1, 6, 2}}
+    {"outs_planning", {1, 6, 2}},
+    {"seg_out", {1, 5, 1, 50, 50}}
   };
 };
 
@@ -215,6 +216,7 @@ struct KernelOutput {
   std::vector<int32_t> obj_idxes = std::vector<int32_t>(TRACK_MAX);
   std::vector<int32_t> max_obj_id_out = std::vector<int32_t>(1);
   std::vector<float> outs_planning = std::vector<float>(1*6*2);
+  std::vector<int32_t> seg_out = std::vector<int32_t>(1*5*1*50*50);
 
   std::unordered_map<std::string, void*> data_ptrs = {
     {"prev_track_intances0_out", prev_track_intances0_out.data()},
@@ -238,7 +240,8 @@ struct KernelOutput {
     {"obj_idxes", obj_idxes.data()},
     {"max_obj_id_out", max_obj_id_out.data()},
     {"bev_embed", bev_embed.data()},
-    {"outs_planning", outs_planning.data()}
+    {"outs_planning", outs_planning.data()},
+    {"seg_out", seg_out.data()}
   };
   std::unordered_map<std::string, std::vector<int>> output_shapes;
   std::unordered_map<std::string, size_t> output_dsizes;

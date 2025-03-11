@@ -1,16 +1,12 @@
-docker/nuscenes
 build/
 data/
+onnxs/
 engines/
 
 .vscode
 *.ignore
+*.onnx
 *.nsys-rep
 *.tmp
 *.log
 *.ttf
-*.npy
-*.bin
-*.engine
-*.jpg
-*.mp4

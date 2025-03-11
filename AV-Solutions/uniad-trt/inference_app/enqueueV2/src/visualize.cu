@@ -56,7 +56,7 @@
 
 namespace nv {
 
-#define UseFont "./inference_app/dependencies/cuOSD/data/simhei.ttf"
+#define UseFont "../../../common/dependencies/cuOSD/data/simhei.ttf"
 #define MaxDistance 50
 #define INTER_RESIZE_COEF_BITS 11
 #define INTER_RESIZE_COEF_SCALE (1 << INTER_RESIZE_COEF_BITS)

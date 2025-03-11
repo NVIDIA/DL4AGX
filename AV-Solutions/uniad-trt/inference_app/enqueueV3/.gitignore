@@ -10,3 +10,6 @@ engine/
 *.tmp
 *.log
 *.ttf
+*.so
+*.jpg
+*.mp4

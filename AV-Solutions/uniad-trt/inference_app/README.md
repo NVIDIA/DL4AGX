@@ -1,23 +1,27 @@
 # C++ Inference Application
 
 ## Environment
-The inference application is tested on NVIDIA DRIVE Orin platform with `TensorRT 8.6.13.3`.
+The inference application with `TensorRT::enqueueV2` is tested on NVIDIA DRIVE platforms and X86 platform using `TensorRT 8.6`. 
+
+Since `TensorRT::enqueueV2` is being deprecated, we also demonstrate how to use `TensorRT::enqueueV3` to run engine inference with inputs or outputs with data-dependent-shape (DDS). The inference application with `TensorRT::enqueueV3` is tested on NVIDIA DRIVE platforms and X86 platform using `TensorRT 10.8`.
 ## Dependencies
-The inference application will use [cuOSD](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and [STB](https://github.com/nothings/stb) as submodules. Notice that since cuOSD do not have separate repo, we need to manually download it from [here](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and put it under [dependencies folder](./dependencies/), i.e.,
+The inference application will use [cuOSD](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and [STB](https://github.com/nothings/stb) as submodules. Notice that since cuOSD do not have separate repo, we need to manually download it from [here](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and put it under [the dependencies folder](../../common/dependencies/), i.e.,
 ```
-dependencies/
-|── stb/
-|── cuOSD/
+common/
+├── dependencies/
+│   ├── stb/
+│   ├── cuOSD/
 ```
 ## Build TensorRT plugins and the inference application
 
 ### Plugins and Application Compilation
 To deploy UniAD-tiny with TensorRT, we first need to compile TensorRT plugins for `MultiScaleDeformableAttnTRT`, `InverseTRT` and `RotateTRT` operators which are not supported by Native TensorRT, and then we need to build the C++ inference application. 
 
-Please run the following commands to compile:
+Please `cd` into `enqueueV2` or `enqueueV3` folder and run the following commands to compile:
 ```
+cd enqueueV<2 or 3>/
 mkdir ./build && cd ./build/
-cmake .. -DTENSORRT_PATH=<path_to_TensorRT> && make -j$(nproc)
+cmake .. -DTENSORRT_PATH=<path_to_TensorRT> -DTARGET_GPU_SM=<GPU_compute_capability> && make -j$(nproc)
 ```
 
 Then the ```uniad``` and ```libuniad_plugin.so``` should be generated under the ```./build``` folder
@@ -29,24 +33,21 @@ To build TensorRT engine, run the following commands
 MIN=901
 OPT=901
 MAX=1150
-DAT_PATH=<path_to_dumped_inputs>
-SHAPES="prev_track_intances0:${MIN}x512,prev_track_intances1:${MIN}x3,prev_track_intances3:${MIN},prev_track_intances4:${MIN},prev_track_intances5:${MIN},prev_track_intances6:${MIN},prev_track_intances8:${MIN},prev_track_intances9:${MIN}x10,prev_track_intances11:${MIN}x4x256,prev_track_intances12:${MIN}x4,prev_track_intances13:${MIN}"
-INPUTS="max_obj_id:${DAT_PATH}/max_obj_id.dat,img_metas_can_bus:${DAT_PATH}/img_metas_can_bus.dat,img_metas_lidar2img:${DAT_PATH}/img_metas_lidar2img.dat,img:${DAT_PATH}/img.dat,use_prev_bev:${DAT_PATH}/use_prev_bev.dat,prev_bev:${DAT_PATH}/prev_bev.dat,command:${DAT_PATH}/command.dat,timestamp:${DAT_PATH}/timestamp.dat,l2g_r_mat:${DAT_PATH}/l2g_r_mat.dat,l2g_t:${DAT_PATH}/l2g_t.dat,prev_track_intances0:${DAT_PATH}/prev_track_intances0.dat,prev_track_intances1:${DAT_PATH}/prev_track_intances1.dat,prev_track_intances3:${DAT_PATH}/prev_track_intances3.dat,prev_track_intances4:${DAT_PATH}/prev_track_intances4.dat,prev_track_intances5:${DAT_PATH}/prev_track_intances5.dat,prev_track_intances6:${DAT_PATH}/prev_track_intances6.dat,prev_track_intances8:${DAT_PATH}/prev_track_intances8.dat,prev_track_intances9:${DAT_PATH}/prev_track_intances9.dat,prev_track_intances11:${DAT_PATH}/prev_track_intances11.dat,prev_track_intances12:${DAT_PATH}/prev_track_intances12.dat,prev_track_intances13:${DAT_PATH}/prev_track_intances13.dat,prev_timestamp:${DAT_PATH}/prev_timestamp.dat,prev_l2g_r_mat:${DAT_PATH}/prev_l2g_r_mat.dat,prev_l2g_t:${DAT_PATH}/prev_l2g_t.dat"
-LD_LIBRARY_PATH=<path_to_TensorRT>/lib:$LD_LIBRARY_PATH \
-<path_to_TensorRT>/bin/trtexec \
+SHAPES=prev_track_intances0:${MIN}x512,prev_track_intances1:${MIN}x3,prev_track_intances3:${MIN},prev_track_intances4:${MIN},prev_track_intances5:${MIN},prev_track_intances6:${MIN},prev_track_intances8:${MIN},prev_track_intances9:${MIN}x10,prev_track_intances11:${MIN}x4x256,prev_track_intances12:${MIN}x4,prev_track_intances13:${MIN}
+
+LD_LIBRARY_PATH=${TRT_PATH}/lib:$LD_LIBRARY_PATH \
+${TRT_PATH}/bin/trtexec \
   --onnx=<path_to_ONNX> \
   --saveEngine=<path_to_engine> \
-  --plugins=<path_to_libuniad_plugin.so> \
+  --staticPlugins=<path_to_libuniad_plugin.so> \
   --verbose \
-  --dumpLayerInfo \
-  --dumpProfile \
-  --separateProfileRun \
   --profilingVerbosity=detailed \
   --useCudaGraph \
+  --tacticSources=+CUBLAS \
   --minShapes=${SHAPES//${MIN}/${MIN}} \
   --optShapes=${SHAPES//${MIN}/${OPT}} \
   --maxShapes=${SHAPES//${MIN}/${MAX}} \
-  --loadInputs=${INPUTS}
+  --skipInference
 ```
 
 ## Test inference application
@@ -77,10 +78,25 @@ The ```uniad_trt_input``` folder is used as ```<input_path>```.
 
 
 ### Run inference
-Run the following command to run inference on the input data and generate output results. Notice that for the application to correctly locate and use the data, you need to call the application at the [root dir](../) of this repo.
+Run the following command to run inference on the input data and to generate output results. Notice that for the application to correctly locate and use the data, you need to call the application at the [enqueueV2](./enqueueV2) or [enqueueV3](./enqueueV3) folder of this repo and to create a soft link of data folder under the [enqueueV2](./enqueueV2) or [enqueueV3](./enqueueV3) folder. The data soft link should be linking to:
 ```
-cd ..
-LD_LIBRARY_PATH=<path_to_TensorRT>/lib/:$LD_LIBRARY_PATH ./inference_app/build/uniad <engine_path> ./inference_app/build/libuniad_plugin.so <input_path> <output_path> <number_frame>
+enqueueV2/ or enqueueV3/
+├── data/
+│   ├── nuscenes/
+│   │   ├── can_bus/
+│   │   ├── maps/
+│   │   ├── samples/
+│   │   ├── sweeps/
+│   │   ├── v1.0-trainval/
+│   ├── infos/
+│   │   ├── nuscenes_infos_temporal_train.pkl
+│   │   ├── nuscenes_infos_temporal_val.pkl
+│   ├── others/
+│   │   ├── motion_anchor_infos_mode6.pkl
+```
+The inference command is:
+```
+LD_LIBRARY_PATH=<path_to_TensorRT>/lib/:$LD_LIBRARY_PATH ./build/uniad <engine_path> ./build/libuniad_plugin.so <input_path> <output_path> <number_frame>
 ```
 This command will read the raw images and the dumped metadata as input, run infernece using the engine and generate visualization results under the ```<output_path>``` folder.
 

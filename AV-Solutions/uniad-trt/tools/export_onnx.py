@@ -327,7 +327,8 @@ def main():
         bbox_index=[-1],
         obj_idxes=[-1],
         max_obj_id_out=[1],
-        outs_planning=[1,6,2],
+        seg_out=[1, 5, 1, bevh, bevh], # preserved for future collision optimization use
+        outs_planning=[1, 6, 2],
     )
 
     dynamic_axes = {
@@ -496,10 +497,10 @@ def main():
         inputs = tuple(inputs.values())
         with torch.no_grad():
             dummy_outputs = model.forward_uniad_trt(*inputs)
-        max_obj_id = dummy_outputs[-2]
-        prev_l2g_r_mat_out = dummy_outputs[-9]
-        prev_l2g_t_out = dummy_outputs[-10]
-        prev_timestamp_out = dummy_outputs[-11]
+        max_obj_id = dummy_outputs[-3]
+        prev_l2g_r_mat_out = dummy_outputs[-10]
+        prev_l2g_t_out = dummy_outputs[-11]
+        prev_timestamp_out = dummy_outputs[-12]
         output_name = list(output_shapes.keys())
         if not os.path.exists(onnx_export_output):
             os.mkdir(onnx_export_output)

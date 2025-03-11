@@ -1643,10 +1643,10 @@ index ffa5e21..43a352f 100644
 +        attn_mask.shape[0],
 +        attn_mask.shape[1],
 +        1,
-+        ).to(attn_mask)), dim=-1)
++        ).to(attn_mask)), dim=2)
 +
 +    mask_float = mask[...,None].float()
-+    attn_mask = mask_float*0 + (1-mask_float)*attn_mask
++    attn_mask = mask_float*torch.zeros_like(attn_mask) + (1-mask_float)*attn_mask
 +
 +    return attn_mask[...,:-1]
 +
@@ -1687,7 +1687,7 @@ index ffa5e21..43a352f 100644
 +        attn_mask = attn_mask.float()
 +        b,q,h,w = attn_mask.shape
 +        attn_mask = attn_mask.view(b,q,h*w).permute(0,2,1)[:,None,...].repeat(
-+            1, self.num_heads, 1, 1).flatten(0, 1).detach()
++            1, self.num_heads, 1, 1).reshape(b*self.num_heads, h*w, q).detach()
 +        query_index = attn_mask.sum(-1) == attn_mask.shape[-1]
 +        attn_mask = if_sum_greater_zero(query_index, attn_mask)
 +
@@ -1742,9 +1742,9 @@ index ffa5e21..43a352f 100644
 +                    query_key_padding_mask=None,
 +                    key_padding_mask=None
 +                )  # out size: [h'*w', b, c]
-+            cur_state_h = torch.tensor(cur_state.shape[0]**0.5, device=cur_state.device).int()
-+            _, b, c = cur_state.shape
-+            cur_state = cur_state.permute(1,2,0).view(b,c,cur_state_h,cur_state_h)
++            # cur_state_h = torch.tensor(cur_state.shape[0]**0.5, device=cur_state.device).int()
++            # _, b, c = cur_state.shape
++            cur_state = cur_state.permute(1,2,0).view(b,c,h,w)
 +            
 +            # Upscale to /4
 +            cur_state = self.upsample_adds[i](cur_state, last_state)
@@ -1761,7 +1761,7 @@ index ffa5e21..43a352f 100644
 +        future_states = self.dense_decoder(future_states)
 +        future_states = F.interpolate(
 +                        future_states,
-+                        (future_states.shape[-3], self.bev_size[-2], self.bev_size[-1]),
++                        (future_states.shape[2], self.bev_size[-2], self.bev_size[-1]),
 +                        mode='trilinear',
 +                        align_corners=False
 +                        )
@@ -1777,7 +1777,7 @@ index ffa5e21..43a352f 100644
 +        track_query_pos = track_query_pos.detach()
 +        ins_query = ins_query[-1]
 +        ins_query = self.mode_fuser(ins_query).max(2)[0]
-+        ins_query = self.multi_query_fuser(torch.cat([ins_query, track_query, track_query_pos], dim=-1))
++        ins_query = self.multi_query_fuser(torch.cat([ins_query, track_query, track_query_pos], dim=2))
 +        
 +        return ins_query
 +
@@ -1804,8 +1804,8 @@ index ffa5e21..43a352f 100644
 +
 +        pred_seg_scores = self.test_seg_thresh-1
 +        pred_seg_scores2 = if_no_query(pred_ins_sigmoid, pred_seg_scores)
-+        seg_out = (pred_seg_scores2 > self.test_seg_thresh).long()[:,:,None,...]  # [b, t, 1, h, w]
-+        seg_out = (seg_out*(track_query_shape1!=0)).long() 
++        seg_out = (pred_seg_scores2 > self.test_seg_thresh).int()[:,:,None,...]  # [b, t, 1, h, w]
++        # seg_out = (seg_out*(track_query_shape1!=0)).long() 
 +
 +        return seg_gt, seg_out
 +
@@ -3486,7 +3486,7 @@ index 78a4a87..e339d84 100644
 +                labels.int(),
 +                bbox_index.int(),
 +                obj_idxes.int(),
-+                max_obj_id_out.int(),
++                max_obj_id_out.int(),seg_out,
 +                outs_planning)
 diff --git a/projects/mmdet3d_plugin/uniad/detectors/uniad_track.py b/projects/mmdet3d_plugin/uniad/detectors/uniad_track.py
 index 577ae38..7fece7e 100644
@@ -3903,7 +3903,7 @@ index 577ae38..7fece7e 100644
 +        track_instances[1] = last_ref_pts[0]
 +        track_instances[3][900] = -2
 +        track_instances[3], track_instances[5], max_obj_id = \
-+            track_base_update_trt_script_v4(
++            track_base_update_trt_script_v5(
 +            track_instances[3], track_instances[5],track_instances[7], 
 +            track_instances[-5].shape[0], self.track_base.score_thresh, 
 +            self.track_base.filter_score_thresh, 
@@ -4560,7 +4560,7 @@ index 577ae38..7fece7e 100644
 +    cond3=cond2&(track_instances5_c >= miss_tolerance)
 +    track_instances3_c = ((-1)*cond3+(track_instances3_c)*~cond3).int()
 +    diff = cond1.int().sum().int()
-+    data = torch.arange(max_obj_id[0].int(), diff+max_obj_id[0].int(), device=max_obj_id.device, dtype=torch.int32)
++    data = torch.arange(cond1.nonzero().shape[0], device=track_instances3_c.device, dtype=torch.int32)+max_obj_id[0].int()
 +    track_instances3_c[index_bool2long_trt(cond1)] = data 
 +    max_obj_id_out = max_obj_id + diff
 +
