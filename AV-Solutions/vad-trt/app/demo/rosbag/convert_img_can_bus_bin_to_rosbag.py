@@ -189,8 +189,9 @@ def main():
 
             cam_img = arr[vad_index]
             cam_img = cam_img * std[:, None, None] + mean[:, None, None]
+            # cam_imgのwidthを1600, heightを960に変換
+            cam_img = cv2.resize(cam_img.transpose(1, 2, 0), (1600, 960))
             cam_img = np.clip(cam_img, 0, 255).astype(np.uint8)
-            cam_img = cam_img.transpose(1, 2, 0)
 
             ret, jpeg_encoded = cv2.imencode(".jpg", cam_img)
             if not ret:
