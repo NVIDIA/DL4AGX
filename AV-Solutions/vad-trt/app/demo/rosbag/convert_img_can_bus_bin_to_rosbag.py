@@ -11,6 +11,7 @@ from builtin_interfaces.msg import Time
 import rosbag2_py
 
 from convert_can_bus_bin_to_rosbag import convert_bin_to_imu, convert_bin_to_kinematic_state, write_to_rosbag, convert_bin_to_tf_static, create_camera_info_messages
+from convert_can_bus_bin_to_rosbag import ns2aw_kinematic_state, ns2aw_imu, ns2aw_tf_static, ns2aw_camera_info
 
 def main():
     parser = argparse.ArgumentParser(
@@ -132,12 +133,14 @@ def main():
             nanosec=int((base_timestamp - int(base_timestamp)) * 1e9)
         )
 
-        # IMUメッセージの処理
+        # IMUメッセージの処理 - nuScenes → Autoware 座標変換を適用
         imu_msg = convert_bin_to_imu(can_bus_data, ros_timestamp)
+        imu_msg = ns2aw_imu(imu_msg)  # 座標変換を適用
         write_to_rosbag(writer, "/sensing/imu/tamagawa/imu_raw", imu_msg, ros_timestamp)
         
-        # 運動学状態メッセージの処理
+        # 運動学状態メッセージの処理 - nuScenes → Autoware 座標変換を適用
         kinematic_msg = convert_bin_to_kinematic_state(can_bus_data, ros_timestamp)
+        kinematic_msg = ns2aw_kinematic_state(kinematic_msg)  # 座標変換を適用
         write_to_rosbag(writer, "/localization/kinematic_state", kinematic_msg, ros_timestamp)
 
         # LiDARデータの処理（ダミー）
@@ -165,14 +168,17 @@ def main():
                 lidar2img_dict[vad_camera_id] = lidar2img_data[16*vad_camera_id:16*(vad_camera_id+1)]
             
             tf_static_msg = convert_bin_to_tf_static(lidar2img_dict, ros_timestamp)
+            tf_static_msg = ns2aw_tf_static(tf_static_msg)  # 座標変換を適用
             write_to_rosbag(writer, "/tf_static", tf_static_msg, ros_timestamp)
 
         # camera_infoメッセージの作成と書き込み
         camera_infos = create_camera_info_messages(ros_timestamp)
         for autoware_camera_id in range(6):
+            camera_info_msg = camera_infos[autoware_camera_id]
+            camera_info_msg = ns2aw_camera_info(camera_info_msg)  # 座標変換を適用
             write_to_rosbag(writer, 
                           f"/sensing/camera/camera{autoware_camera_id}/camera_info", 
-                          camera_infos[autoware_camera_id], 
+                          camera_info_msg, 
                           ros_timestamp)
 
         # 画像データの処理
