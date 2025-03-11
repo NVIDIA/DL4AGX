@@ -36,6 +36,263 @@ IMAGE_SCALE_HIGHT = BIN_HIGHT / ORIGINAL_HIGHT # 384/960=0.4
 NEW_IMAGE_SCALE_WIDTH = NEW_WIDTH / ORIGINAL_WIDTH # 1280/1600=1.2
 NEW_IMAGE_SCALE_HIGHT = NEW_HIGHT / ORIGINAL_HIGHT # 1920/960=1.3....
 
+def aw2ns_xy(aw_x, aw_y):
+    ns_x = -aw_y
+    ns_y = aw_x
+    return ns_x, ns_y
+
+def ns2aw_xy(ns_x, ns_y):
+    aw_x = ns_y
+    aw_y = -ns_x
+
+    return aw_x, aw_y
+
+def ns2aw_kinematic_state(kinematic_msg: Odometry) -> Odometry:
+    """
+    Convert kinematic state message from nuScenes to Autoware coordinate system.
+    
+    Args:
+        kinematic_msg: Odometry message in nuScenes coordinate system
+        
+    Returns:
+        Odometry: Converted message in Autoware coordinate system
+    """
+    # Create a deep copy to avoid modifying the original message
+    aw_msg = Odometry()
+    aw_msg.header = kinematic_msg.header
+    aw_msg.child_frame_id = kinematic_msg.child_frame_id
+    
+    # Transform position
+    ns_x = kinematic_msg.pose.pose.position.x
+    ns_y = kinematic_msg.pose.pose.position.y
+    aw_x, aw_y = ns2aw_xy(ns_x, ns_y)
+    
+    aw_msg.pose.pose.position.x = aw_x
+    aw_msg.pose.pose.position.y = aw_y
+    aw_msg.pose.pose.position.z = kinematic_msg.pose.pose.position.z
+    
+    # Transform orientation quaternion
+    # Create a Quaternion from the original message
+    q_ns = Quaternion(
+        w=kinematic_msg.pose.pose.orientation.w,
+        x=kinematic_msg.pose.pose.orientation.x,
+        y=kinematic_msg.pose.pose.orientation.y,
+        z=kinematic_msg.pose.pose.orientation.z
+    )
+    
+    # Create a 90-degree rotation around Z-axis (yaw)
+    q_rotation = Quaternion(axis=[0, 0, 1], angle=np.pi/2)
+    
+    # Apply the rotation
+    q_aw = q_rotation * q_ns
+    
+    # Set the transformed quaternion
+    aw_msg.pose.pose.orientation.x = q_aw.x
+    aw_msg.pose.pose.orientation.y = q_aw.y
+    aw_msg.pose.pose.orientation.z = q_aw.z
+    aw_msg.pose.pose.orientation.w = q_aw.w
+    
+    # Transform linear velocities
+    ns_vx = kinematic_msg.twist.twist.linear.x
+    ns_vy = kinematic_msg.twist.twist.linear.y
+    aw_vx, aw_vy = ns2aw_xy(ns_vx, ns_vy)
+    
+    aw_msg.twist.twist.linear.x = aw_vx
+    aw_msg.twist.twist.linear.y = aw_vy
+    aw_msg.twist.twist.linear.z = kinematic_msg.twist.twist.linear.z
+    
+    # Transform angular velocities
+    # Only the z component needs to be preserved (yaw rate)
+    # x and y components get transformed according to the coordinate change
+    ns_wx = kinematic_msg.twist.twist.angular.x
+    ns_wy = kinematic_msg.twist.twist.angular.y
+    aw_wx, aw_wy = ns2aw_xy(ns_wx, ns_wy)
+    
+    aw_msg.twist.twist.angular.x = aw_wx
+    aw_msg.twist.twist.angular.y = aw_wy
+    aw_msg.twist.twist.angular.z = kinematic_msg.twist.twist.angular.z  # Yaw rate stays the same
+    
+    # Copy covariance matrices
+    aw_msg.pose.covariance = kinematic_msg.pose.covariance
+    aw_msg.twist.covariance = kinematic_msg.twist.covariance
+    
+    return aw_msg
+
+def ns2aw_imu(imu_msg: Imu) -> Imu:
+    """
+    Convert IMU message from nuScenes to Autoware coordinate system.
+    
+    Args:
+        imu_msg: IMU message in nuScenes coordinate system
+        
+    Returns:
+        Imu: Converted message in Autoware coordinate system
+    """
+    # Create a deep copy to avoid modifying the original message
+    aw_msg = Imu()
+    aw_msg.header = imu_msg.header
+    
+    # Transform linear accelerations
+    ns_ax = imu_msg.linear_acceleration.x
+    ns_ay = imu_msg.linear_acceleration.y
+    aw_ax, aw_ay = ns2aw_xy(ns_ax, ns_ay)
+    
+    aw_msg.linear_acceleration.x = aw_ax
+    aw_msg.linear_acceleration.y = aw_ay
+    aw_msg.linear_acceleration.z = imu_msg.linear_acceleration.z
+    
+    # Transform angular velocities
+    ns_wx = imu_msg.angular_velocity.x
+    ns_wy = imu_msg.angular_velocity.y
+    aw_wx, aw_wy = ns2aw_xy(ns_wx, ns_wy)
+    
+    aw_msg.angular_velocity.x = aw_wx
+    aw_msg.angular_velocity.y = aw_wy
+    aw_msg.angular_velocity.z = imu_msg.angular_velocity.z  # Yaw rate stays the same
+    
+    # Transform orientation quaternion if it exists
+    if imu_msg.orientation.x != 0 or imu_msg.orientation.y != 0 or imu_msg.orientation.z != 0 or imu_msg.orientation.w != 0:
+        # Create a Quaternion from the original message
+        q_ns = Quaternion(
+            w=imu_msg.orientation.w,
+            x=imu_msg.orientation.x,
+            y=imu_msg.orientation.y,
+            z=imu_msg.orientation.z
+        )
+        
+        # Create a 90-degree rotation around Z-axis (yaw)
+        q_rotation = Quaternion(axis=[0, 0, 1], angle=np.pi/2)
+        
+        # Apply the rotation
+        q_aw = q_rotation * q_ns
+        
+        # Set the transformed quaternion
+        aw_msg.orientation.x = q_aw.x
+        aw_msg.orientation.y = q_aw.y
+        aw_msg.orientation.z = q_aw.z
+        aw_msg.orientation.w = q_aw.w
+    else:
+        # If orientation is not set, copy the original values
+        aw_msg.orientation = imu_msg.orientation
+    
+    # Copy covariance matrices
+    aw_msg.linear_acceleration_covariance = imu_msg.linear_acceleration_covariance
+    aw_msg.angular_velocity_covariance = imu_msg.angular_velocity_covariance
+    aw_msg.orientation_covariance = imu_msg.orientation_covariance
+    
+    return aw_msg
+
+def ns2aw_tf_static(tf_static_msg: TFMessage) -> TFMessage:
+    """
+    Convert TF static message from nuScenes to Autoware coordinate system.
+    
+    Args:
+        tf_static_msg: TF static message in nuScenes coordinate system
+        
+    Returns:
+        TFMessage: Converted message in Autoware coordinate system
+    """
+    # Create a new TF message
+    aw_msg = TFMessage()
+    
+    # Process each transform in the message
+    for transform in tf_static_msg.transforms:
+        # Create a deep copy of the transform
+        aw_transform = TransformStamped()
+        aw_transform.header = transform.header
+        aw_transform.child_frame_id = transform.child_frame_id
+        
+        # Transform translation
+        ns_x = transform.transform.translation.x
+        ns_y = transform.transform.translation.y
+        aw_x, aw_y = ns2aw_xy(ns_x, ns_y)
+        
+        aw_transform.transform.translation.x = aw_x
+        aw_transform.transform.translation.y = aw_y
+        aw_transform.transform.translation.z = transform.transform.translation.z
+        
+        # Transform orientation quaternion
+        # Create a Quaternion from the original message
+        q_ns = Quaternion(
+            w=transform.transform.rotation.w,
+            x=transform.transform.rotation.x,
+            y=transform.transform.rotation.y,
+            z=transform.transform.rotation.z
+        )
+        
+        # Create a 90-degree rotation around Z-axis (yaw)
+        q_rotation = Quaternion(axis=[0, 0, 1], angle=np.pi/2)
+        
+        # Apply the rotation
+        q_aw = q_rotation * q_ns
+        
+        # Set the transformed quaternion
+        aw_transform.transform.rotation.x = q_aw.x
+        aw_transform.transform.rotation.y = q_aw.y
+        aw_transform.transform.rotation.z = q_aw.z
+        aw_transform.transform.rotation.w = q_aw.w
+        
+        # Add the transformed transform to the message
+        aw_msg.transforms.append(aw_transform)
+    
+    return aw_msg
+
+def ns2aw_camera_info(camera_info_msg: CameraInfo) -> CameraInfo:
+    """
+    Convert camera info message from nuScenes to Autoware coordinate system.
+    
+    Args:
+        camera_info_msg: Camera info message in nuScenes coordinate system
+        
+    Returns:
+        CameraInfo: Converted message in Autoware coordinate system
+    """
+    # Create a deep copy to avoid modifying the original message
+    aw_msg = CameraInfo()
+    aw_msg.header = camera_info_msg.header
+    aw_msg.height = camera_info_msg.height
+    aw_msg.width = camera_info_msg.width
+    aw_msg.distortion_model = camera_info_msg.distortion_model
+    aw_msg.d = camera_info_msg.d  # Distortion coefficients remain the same
+    
+    # The intrinsic camera matrix K remains the same as it's defined in camera's local coordinate system
+    aw_msg.k = camera_info_msg.k
+    
+    # The rectification matrix R depends on the camera's orientation
+    # For a rotated coordinate system, we need to modify it
+    # However, if R is identity (no rectification), it can remain the same
+    if all(val == 0.0 for i, val in enumerate(camera_info_msg.r) if i % 4 != 0) and all(val == 1.0 for i, val in enumerate(camera_info_msg.r) if i % 4 == 0):
+        # R is identity, keep it as is
+        aw_msg.r = camera_info_msg.r
+    else:
+        # R is not identity, apply rotation
+        # Convert R to numpy matrix for easier manipulation
+        r_matrix = np.array(camera_info_msg.r).reshape(3, 3)
+        
+        # Create rotation matrix for 90-degree rotation around Z-axis
+        rot_z = np.array([
+            [0, -1, 0],
+            [1, 0, 0],
+            [0, 0, 1]
+        ])
+        
+        # Apply rotation
+        r_matrix_aw = np.dot(rot_z, r_matrix)
+        
+        # Convert back to list
+        aw_msg.r = r_matrix_aw.flatten().tolist()
+    
+    # The projection matrix P combines K with the extrinsic parameters
+    # If there's a change in coordinate system, P needs to be updated
+    # For simplicity, we just copy P here since the camera's intrinsic parameters
+    # and its projection in its own coordinate system remain the same
+    aw_msg.p = camera_info_msg.p
+    
+    # Note: If the camera's extrinsic parameters (position and orientation relative to the vehicle)
+    # are encoded in P, a more complex transformation might be needed
+    
+    return aw_msg
+
 def calculate_shift(delta_x, delta_y, patch_angle_rad, grid_length=grid_length, bev_h=bev_h_, bev_w=bev_w_):
     ego_angle = np.array(patch_angle_rad / np.pi * 180)
 
@@ -549,20 +806,24 @@ def main():
         # 各トピックへの変換と書き込み        
         # 1. IMUの変換と書き込み
         imu_msg = convert_bin_to_imu(can_bus_data, ros_timestamp)
+        imu_msg = ns2aw_imu(imu_msg)
         write_to_rosbag(writer, "/sensing/imu/tamagawa/imu_raw", imu_msg, ros_timestamp)
         
         # 2. 運動学状態の変換と書き込み
         kinematic_msg = convert_bin_to_kinematic_state(can_bus_data, ros_timestamp)
+        kinematic_msg = ns2aw_kinematic_state(kinematic_msg)
         write_to_rosbag(writer, "/localization/kinematic_state", kinematic_msg, ros_timestamp)
 
         # 3. lidar2imgのtf_staticへの変換と書き込み
         # base_link(lidar) to camera{vad_camera_id}/optical_link
         tf_static_msg = convert_bin_to_tf_static(lidar2img_data_dict[frame], ros_timestamp)
+        tf_static_msg = ns2aw_tf_static(tf_static_msg)
         write_to_rosbag(writer, "/tf_static", tf_static_msg, ros_timestamp)
 
         # 4. intrinsicsのcamera_infoへの変換と書き込み
         camera_infos = create_camera_info_messages(ros_timestamp)
         for autoware_camera_id in range(6):
+            camera_infos[autoware_camera_id] = ns2aw_camera_info(camera_infos[autoware_camera_id])
             write_to_rosbag(writer, f"/sensing/camera/camera{autoware_camera_id}/camera_info", camera_infos[autoware_camera_id], ros_timestamp)
         
         print(f"Processed frame {frame}")
@@ -648,35 +909,70 @@ def reconstruct_can_bus_from_rosbag(bag_file: str, init_time: float, cycle_time_
         
         if topic_name == "/localization/kinematic_state":
             msg = deserialize_message(data, Odometry)
-            # 位置情報を取得
+            
+            # 位置情報を取得 - AutowareからnuScenesに変換
+            aw_x = msg.pose.pose.position.x
+            aw_y = msg.pose.pose.position.y
+            ns_x, ns_y = aw2ns_xy(aw_x, aw_y)
+            
             reconstructed_data[frame_id]["translation"] = [
-                msg.pose.pose.position.x,
-                msg.pose.pose.position.y,
+                ns_x,
+                ns_y,
                 msg.pose.pose.position.z
             ]
-            # 姿勢情報を取得
+            
+            # 姿勢情報を取得 - AutowareからnuScenesに変換
+            # クォータニオンを取得
+            q_aw = Quaternion(
+                w=msg.pose.pose.orientation.w,
+                x=msg.pose.pose.orientation.x,
+                y=msg.pose.pose.orientation.y,
+                z=msg.pose.pose.orientation.z
+            )
+            
+            # -90度回転（Autoware -> nuScenes）
+            q_rotation = Quaternion(axis=[0, 0, 1], angle=-np.pi/2)
+            
+            # 回転を適用
+            q_ns = q_rotation * q_aw
+            
             reconstructed_data[frame_id]["rotation"] = [
-                msg.pose.pose.orientation.x,
-                msg.pose.pose.orientation.y,
-                msg.pose.pose.orientation.z,
-                msg.pose.pose.orientation.w
-            ]
-            # 速度情報を取得
-            reconstructed_data[frame_id]["velocity"] = [
-                msg.twist.twist.linear.x,
-                msg.twist.twist.linear.y
+                q_ns.x,
+                q_ns.y,
+                q_ns.z,
+                q_ns.w
             ]
             
-            # 角速度情報を取得
-            reconstructed_data[frame_id]["roll_rate"] = msg.twist.twist.angular.x
-            reconstructed_data[frame_id]["pitch_rate"] = msg.twist.twist.angular.y
-            reconstructed_data[frame_id]["yaw_rate"] = msg.twist.twist.angular.z
+            # 速度情報を取得 - AutowareからnuScenesに変換
+            aw_vx = msg.twist.twist.linear.x
+            aw_vy = msg.twist.twist.linear.y
+            ns_vx, ns_vy = aw2ns_xy(aw_vx, aw_vy)
+            
+            reconstructed_data[frame_id]["velocity"] = [
+                ns_vx,
+                ns_vy
+            ]
+            
+            # 角速度情報を取得 - AutowareからnuScenesに変換
+            aw_wx = msg.twist.twist.angular.x
+            aw_wy = msg.twist.twist.angular.y
+            ns_wx, ns_wy = aw2ns_xy(aw_wx, aw_wy)
+            
+            reconstructed_data[frame_id]["roll_rate"] = ns_wx
+            reconstructed_data[frame_id]["pitch_rate"] = ns_wy
+            reconstructed_data[frame_id]["yaw_rate"] = msg.twist.twist.angular.z  # Yaw rate stays the same
         
         elif topic_name == "/sensing/imu/tamagawa/imu_raw":
             msg = deserialize_message(data, Imu)
+            
+            # 加速度情報を取得 - AutowareからnuScenesに変換
+            aw_ax = msg.linear_acceleration.x
+            aw_ay = msg.linear_acceleration.y
+            ns_ax, ns_ay = aw2ns_xy(aw_ax, aw_ay)
+            
             reconstructed_data[frame_id]["acceleration"] = [
-                msg.linear_acceleration.x,
-                msg.linear_acceleration.y,
+                ns_ax,
+                ns_ay,
                 msg.linear_acceleration.z,
             ]
     
@@ -693,20 +989,22 @@ def reconstruct_can_bus_from_rosbag(bag_file: str, init_time: float, cycle_time_
         # acceleration (7:10)
         can_bus[7:10] = data["acceleration"]
         
-        # angular velocity (10:12)
+        # angular velocity (10:13)
         can_bus[10] = data["roll_rate"]
         can_bus[11] = data["pitch_rate"]
         can_bus[12] = data["yaw_rate"]
         
         # velocity (13:15)
-        can_bus[13:15] = data["velocity"]
+        can_bus[13] = data["velocity"][0]
+        can_bus[14] = data["velocity"][1]
+        can_bus[15] = 0.0  # z方向速度（通常0）
         
         # patch_angle
         can_bus[16] = calculate_patch_angle_rad(data["rotation"])  # rad
         if frame_id > 1:
             patch_angle_deg_last_frame = result[frame_id - 1][-2] / np.pi * 180
             patch_angle_deg = can_bus[16] / np.pi * 180
-            can_bus[17] =  patch_angle_deg - patch_angle_deg_last_frame  # deg
+            can_bus[17] = patch_angle_deg - patch_angle_deg_last_frame  # deg
         else:
             # TODO(Shin-kyoto): use magic number for first frame
             can_bus[17] = -1.0353195667266846
@@ -768,7 +1066,6 @@ def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_tim
         if "/camera_info" in topic_name:
             # AutowareカメラIDを抽出
             autoware_camera_id = int(topic_name.split("/camera")[-2])
-
             
             # CameraInfoメッセージをデシリアライズ
             camera_info_msg = deserialize_message(data, CameraInfo)
@@ -815,7 +1112,6 @@ def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_tim
                 if "camera" in child_frame_id and "/optical_link" in child_frame_id:
                     # Autowareカメラ名からカメラIDを抽出
                     autoware_camera_id = int(child_frame_id.split("/")[0].split("camera")[-1])
-
                     
                     # VADカメラIDに変換
                     if autoware_camera_id not in autoware_to_vad_camera_map:
@@ -827,27 +1123,38 @@ def reconstruct_lidar2img_from_rosbag(bag_file: str, init_time: float, cycle_tim
                         print(f"Warning: No camera intrinsics for camera{autoware_camera_id}")
                         continue
                     
-                    # 平行移動を取得
-                    translation = np.array([
+                    # Autoware座標系の平行移動ベクトルを取得
+                    aw_translation = np.array([
                         transform.transform.translation.x,
                         transform.transform.translation.y,
                         transform.transform.translation.z
                     ])
                     
-                    # クォータニオンを取得
-                    qx = transform.transform.rotation.x
-                    qy = transform.transform.rotation.y
-                    qz = transform.transform.rotation.z
-                    qw = transform.transform.rotation.w
+                    # AutowareからnuScenes座標系に変換
+                    ns_x, ns_y = aw2ns_xy(aw_translation[0], aw_translation[1])
+                    ns_translation = np.array([ns_x, ns_y, aw_translation[2]])
                     
-                    # pyquaternionのQuaternionクラスを使用して回転行列に変換
-                    q = Quaternion(w=qw, x=qx, y=qy, z=qz)
-                    rotation_matrix = q.rotation_matrix
+                    # Autoware座標系のクォータニオンを取得
+                    q_aw = Quaternion(
+                        w=transform.transform.rotation.w,
+                        x=transform.transform.rotation.x,
+                        y=transform.transform.rotation.y,
+                        z=transform.transform.rotation.z
+                    )
                     
-                    # lidar2cam_rtを構築
+                    # -90度回転（Autoware -> nuScenes）
+                    q_rotation = Quaternion(axis=[0, 0, 1], angle=-np.pi/2)
+                    
+                    # 回転を適用
+                    q_ns = q_rotation * q_aw
+                    
+                    # nuScenes座標系での回転行列に変換
+                    ns_rotation_matrix = q_ns.rotation_matrix
+                    
+                    # lidar2cam_rtを構築（nuScenes座標系）
                     lidar2cam_rt = np.eye(4, dtype=np.float32)
-                    lidar2cam_rt[:3, :3] = rotation_matrix
-                    lidar2cam_rt[3, :3] = translation
+                    lidar2cam_rt[:3, :3] = ns_rotation_matrix
+                    lidar2cam_rt[3, :3] = ns_translation
                     
                     # lidar2cam_rt.Tを計算
                     lidar2cam_rt_T = lidar2cam_rt.T
