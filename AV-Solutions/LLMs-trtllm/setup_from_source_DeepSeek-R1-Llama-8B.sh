@@ -10,7 +10,7 @@ export path_engine=$PWD/DeepSeek-R1-Distill-Llama-8B_int4_awq_kv_int8
 export path_model=$PWD/DeepSeek-R1-Distill-Llama-8B
 
 
-# Disable rotary_scaling in Llama 3.1 for Orin deployment
+# Disable rotary_scaling in DeepSeek R1 distilled Llama 3.1 for Orin deployment
 python json_modifier.py $path_engine/config.json
 
 

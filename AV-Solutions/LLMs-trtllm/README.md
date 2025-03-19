@@ -1,7 +1,11 @@
 # TensorRT-LLM on DRIVE Orin
 
-[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM/tree/v0.13.0) is a toolbox for optimizing Large Language Model (LLM) inference. It offers cutting-edge optimizations such as custom attention kernels, plugins, and various quantization techniques, enabling efficient inference on NVIDIA GPUs. In this repository, we demonstrate how to deploy Large Lanuage Model (LLM) on DRIVE Orin platform for developers who is interested in using TensorRT-LLM. Following this repository, we detail the deployment of [Llama-3.1-8B](https://huggingface.co/meta-llama/Llama-3.1-8B) model on Orin with TensorRT-LLM 0.13. This repository is for evaluation purposes only. 
+[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM/tree/v0.13.0) is a toolbox for optimizing Large Language Model (LLM) inference. It offers cutting-edge optimizations such as custom attention kernels, plugins, and various quantization techniques, enabling efficient inference on NVIDIA GPUs. In this repository, we demonstrate how to deploy Large Lanuage Model (LLM) on DRIVE Orin platform for developers who is interested in using TensorRT-LLM. Following this repository, we detail the deployment of LLMs on Orin with TensorRT-LLM 0.13. This repository is for evaluation purposes only. 
 
+## Supported Models:
+Currently, the following LLMs are supported: 
+- [Llama-3.1-8B](https://huggingface.co/meta-llama/Llama-3.1-8B)
+- [DeepSeek-R1-Distill-Llama-8B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Llama-8B)
 
 ## Orin Environment:
 
@@ -14,9 +18,9 @@ Please make sure you have the following Orin environment setup on your device. Y
 - TensorRT 10.4.0.11
 
 
-## Generate LLaMA-3.1-8B Model with INT4_AWQ and INT8-KV-Cache on x86
+## Generate LLMs with INT4_AWQ and INT8-KV-Cache on x86
 
-In this example, we are recommending quantizing the Llama-3.1-8B model during the deployment. To quantize this Llama model, please follow this link to install the TensorRT-LLM on an x86 system with at least 16GB GPU memory the following sample commands: 
+In this example, we are recommending quantizing the LLMs during the deployment. To quantize this Llama model, please follow this link to install the TensorRT-LLM on an x86 system with at least 16GB GPU memory the following sample commands: 
 
 ```
 python -m venv trtllm
@@ -34,16 +38,14 @@ python convert_checkpoint.py --model_dir $input_model --output_dir $output_model
 ```
 
 
-
-
 ## Build TensorRT-LLM from Source
 
-After generating the quantized Llama-3.1-8B model on x86 system, please copy **Llama-3.1-8B** and **Llama-3.1-8B_int4_awq_kv_int8** folders from host to your target DRIVE Orin working directory. Then please run the following command to build TensorRT-LLM from source. 
+After generating the quantized LLMs on x86 system, please copy original LLM checkpoint folder and quantized LLM folders from host to your target DRIVE Orin working directory. Then please run the following command to build TensorRT-LLM from source. 
 ```
-./setup_from_source.sh
+./setup_from_source_{MODEL_NAME}.sh
 ```
 
-The overall working directory after running `setup_from_source.sh` will be as follows:
+The overall working directory after running `setup_from_source_{MODEL_NAME}.sh` will be as follows:
 ```
 work_dir
 ├── batch_manager 
@@ -52,8 +54,8 @@ work_dir
 ├── setup_from_source.sh 
 ├── TensorRT-LLM
 ├── TensorRT-10.4.0.11
-├── Llama-3.1-8B
-├── Llama-3.1-8B_int4_awq_kv_int8 
+├── {MODEL_NAME}
+├── {MODEL_NAME}_int4_awq_kv_int8 
 ├── trtllm_0.13 (vitual enviornment)
 ├── nccl
 ├── json_modifier.py
