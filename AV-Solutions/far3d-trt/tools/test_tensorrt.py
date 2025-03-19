@@ -412,6 +412,7 @@ def main():
         if scene_token != data['img_metas'][0].data[0][0]['scene_token']:
             scene_token = data['img_metas'][0].data[0][0]['scene_token']
             data["prev_exists"] = torch.cuda.FloatTensor([0]).unsqueeze(0)
+            trt_model.decoder.reset_internal_state()
         trt_results = trt_model(stream=stream, data=data)
         for key in trt_results.keys():
             trt_results[key] = trt_results[key].cpu()
@@ -419,8 +420,6 @@ def main():
         trt_results = dict(pts_bbox=dict(boxes_3d=trt_results['bboxes'], scores_3d=trt_results['scores'], labels_3d=trt_results['labels']))
         trt_results['pts_bbox']['boxes_3d'] = LiDARInstance3DBoxes(trt_results['pts_bbox']['boxes_3d'])
         trt_outputs.append(trt_results)
-        if i == 500:
-            break
         
     eval_kwargs = cfg.get('evaluation', {}).copy()    
     remove_keys = ['interval', 'tmpdir', 'start', 'gpu_collect', 'save_best','rule']
@@ -428,7 +427,7 @@ def main():
         eval_kwargs.pop(key, None)
     print('Tensorrt performance')
     print(dataset.evaluate(trt_outputs, **eval_kwargs))
-
+    
 
 if __name__ == '__main__':
     torch.multiprocessing.set_start_method('fork')

@@ -39,10 +39,9 @@ import projects.mmdet3d_plugin.models.utils.detr3d_transformer as detr3d_transfo
 import onnx_graphsurgeon as gs
 import onnx
 import onnxsim
+import subprocess
 
-
-onnx_opset_version = 15
-precision = 'fp32'
+onnx_opset_version = 17
 
 msda_plugin_name = "MultiscaleDeformableAttnPlugin_TRT"
 
@@ -93,19 +92,60 @@ class PatchMSDA(torch.autograd.Function):
             sampling_offsets,
             attention_weights,
         )
-        
+        attention_op.setType(value.type())
         return attention_op
 
     @staticmethod
     def forward(ctx, feat_flatten, spatial_flatten, level_start_index, points_2d,
                 weights, im2col_step):
-        return base_msda.forward(ctx, feat_flatten, spatial_flatten, level_start_index, points_2d, weights, im2col_step)
-        
+        # The pytorch MSDA operation only supports FP32, so in this function we cast to FP32 and then back to the original dtype
+        # to enable onnx tracing
+        dtype = feat_flatten.dtype
+        output = base_msda.forward(ctx, feat_flatten.float(), spatial_flatten, level_start_index, points_2d.float(), weights.float(), im2col_step)
+        return output.to(dtype) # 7, 1250, 256
 
-def patch_inverse(g, matrix):
-    output_op = g.op(f"trt::{inverse_plugin_name}", matrix)
-    output_op.setType(matrix.type().with_sizes(matrix.type().sizes()))
-    return output_op
+from torch.onnx._internal import jit_utils, registration
+import functools
+from torch.onnx import _type_utils, symbolic_helper
+from typing import Sequence
+from torch import _C
+
+# The version of pytorch that is compatible with far3d contains a bugged layer norm symbolic export function
+# this is the layer norm symbolic export function from a more recent version of pytorch that works correctly.
+_onnx_symbolic = functools.partial(registration.onnx_symbolic, opset=17)
+@_onnx_symbolic("aten::layer_norm")
+@symbolic_helper.parse_args("v", "is", "v", "v", "f", "none")
+def layer_norm(
+    g: jit_utils.GraphContext,
+    input: _C.Value,
+    normalized_shape: Sequence[int],
+    weight: _C.Value,
+    bias: _C.Value,
+    eps: float,
+    cudnn_enable: bool,
+):
+    # normalized_shape: input shape from an expected input of size
+    # axis: The first normalization dimension.
+    # layer_norm normalizes on the last D dimensions,
+    # where D is the size of normalized_shape
+    axis = -len(normalized_shape)
+    scalar_type = _type_utils.JitScalarType.FLOAT
+    dtype = scalar_type.dtype()
+    if symbolic_helper._is_none(weight):
+        weight_value = torch.ones(normalized_shape, dtype=dtype)
+        weight = g.op("Constant", value_t=weight_value)
+    if symbolic_helper._is_none(bias):
+        bias_value = torch.zeros(normalized_shape, dtype=dtype)
+        bias = g.op("Constant", value_t=bias_value)
+    return g.op(
+        "LayerNormalization",
+        input,
+        weight,
+        bias,
+        epsilon_f=eps,
+        axis_i=axis,
+    )
+
 
 # from https://github.com/pytorch/pytorch/pull/100040/files
 def patch_atan2(g, input, other):
@@ -130,8 +170,6 @@ def patch_atan2(g, input, other):
 
 
 torch.onnx.register_custom_op_symbolic(f"trt::{msda_plugin_name}", PatchMSDA.symbolic, 9)
-torch.onnx.register_custom_op_symbolic("::inverse", patch_inverse, 9)
-torch.onnx.register_custom_op_symbolic("aten::linalg_inv", patch_inverse, 9)
 torch.onnx.register_custom_op_symbolic("aten::atan2", patch_atan2, 9)
 
 def noop_complex_operators(g, input):
@@ -226,6 +264,13 @@ class TransformerDecoderExportWrapper(torch.nn.Module):
                 img2lidar,
                 ego_pose,
                 memory_embedding, memory_reference_point, memory_egopose, memory_velo, memory_timestamp):
+        # for non-stronglyTyped networks, the input tensor dtype does not matter, for stronglyTyped networks
+        # this enables half precision for feature based operations
+        img_feats_0 = img_feats_0.half()
+        img_feats_1 = img_feats_1.half()
+        img_feats_2 = img_feats_2.half()
+        img_feats_3 = img_feats_3.half()
+
         img_metas = [dict(pad_shape=[torch.Tensor([640, 960, 3]).to(device=img_feats_0.device)])]
         data = dict(img_feats=[img_feats_0, img_feats_1, img_feats_2, img_feats_3], 
                     prev_exists=prev_exists, 
@@ -251,7 +296,8 @@ class TransformerDecoderExportWrapper(torch.nn.Module):
                                             bbox_list=[bbox_list_0, bbox_list_1, bbox_list_2, bbox_list_3, bbox_list_4, bbox_list_5, bbox_list_6],
                                             )
         bbox_list, state = self.module.simple_test_bboxes(img_metas=img_metas, outs_roi=outs_roi, state=state, **data)
-        output = [bbox_list[0][0], bbox_list[0][1], bbox_list[0][2].to(torch.int32)]
+        # cast the outputs to float to keep a consistent output format regardless of running the decoder as fp32 or strongly typed.
+        output = [bbox_list[0][0].float(), bbox_list[0][1].float(), bbox_list[0][2].to(torch.int32)]
         for name in far3d_state_names:
             output.append(state[name])
         return output
@@ -304,48 +350,47 @@ class Far3DExportWrapper(torch.nn.Module):
             output.append(state[name])
         return output   
 
-def patch_msda_onnx(onnx_file_path):
+def patch_msda_onnx(onnx_file_path, num_cams=7, num_queries = 1250, num_groups = 8, num_levels = 4, num_points = 13):
+    # MMCV expected attention_weights to be of the form [N, Lq, M, L * P] while tensorrt open source expects
+    # the form [N, Lq, M, L, P]
+    # the below work around is due to bugs in shape inference during the pytorch -> onnx conversion process
+    # thus we operate directly on the produced onnx file to add a reshape layer prior to each MSDA
     base = os.path.splitext(onnx_file_path)[0]
     model = onnx.load(onnx_file_path)
-    inferred = onnx.shape_inference.infer_shapes(model)
-    sim_inferred, _ = onnxsim.simplify(inferred)
+    model = onnx.shape_inference.infer_shapes(model)
+    model, _ = onnxsim.simplify(model)
     # Have to do a while loop here to re-run simplify and infer_shapes
+    g = gs.import_onnx(model)
+    for node in g.nodes:
+        if node.op == 'MultiscaleDeformableAttnPlugin_TRT':
+            if(len(node.inputs[-1].shape)) == 4:
+                print('Updating {}'.format(node.name))
+                
+                new_weight_shape = np.array([num_cams, num_queries, num_groups, num_levels, num_points])
+                name = node.name
+                name = '/'.join(name.split('/')[:-1] + ['weight_reshape'])
+                new_weight_shape = gs.Constant(name=name, values=new_weight_shape)
+                weight_reshape = g.layer(op="Reshape", inputs=[node.inputs[-1], new_weight_shape], outputs=["Reshape_{}_out".format(node.name)])[0]
+                weight_reshape.shape = [num_cams, num_queries, num_groups, num_levels, num_points]
+                weight_reshape.dtype = node.inputs[0].dtype
+                node.inputs[-1] = weight_reshape
+
+                name = node.name
+                name = '/'.join(name.split('/')[:-1] + ['point_reshape'])
+                new_point_shape = np.array([num_cams, num_queries, num_groups, num_levels, num_points, 2])
+                new_point_shape = gs.Constant(name=name, values=new_point_shape)
+                point_reshape = g.layer(op="Reshape", inputs=[node.inputs[-2], new_point_shape], outputs=["Reshape_{}_out".format(node.name)])[0]
+                point_reshape.shape = [num_cams, num_queries, num_groups, num_levels, num_points]
+                point_reshape.dtype = node.inputs[0].dtype
+                node.inputs[-2] = point_reshape
+                
+    g.toposort()    
+    new_onnx = gs.export_onnx(g)
+    inferred = onnx.shape_inference.infer_shapes(new_onnx)
+    sim_inferred, _ = onnxsim.simplify(inferred)
     g = gs.import_onnx(sim_inferred)
-    count = 0
-    while(True):
-        found = False
-        # unfortunately since we re-sort the model, it is necessary to just re-iterate over the whole node list
-        for node in g.nodes:
-            if node.op == 'MultiscaleDeformableAttnPlugin_TRT':
-                if(len(node.inputs[-1].shape)) == 4:
-                    print('Updating {}'.format(node.name))
-                    if count == 0:
-                        # all of the attention layers are of the same shape in Far3D,
-                        # but shape inference breaks after the first one, so we store the shapes
-                        # from the first attention layer here
-                        N, _, M, _ = node.inputs[0].shape
-                        _, Lq, _, L, P, _  = node.inputs[-2].shape
-                    count += 1
-                    new_shape = np.array([N, Lq, M, L, P], dtype=np.int32)
-                    
-                    name = node.name
-                    name = '/'.join(name.split('/')[:-1] + ['reshape_constant'])
-                    new_shape = gs.Constant(name=name, values=new_shape)
-                    #casted = g.layer(op="Cast", inputs=[new_shape], outputs=["Cast_{}_out".format(node.name)], attrs=dict(to=onnx.TensorProto.INT32))[0]
-                    reshape = g.layer(op="Reshape", inputs=[node.inputs[-1], new_shape], outputs=["Reshape_{}_out".format(node.name)])[0]
-                    reshape.shape = [N, Lq, M, L, P]
-                    reshape.dtype = node.inputs[0].dtype
-                    node.inputs[-1] = reshape
-                    g.toposort()
-                    new_onnx = gs.export_onnx(g)
-                    inferred = onnx.shape_inference.infer_shapes(new_onnx)
-                    sim_inferred, _ = onnxsim.simplify(inferred)
-                    g = gs.import_onnx(sim_inferred)
-                    found = True
-                    break
-        if not found:
-            break
-    onnx.save_model(sim_inferred, f"{base}.patched.onnx")
+    onnx.save_model(sim_inferred, f"{base}.onnx")
+    print(f'Finished patching {base}.onnx')
     
 def load_input(path):
     input_dict = pkl.load(open(path, 'rb'))
@@ -410,9 +455,11 @@ def main():
         encoder_input_names = encoder.get_input_names()
         encoder_output_names = encoder.get_output_names()
         encoder_input_data_ = list(encoder_input_data)
+        # On disk we store input tensors as NHWC so that we don't need to permute to run visualization code
+        # Thus we permute here on the input to the network and then unpermute in the network
         encoder_input_data_[0] = encoder_input_data_[0].permute(0,1,3,4,2)
         encoder_input_data = tuple(encoder_input_data_)
-        # this changes it from bgr input to rgb input
+        # This changes the first convolution from BGR to RGB
         encoder.module.img_backbone.stem[0].weight = torch.nn.Parameter(encoder.module.img_backbone.stem[0].weight.flip(1))
         encoder.module.mean = encoder.module.mean.flip(0)
         encoder.module.std = encoder.module.std.flip(0)
@@ -421,22 +468,29 @@ def main():
                         do_constant_folding=False,
                         input_names=encoder_input_names,
                         output_names=encoder_output_names,
-                        opset_version=15)
+                        opset_version=onnx_opset_version)
+        ##################
+        # Decoder
+        ##################
         model.eval()
         decoder = TransformerDecoderExportWrapper(model)
         decoder_input_names = decoder.get_input_names()
         decoder_output_names = decoder.get_output_names()
         decoder_file_name= "far3d.decoder.onnx"
-        torch.onnx.export(decoder, args=decoder_input_data,
-                          f=decoder_file_name,
-                          do_constant_folding=False,
-                            input_names=decoder_input_names,
-                            output_names=decoder_output_names,
-                            opset_version=15)
-        patch_msda_onnx(decoder_file_name)
 
+        model.pts_bbox_head.half()
+        
+        torch.onnx.export(decoder, args=decoder_input_data,
+                        f=decoder_file_name,
+                        do_constant_folding=False,
+                        input_names=decoder_input_names,
+                        output_names=decoder_output_names,
+                        opset_version=onnx_opset_version)
+        
+        patch_msda_onnx(decoder_file_name)
         
         model.eval()
+        model.pts_bbox_head.float()
         full_model = Far3DExportWrapper(model)
         input_names = full_model.get_input_names()
         output_names = full_model.get_output_names()
@@ -446,16 +500,8 @@ def main():
                           do_constant_folding=False,
                             input_names=input_names,
                             output_names=output_names,
-                            opset_version=15)
+                            opset_version=onnx_opset_version)
         patch_msda_onnx(full_file_name)
-
-        
-        # MMCV expected attention_weights to be of the form [N, Lq, M, L * P] while tensorrt open source expects
-        # the form [N, Lq, M, L, P]
-        # the below work around is due to bugs in shape inference during the pytorch -> onnx conversion process
-        # thus we operate directly on the produced onnx file to add a reshape layer prior to each MSDA
-
-
 
 
 if __name__ == '__main__':
