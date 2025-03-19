@@ -20,7 +20,7 @@ Please make sure you have the following Orin environment setup on your device. Y
 
 ## Generate LLMs with INT4_AWQ and INT8-KV-Cache on x86
 
-In this example, we are recommending quantizing the LLMs during the deployment. To quantize this Llama model, please follow this link to install the TensorRT-LLM on an x86 system with at least 16GB GPU memory the following sample commands: 
+In this example, we are recommending quantizing the LLMs during the deployment. To quantize these LLMs model, please follow this link to install the TensorRT-LLM on an x86 system with at least 16GB GPU memory the following sample commands: 
 
 ```
 python -m venv trtllm
@@ -40,7 +40,7 @@ python convert_checkpoint.py --model_dir $input_model --output_dir $output_model
 
 ## Build TensorRT-LLM from Source
 
-After generating the quantized LLMs on x86 system, please copy original LLM checkpoint folder and quantized LLM folders from host to your target DRIVE Orin working directory. Then please run the following command to build TensorRT-LLM from source. 
+After generating the quantized LLMs on x86 system, please copy original LLM checkpoint folder and quantized LLM folder from host to your target DRIVE Orin working directory. Then please run the following command to build TensorRT-LLM from source. 
 ```
 ./setup_from_source_{MODEL_NAME}.sh
 ```
