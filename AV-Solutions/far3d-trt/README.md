@@ -5,6 +5,9 @@
 
 (Image taken from the [Far3D repo](https://github.com/megvii-research/Far3D))
 
+## News
+- `[2025-03-19]` Added support for a mixed precision decoder in TensorRT 10+ which reduces latency by more than 40% with marginal accuracy loss.
+
 # Prerequisites
 Repository preparation
 Please execute the following commands to download this repository and apply patches.
@@ -83,15 +86,26 @@ Use the following command to export the model to onnx, modifying the config and 
   python3 tools/export_onnx.py dependencies/Far3D/projects/configs/far3d.py weights/iter_82548.pth
 ```
 
+
 The above workflow will produce a "far3d.encoder.onnx" and a "far3d.decoder.onnx" file in the root of the workspace.
 
 # Building TensorRT engine on DRIVE Orin
-This model is to be deployed on NVIDIA DRIVE Orin with TensorRT 8.6.13.3. To get access to this version of TensorRT, please refer to details on the [NVIDIA DRIVE site](https://developer.nvidia.com/drive/downloads). This version of TensorRT comes with a compatible version of MultiScaleDeformableAttention (MSDA) inside the default libnvinfer_plugins.so library which enables the Far3D transformer decoder.
+This model has been tested on NVIDIA DRIVE Orin with TensorRT 8.6 and TensorRT 10.5+. To get access to these versions of TensorRT, please refer to details on the [NVIDIA DRIVE site](https://developer.nvidia.com/drive/downloads). These versions of TensorRT comes with a compatible version of MultiScaleDeformableAttention (MSDA) inside the default libnvinfer_plugins.so library which enables the Far3D transformer decoder.
 
 Far3D TensorRT engine files can be generated with trtexec on the target device:
 ```shell
   trtexec --onnx=far3d.encoder.onnx --saveEngine=far3d.encoder.fp16.engine --fp16
-  trtexec --onnx=far3d.decoder.patched.onnx --saveEngine=far3d.decoder.fp32.engine
+  # The stongly typed onnx file is still compatible with TensorRT 8.6 as a weakly typed fp32 model with no loss in accuracy.
+  trtexec --onnx=far3d.decoder.onnx --saveEngine=far3d.decoder.fp32.engine
+  # stronglyTyped is a feature of TensorRT 10+ and thus the following will not work for 8.6
+  trtexec --onnx=far3d.decoder.onnx --saveEngine=far3d.decoder.fp16.engine --stronglyTyped
+```
+The strategy used here to enable FP16 in the decoder is to keep all operations on features in FP16 and to keep all operations on points and intrinsics in FP32. The reason for this is that the intrinsic matrices are sensitive to casting to FP16, and that the matrix multiplications involved with point projection are prone to overflowing FP16 precision. Both of these operations are on small amounts of data while the operations on features are much less error prone to lower precision. The strongly typed network feature that was introduced in TensorRT 10+ enables precise precision control of operations and tensors which we use to achieve a significant reduction in latency while maintaining the necessary precision for sensitive operations and tensors.
+
+# Verifying TensorRT model performance
+The following command can be used to verify TensorRT model performance on the complete argoverse validation set using TensorRT python bindings.  This needs to be done from inside the `export container` due to a dependency on MMCV for dataloading and preprocessing.
+```shell
+  python3 tools/test_tensorrt.py dependencies/Far3D/projects/configs/far3d.py far3d.encoder.fp16.engine far3d.decoder.fp16.engine
 ```
 
 # Inference application in C++
@@ -104,8 +118,8 @@ The example C++ inference application expects binary dumps on disk, this data ca
   python3 tools/extract_data.py dependencies/Far3D/projects/configs/far3d.py
 ```
 
-The above command needs the Far3D configuration file to ensure data is loaded consistently with how it was exported to ensure a correct performance evaluation.  It will produce a dump of data for the first scene in argoverse2 into the data folder as well as data/filelist.txt which instructs the c++ inference application which frames to run inference on.
-  
+The above command needs the Far3D configuration file to ensure data is loaded consistently with how it was exported to ensure a correct performance evaluation. It will produce a dump of data for the first scene in argoverse2 into the data folder as well as data/filelist.txt which instructs the c++ inference application which frames to run inference on.
+
 ### Cross compile C++ inference application on x86 for NVIDIA DRIVE Orin
 
 We recommend using the following NVIDIA DRIVE docker image `drive-agx-orin-linux-aarch64-sdk-build-x86:6.0.10.0-0009` as the cross-compile environment, this container will be referred to as the `build container`.
@@ -132,12 +146,12 @@ The C++ inference application follows standard cmake practices, it can be built 
 ```
 
 #### Run C++ inference application
-The above will generate a libfar3d.so shared library and a main inference application.  It is recommended to network mount this workspace to your NVIDIA DRIVE Orin to enable data sharing.  The main inference application can be run as follows from the Orin device:
+The above will generate a libfar3d.so shared library and a main inference application. It is recommended to network mount this workspace to your NVIDIA DRIVE Orin to enable data sharing. The main inference application can be run as follows from the Orin device, selecting from FP16 or FP32 for decoder precision:
 ```shell
-  ./build/main far3d.encoder.fp16.engine far3d.decoder.fp32.engine data/filelist.txt
+  ./build/main far3d.encoder.fp16.engine far3d.decoder.{decoder_precision}.engine data/filelist.txt
 ```
 
-It will produce ${prefix}_bboxes.bin, ${prefix}_labels.bin, and ${prefix}_scores.bin  which can be loaded by numpy in the following step for validation; as well as several visualizations of detections such as the following:
+It will produce ${prefix}_bboxes.bin, ${prefix}_labels.bin, and ${prefix}_scores.bin which can be loaded by numpy in the following step for validation; as well as several visualizations of detections such as the following:
 <img src="./assets/visualization.jpg" width="1024">
 
 #### Validate inference results
@@ -148,11 +162,12 @@ The first sequence of argoverse can be tested with the following command from th
 
 The above command expects your config file as an input to configure dataloading, it then will read the first sequence of data and evaluate model performance on it by loading the binary blobs generated in the last step.
 
-# Results on Aroverse2 validation set
-These results are based on the pretrained [reference model](https://github.com/megvii-research/Far3D/releases/download/v1.0/iter_82548.pth) ([config](https://github.com/megvii-research/Far3D/blob/main/projects/configs/far3d.py)) with a VoV-99 backbone at 960x640 input resolution.
+# Results on Argoverse2 validation set
+These results are based on the pretrained [reference model](https://github.com/megvii-research/Far3D/releases/download/v1.0/iter_82548.pth) ([config](https://github.com/megvii-research/Far3D/blob/main/projects/configs/far3d.py)) with a VoV-99 backbone at 960x640 input resolution. Latency measurements were collected on a DRIVE Orin-X platform.
 
 |         Precision          | Framework          | GPU Compute Time (median, ms)| Accuracy (mAP) |
 |----------------------------|--------------------|------------------------------|----------------|
-|FP32 encoder + FP32 decoder |  Pytorch   1.13.1  |            --                |     0.241      |
-|FP32 encoder + FP32 decoder |  TensorRT  8.6.13.3|          531.89              |     0.233      |
-|FP16 encoder + FP32 decoder |  TensorRT  8.6.13.3|          366.47              |     0.233      |
+|FP32 encoder + FP32 decoder |  Pytorch   1.13.1  |          730.0               |     0.241      |
+|FP32 encoder + FP32 decoder |  TensorRT  8.6     |          538.5               |     0.233      |
+|FP16 encoder + FP32 decoder |  TensorRT  8.6     |          367.4               |     0.233      |
+|FP16 encoder + FP16 decoder |  TensorRT  10.9    |          203.9               |     0.232      |
