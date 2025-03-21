@@ -105,6 +105,45 @@ index 0a913c1..321e167 100644
                        GridSamplerInterpolation interp,
                        GridSamplerPadding padding, bool align_corners,
                        cudaStream_t stream);
+diff --git a/TensorRT/plugin/modulated_deformable_conv2d/modulatedDeformableConv2dPlugin.cpp b/TensorRT/plugin/modulated_deformable_conv2d/modulatedDeformableConv2dPlugin.cpp
+index 0494a8f..ed4a2b8 100644
+--- a/TensorRT/plugin/modulated_deformable_conv2d/modulatedDeformableConv2dPlugin.cpp
++++ b/TensorRT/plugin/modulated_deformable_conv2d/modulatedDeformableConv2dPlugin.cpp
+@@ -66,7 +66,11 @@ DimsExprs ModulatedDeformableConv2dPlugin::getOutputDimensions(
+   return outputDim;
+ }
+ 
+-int32_t ModulatedDeformableConv2dPlugin::initialize() noexcept { return 0; }
++int32_t ModulatedDeformableConv2dPlugin::initialize() noexcept {
++#if NV_TENSORRT_MAJOR >= 10 && NV_TENSORRT_MINOR >= 3
++#endif
++  return 0;
++}
+ 
+ void ModulatedDeformableConv2dPlugin::terminate() noexcept {}
+ 
+@@ -118,6 +122,9 @@ int32_t ModulatedDeformableConv2dPlugin::enqueue(
+     const nvinfer1::PluginTensorDesc *inputDesc,
+     const nvinfer1::PluginTensorDesc *outputDesc, const void *const *inputs,
+     void *const *outputs, void *workSpace, cudaStream_t stream) noexcept {
++#if NV_TENSORRT_MAJOR >= 10 && NV_TENSORRT_MINOR >= 3
++  cublasSetStream(m_cublas_handle, stream);
++#endif
+   int batch = inputDesc[0].dims.d[0];
+   int channels = inputDesc[0].dims.d[1];
+   int height = inputDesc[0].dims.d[2];
+@@ -286,7 +293,11 @@ DataType ModulatedDeformableConv2dPlugin::getOutputDataType(
+ void ModulatedDeformableConv2dPlugin::attachToContext(
+     cudnnContext *cudnn, cublasContext *cublas,
+     nvinfer1::IGpuAllocator *allocator) noexcept {
++#if NV_TENSORRT_MAJOR >= 10 && NV_TENSORRT_MINOR >= 3
++  cublasCreate(&m_cublas_handle);
++#else
+   m_cublas_handle = cublas;
++#endif
+ }
+ 
+ void ModulatedDeformableConv2dPlugin::detachFromContext() noexcept {}
 diff --git a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.cu b/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.cu
 index e1a70ac..3bd468a 100644
 --- a/TensorRT/plugin/multi_scale_deformable_attn/multiScaleDeformableAttnKernel.cu
