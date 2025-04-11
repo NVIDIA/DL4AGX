@@ -20,6 +20,7 @@ RUN python -c "import cv2"
 RUN python -m torch.utils.collect_env
 
 RUN apt-get install -y libyaml-cpp-dev libeigen3-dev pybind11-dev
+RUN pip install "nvidia-modelopt[all]==0.15.1" -U --extra-index-url https://pypi.nvidia.com
 
 ENTRYPOINT /bin/bash
 WORKDIR /workspace/far3d-trt
