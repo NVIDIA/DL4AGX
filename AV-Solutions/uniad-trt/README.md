@@ -34,6 +34,10 @@ In order to prepare data used for exporting to ONNX and inference with TensorRT,
 ### Model Training and Exportation <a name="uniad_tiny_train_export"></a>
 For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny version of UniAD(`UniAD-tiny`), with a smaller ResNet backbone and reduced image size & bev size. After training, the model needs to be exported from Pytorch to ONNX format. Please see [Model Training and Exportation](./documents/train_export.md) for details.
 
+
+### Explicit Quantization <a name="explicit_quantization"></a>
+This is an extended example of deploying [UniAD-tiny](https://github.com/NVIDIA/DL4AGX/tree/master/AV-Solutions/uniad-trt) with explicit quantization via [NVIDIA's ModelOpt Toolkit](https://github.com/NVIDIA/TensorRT-Model-Optimizer). Please see [Explicit Quantization](./documents/explicit_quantization.md) for details.
+
 ### Inference Application <a name="inference_app"></a>
 
 The inference is showcased with a C++ sample application, it loads raw images and other data as input, runs inference with a built TensorRT engine, and outputs the results of tracking and planning with visualization. We have provided two inference examples, using TensorRT::enqueueV2 and TensorRT::enqueueV3, respectively. Please follow the instructions at [Inference Application](./inference_app/README.md) on how to build the TensorRT engine, compile and run the inference application.

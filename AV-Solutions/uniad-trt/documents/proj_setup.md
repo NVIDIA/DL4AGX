@@ -54,6 +54,8 @@ Step 9: apply a patch to `BEVFormer_tensorrt/TensorRT` to support TensorRT plugi
 cd ./dependencies/BEVFormer_tensorrt/TensorRT
 git apply --exclude='*.DS_Store' ../../../patch/plugins-trt10-support.patch
 cd ../../..
+cp -r ./dependencies/BEVFormer_tensorrt/TensorRT ./UniAD/plugins
+cp ./tools/compile_plugins_x86.sh ./UniAD/plugins/
 ```
 
 -> Next Page: [Environment Preparation](env_prep.md)
