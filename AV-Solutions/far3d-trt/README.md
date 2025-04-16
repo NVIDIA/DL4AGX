@@ -88,7 +88,7 @@ Use the following command to export the model to onnx, modifying the config and 
 The above workflow will produce a "far3d.encoder.onnx" and a "far3d.decoder.onnx" file in the root of the workspace.
 
 ### Post Training Quantization
-Use the following command to quantize the encoder, modifying the config and onnx path parameters accordingly.
+To further reduce latency, we demonstrate how to perform post training quantization on the image encoder to enable INT8 inference. Use the following command to quantize the encoder, modifying the config and onnx path parameters accordingly.
 ```shell
     export PYTHONPATH=$(pwd)/dependencies/Far3D/
     python3 tools/quantize_onnx.py dependencies/Far3D/projects/configs/far3d.py far3d.encoder.onnx
