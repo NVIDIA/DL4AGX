@@ -55,7 +55,7 @@ RUN pip install --extra-index-url https://pypi.ngc.nvidia.com onnx_graphsurgeon=
 RUN pip install torch==2.3.0 torchvision==0.18.0 --index-url https://download.pytorch.org/whl/cu121
 
 # ======== Install ModelOpt Toolkit for quantization and ORT for CUDA 12 =========
-RUN pip install nvidia-modelopt[onnx]==0.15.0 --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
+RUN pip install nvidia-modelopt[onnx]==0.27.1
 ENV LD_LIBRARY_PATH=/usr/local/lib/python3.10/dist-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
 
 # ======== Prepare repo to convert BEVFormer model from PyTorch to ONNX ========

@@ -57,7 +57,6 @@ def parse_args():
     parser.add_argument(
         "--calibrator", type=str, default=None, help="[legacy, entropy, minmax]"
     )
-    # parser.add_argument("--plugin", default="/workspace/BEVFormer_tensorrt/TensorRT/lib/libtensorrt_ops.so")
     parser.add_argument(
         "--trt_plugins",
         type=str,

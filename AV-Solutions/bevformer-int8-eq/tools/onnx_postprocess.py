@@ -21,7 +21,6 @@ from typing import Dict, List, Tuple
 import argparse
 import numpy as np
 import onnx
-from onnxsim import simplify
 import onnx_graphsurgeon as gs
 import tensorrt as trt
 
@@ -31,8 +30,7 @@ def parse_args():
         "Simplifies an ONNX model with custom TensorRT (TRT) plugins. Steps: \n"
         "  1. Automatically detect custom TRT ops in the ONNX model.\n"
         "  2. Ensure that the custom ops are supported as a TRT plugin in ONNX-Runtime (`trt.plugins` domain).\n"
-        "  3. Use ONNX-GraphSurgeon to update all tensor types and shapes in the ONNX graph.\n"
-        "  4. Apply onnxsim to simplify model with inferred shapes."
+        "  3. Use ONNX-GraphSurgeon to update all tensor types and shapes in the ONNX graph."
     )
     parser.add_argument("--onnx", type=str, required=True, help="Input ONNX model path.")
     parser.add_argument("--trt_plugins", type=str, default=None,
@@ -256,16 +254,6 @@ def main():
 
     if has_custom_op:
         print(f"Found {len(custom_ops)} custom ops: {custom_ops}")
-
-        # Simplify ONNX model with inferred shapes
-        print(f"Simplifying ONNX model with inferred shapes...")
-        model_simp, check = simplify(model)
-        if check:
-            output_path = onnx_path.replace(".onnx", "_post_simp.onnx")
-            onnx.save(model_simp, output_path)
-            print(f"Simplified model was validated and saved in {output_path}")
-        else:
-            print(f"Simplified ONNX model could not be validated.")
     else:
         print("No custom ops found!")
 
