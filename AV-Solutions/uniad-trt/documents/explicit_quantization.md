@@ -30,7 +30,7 @@ TRT_VERSION=10.9.0.34 ./compile_plugins_x86.sh
 ```
 
 ##### 3. Prepare Calibration Data
-Re-run the UniAD-tiny pytorch evaluation script and cherry-pick the minShape 901 samples based on `prev_track_intances0` input shapes for calibration. There are 182 minShape samples in total.
+Re-run the UniAD-tiny pytorch evaluation script and cherry-pick the minShape 901 samples based on `prev_track_intances0` input shapes for calibration. 
 ```
 cd /workspace/UniAD
 PYTHONPATH=$(pwd) python3 ./tools/prepare_calib_data.py
@@ -73,15 +73,15 @@ ${TRT_PATH}/bin/trtexec \
 
 
 ### Results
-We show the TensorRT-10.9.0.34 deployment results on Orin-X in terms of runtime and accuracy.
+We show the TensorRT-10.7.0.23 deployment results on Orin-X in terms of runtime and accuracy. `planning MSE` is the average L2 distance between the TensorRT engine output trajectory and the Pytorch-1.12 model output trajectory. 
 #### Metrics
 | Model | Framework | Precision | DL model latency↓ | avg. L2↓ | avg. Col↓ | planning MSE↓ |
 | :---:| :---: | :---: | :---: | :---: | :---: | :---: |
 | UniAD-tiny | Pytorch-1.12 | FP32 | 843.5172 ms | 0.9986  | 0.27 | 0 |
-| UniAD-tiny | TensorRT-10.9.0.34 | FP32 | 64.5046 ms | 0.9994 | 0.27 | 9.2417e-07 |
-| UniAD-tiny | TensorRT-10.9.0.34 | FP16 |  49.0999 ms | 1.0021 | 0.26 | 0.0458 |
-| UniAD-tiny | TensorRT-10.9.0.34 | INT8(EQ) |  54.1927 ms | testing | testing | 0.012488526 | 
-| UniAD-tiny | TensorRT-10.9.0.34 | BEST(EQ) | 45.8763 ms | testing | testing | 0.04998486 |
+| UniAD-tiny | TensorRT-10.7.0.23 | FP32 | 64.0726 ms | 0.9986 | 0.27 | 9.2417e-07 |
+| UniAD-tiny | TensorRT-10.7.0.23 | FP16 |  50.1560 ms | 1.0021 | 0.26 | 0.0458 |
+| UniAD-tiny | TensorRT-10.7.0.23 | INT8(EQ) |  54.1927 ms | testing | testing | 0.0124 | 
+| UniAD-tiny | TensorRT-10.7.0.23 | BEST(EQ) | 45.8763 ms | testing | testing | 0.0499 |
 
 #### Videos
 Videos coming soon.

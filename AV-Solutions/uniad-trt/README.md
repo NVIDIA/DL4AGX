@@ -36,7 +36,7 @@ For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny
 
 
 ### Explicit Quantization <a name="explicit_quantization"></a>
-This section showcase how to deploy [UniAD-tiny](https://github.com/NVIDIA/DL4AGX/tree/master/AV-Solutions/uniad-trt) with explicit quantization via [NVIDIA's ModelOpt Toolkit](https://github.com/NVIDIA/TensorRT-Model-Optimizer). Please see [Explicit Quantization](./documents/explicit_quantization.md) for details.
+This section showcases how to deploy [UniAD-tiny](https://github.com/NVIDIA/DL4AGX/tree/master/AV-Solutions/uniad-trt) with explicit quantization via [NVIDIA's ModelOpt Toolkit](https://github.com/NVIDIA/TensorRT-Model-Optimizer). Please see [Explicit Quantization](./documents/explicit_quantization.md) for details.
 
 ### Inference Application <a name="inference_app"></a>
 
