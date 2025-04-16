@@ -72,6 +72,11 @@ def parse_args():
             " the original ONNX model with an appropriate suffix."
         ),
     )
+    parser.add_argument(
+        "--simplify",
+        action="store_true",
+        help="If True, the given ONNX model will be simplified before quantization is performed.",
+    )
     args = parser.parse_args()
     return args
 
@@ -93,6 +98,7 @@ def main():
         op_types_to_exclude=args.op_types_to_exclude,
         trt_plugins=args.trt_plugins,
         output_path=args.output_path,
+        simplify=args.simplify,
     )
 
 

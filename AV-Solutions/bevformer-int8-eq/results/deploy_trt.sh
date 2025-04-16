@@ -10,8 +10,8 @@ BEVFORMER_REPO=/workspace/BEVFormer_tensorrt
 ROOT_DIR=$(pwd)
 
 MODEL_NAMES=(
-  bevformer_tiny_epoch_24_cp_op13_post_simp
-  bevformer_tiny_epoch_24_cp2_op13_post_simp
+  bevformer_tiny_epoch_24_cp_op13
+  bevformer_tiny_epoch_24_cp2_op13
 )
 
 PLUGIN_PATH="/workspace/BEVFormer_tensorrt/TensorRT/lib/libtensorrt_ops.so"
@@ -44,7 +44,8 @@ for (( i=0; i<$len; i++ )); do
     --output_path=${MODEL_DIR}/${MODEL_NAME}.quant.onnx \
     --trt_plugins=$PLUGIN_PATH \
     --op_types_to_exclude MatMul \
-    --calibration_data_path=$CALIB_PATH
+    --calibration_data_path=$CALIB_PATH \
+    --simplify
   wait
   for PRECISION in best; do
     echo "    - ${PRECISION}"

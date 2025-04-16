@@ -5,8 +5,8 @@ LOGS_DIR="${MODEL_DIR}/logs_${DEVICE}_trt${TRT_VERSION}"
 BEVFORMER_REPO=/workspace/BEVFormer_tensorrt
 
 MODEL_NAMES=(
-  bevformer_tiny_epoch_24_cp_op13_post_simp
-  bevformer_tiny_epoch_24_cp2_op13_post_simp
+  bevformer_tiny_epoch_24_cp_op13
+  bevformer_tiny_epoch_24_cp2_op13
 )
 
 PLUGIN_PATH="/workspace/BEVFormer_tensorrt/TensorRT/lib/libtensorrt_ops.so"
