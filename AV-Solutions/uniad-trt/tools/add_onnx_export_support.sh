@@ -17,6 +17,7 @@ FILES=(
     "tools/quantize_uniad.py"
     "tools/postprocess_quantized_uniad.py"
     "tools/prepare_calib_data.py"
+    "tools/uniad_prepare_calib_data.sh"
 )
 
 # Copy each file to the destination directory, preserving directory structure
