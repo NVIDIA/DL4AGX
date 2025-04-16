@@ -21,23 +21,16 @@
 #  Modified by Zhiqi Li
 # ---------------------------------------------
 import argparse
-import torch
 
-import onnx
-import onnx_graphsurgeon as gs
-import torch
-
-from mmcv import Config, DictAction
+from mmcv import Config
 from mmdet3d.datasets import build_dataset
-from mmdet.apis import set_random_seed
 from mmdet.datasets import replace_ImageToTensor
 from projects.mmdet3d_plugin.datasets.builder import build_dataloader
-from onnxruntime.quantization.calibrate import CalibrationDataReader
 
-
-import onnx
 
 import modelopt.onnx.quantization.int8
+import onnx
+import onnx_graphsurgeon as gs
 from onnxruntime.quantization.shape_inference import quant_pre_process
 from onnxruntime.quantization.calibrate import CalibrationDataReader
 from onnxconverter_common.float16 import convert_float_to_float16
@@ -154,5 +147,4 @@ def main():
     
 
 if __name__ == '__main__':
-    torch.multiprocessing.set_start_method('fork')
     main()
