@@ -39,17 +39,22 @@ PYTHONPATH=$(pwd) python3 ./tools/prepare_calib_data.py
 ##### 4. Quantize ONNX Model
 ```
 cd /workspace/UniAD
-LD_LIBRARY_PATH=<path_to_cudnn>/lib:/workspace/TensorRT-10.9.0.34_x86_cu118/lib:$LD_LIBRARY_PATH python tools/quantize_uniad.py --onnx_path <path_to_onnx_model> --cali_data_path <path_to_calibration_npz_data> --trt_plugins <path_to_compiled_tensorrt_plugins.so>
+MIN=901
+SHAPES=prev_track_intances0:${MIN}x512,prev_track_intances1:${MIN}x3,prev_track_intances3:${MIN},prev_track_intances4:${MIN},prev_track_intances5:${MIN},prev_track_intances6:${MIN},prev_track_intances8:${MIN},prev_track_intances9:${MIN}x10,prev_track_intances11:${MIN}x4x256,prev_track_intances12:${MIN}x4,prev_track_intances13:${MIN}
+
+LD_LIBRARY_PATH=<path_to_cudnn>/lib:/workspace/TensorRT-10.9.0.34_x86_cu118/lib:$LD_LIBRARY_PATH python -m modelopt.onnx.quantization \
+    --onnx_path=<path_to_onnx_model> \
+    --trt_plugins=<path_to_compiled_tensorrt_plugins.so> \
+    --calibration_eps trt cuda:0 cpu \
+    --calibration_shapes=${SHAPES} \
+    --simplify \
+    --op_types_to_exclude MatMul \
+    --calibration_data_path=<path_to_calibration_npz_data> \
+    --output_path=<path_to_quantized_onnx_model> \
+    --dq_only
 ```
 
-##### 5. Postprocess Quantized ONNX Model
-Note that currently the modelopt toolkit does not support postprocessing quantized onnx model back to dynamic input shapes, so we need to manually apply fixes to the quantized onnx model. In the future, this step will be automatically done by the modelopt toolkit.
-```
-cd /workspace/UniAD
-python3 tools/postprocess_quantized_uniad.py --onnx_path <path_to_quantized_onnx_model>
-```
-
-##### 6. Build TensorRT Engine with Explicit Quantization on Orin
+##### 5. Build TensorRT Engine with Explicit Quantization on Orin
 ```
 MIN=901
 OPT=901
@@ -81,7 +86,7 @@ We show the TensorRT-10.7.0.23 deployment results on Orin-X in terms of runtime 
 | UniAD-tiny | TensorRT-10.7.0.23 | FP32 | 64.0726 ms | 0.9986 | 0.27 | 9.2417e-07 |
 | UniAD-tiny | TensorRT-10.7.0.23 | FP16 |  50.1560 ms | 1.0021 | 0.26 | 0.0458 |
 | UniAD-tiny | TensorRT-10.7.0.23 | INT8(EQ) |  54.1927 ms | testing | testing | 0.0124 | 
-| UniAD-tiny | TensorRT-10.7.0.23 | BEST(EQ) | 45.8763 ms | testing | testing | 0.0499 |
+| UniAD-tiny | TensorRT-10.7.0.23 | BEST(EQ) | 45.8763 ms | 1.0029 | 0.27 | 0.0499 |
 
 #### Videos
 Videos coming soon.
