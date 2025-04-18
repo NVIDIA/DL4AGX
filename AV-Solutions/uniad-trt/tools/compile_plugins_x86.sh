@@ -3,7 +3,7 @@
 # Check if TRT_VERSION and PLATFORM are provided
 if [ -z "$TRT_VERSION" ] || [ -z "$PLATFORM" ]; then
   echo "Error: TRT_VERSION and PLATFORM must be specified."
-  echo "Usage: TRT_VERSION=10.9.0.34 PLATFORM=x86_cu118 ./compile_plugins_x86.sh"
+  echo "Usage: TRT_VERSION=10.7 PLATFORM=x86_cu118 ./compile_plugins_x86.sh"
   exit 1
 fi
 

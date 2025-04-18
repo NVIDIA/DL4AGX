@@ -40,7 +40,7 @@ random.seed(42)
 np.random.seed(42)
 torch.manual_seed(42)
 torch.cuda.manual_seed(42)
-torch.cuda.manual_seed_all(42)  # if you are using multi-GPU
+torch.cuda.manual_seed_all(42)
 
 # Ensure deterministic algorithms in PyTorch
 torch.backends.cudnn.deterministic = True
@@ -218,7 +218,6 @@ def main():
         init_dist(args.launcher, **cfg.dist_params)
 
     # set random seeds
-    # torch.use_deterministic_algorithms(True)
     if args.seed is not None:
         set_random_seed(args.seed, deterministic=args.deterministic)
 
@@ -227,7 +226,7 @@ def main():
     data_loader = build_dataloader(
         dataset,
         samples_per_gpu=samples_per_gpu,
-        workers_per_gpu=0, #cfg.data.workers_per_gpu,
+        workers_per_gpu=0, 
         dist=distributed,
         shuffle=False,
         nonshuffler_sampler=cfg.data.nonshuffler_sampler,
@@ -367,7 +366,7 @@ def main():
     l2g_t0 = torch.zeros(1,3)
     prev_pos = 0
     prev_angle = 0
-    shape0 = None
+    shape0 = 901
     shape0_dict = {}
     for sample_id, data in tqdm(enumerate(data_loader)):
         img_metas = data["img_metas"][0].data
@@ -436,8 +435,6 @@ def main():
                     onnx_inputs[key] = torch.from_numpy(onnx_inputs[key]).cuda()
                     img_metas_scene_token = cur_img_metas_scene_token
 
-        # import pdb; pdb.set_trace()
-        # inputs = tuple(onnx_inputs.values())
         with torch.no_grad():
             dummy_outputs = model.forward_uniad_trt(**onnx_inputs)
         max_obj_id = dummy_outputs[-3]
