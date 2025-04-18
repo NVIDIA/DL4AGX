@@ -41,6 +41,8 @@ def parse_args():
     parser.add_argument('config',help='test config file path')
     parser.add_argument('onnx_path', help='path to far3d.encoder.onnx', default='far3d.encoder.onnx')
     parser.add_argument('--exclude-key', type=str, help='exclude key')
+    parser.add_argument('--num_samples', type=int, default=500, help='Number of samples for quantization')
+    parser.add_argument('--sample_skip_interval', type=int, default=20, help='Number of frames to skip between samples')
     args = parser.parse_args()
 
     return args
@@ -60,14 +62,15 @@ def create_node_IO_mapping(graph):
 
 
 class CalibrationReader(CalibrationDataReader):
-    def __init__(self, data_loader, num_samples):
+    def __init__(self, data_loader, num_samples, skip_interval):
         self.iter = iter(data_loader)
         self.count = 0
         self.num_samples = num_samples
+        self.skip_interval = skip_interval
 
     def get_next(self) -> dict:
         # skip 20 frames
-        for _ in range(20):
+        for _ in range(self.skip_interval):
             data = next(self.iter)
         
         self.count += 1
@@ -137,7 +140,7 @@ def main():
             if exclude_key in node.name:
                 nodes.append(node.name)
             
-    data_reader = CalibrationReader(data_loader, num_samples=500)
+    data_reader = CalibrationReader(data_loader, num_samples=args.num_samples, skip_interval=args.sample_skip_interval)
     quantized_onnx_path = onnx_path.replace('.onnx', '.int8.onnx')
     quantized_model = modelopt.onnx.quantization.int8.quantize(onnx_path, output_path = quantized_onnx_path, 
                                                                 calibration_data_reader=data_reader, 

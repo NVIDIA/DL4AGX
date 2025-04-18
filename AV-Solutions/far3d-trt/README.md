@@ -88,15 +88,15 @@ Use the following command to export the model to onnx, modifying the config and 
 The above workflow will produce a "far3d.encoder.onnx" and a "far3d.decoder.onnx" file in the root of the workspace.
 
 ### Post Training Quantization
-To further reduce latency, we demonstrate how to perform post training quantization on the image encoder to enable INT8 inference. Use the following command to quantize the encoder, modifying the config and onnx path parameters accordingly.
+To further reduce latency, we demonstrate how to perform post training quantization on the image encoder to enable INT8 inference. Use the following command to quantize the encoder, modifying the config and onnx path parameters accordingly.  The below command will sample 500 batches at an interval of one sample per 20 batches from the validation set for calibration.
 ```shell
     export PYTHONPATH=$(pwd)/dependencies/Far3D/
-    python3 tools/quantize_onnx.py dependencies/Far3D/projects/configs/far3d.py far3d.encoder.onnx
+    python3 tools/quantize_onnx.py dependencies/Far3D/projects/configs/far3d.py far3d.encoder.onnx --num_samples=500 --sample_skip_interval=20
 ```
 The above command will produce a post training quantized 'far3d.encoder.int8.onnx' along with quantization data 'far3d.encoder.int8.onnx.data' and 'far3d.encoder.int8.onnx_data' for TensorRT to consume.  
 
 # Building TensorRT engine on DRIVE Orin
-This model has been tested on NVIDIA DRIVE Orin with TensorRT 8.6 and TensorRT 10.5+. To get access to these versions of TensorRT, please refer to details on the [NVIDIA DRIVE site](https://developer.nvidia.com/drive/downloads). These versions of TensorRT comes with a compatible version of MultiScaleDeformableAttention (MSDA) inside the default libnvinfer_plugins.so library which enables the Far3D transformer decoder.
+This model has been tested on NVIDIA DRIVE Orin with TensorRT 8.6 and TensorRT 10.9. To get access to these versions of TensorRT, please refer to details on the [NVIDIA DRIVE site](https://developer.nvidia.com/drive/downloads). These versions of TensorRT comes with a compatible version of MultiScaleDeformableAttention (MSDA) inside the default libnvinfer_plugins.so library which enables the Far3D transformer decoder.
 
 Far3D TensorRT engine files can be generated with trtexec on the target device:
 ```shell
