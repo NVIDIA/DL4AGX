@@ -86,10 +86,19 @@ We show the TensorRT-10.7.0.23 deployment results on Orin-X in terms of runtime 
 | UniAD-tiny | TensorRT-10.7.0.23 | FP32 | 64.0726 ms | 0.9986 | 0.27 | 9.2417e-07 |
 | UniAD-tiny | TensorRT-10.7.0.23 | FP16 |  50.1560 ms | 1.0021 | 0.26 | 0.0458 |
 | UniAD-tiny | TensorRT-10.7.0.23 | INT8(EQ) |  54.1927 ms | 1.0043 | 0.27 | 0.0124 | 
-| UniAD-tiny | TensorRT-10.7.0.23 | BEST(EQ) | 39.6104 ms | 1.0029 | 0.27 | 0.0499 |
+| UniAD-tiny | TensorRT-10.7.0.23 | BEST(EQ) | 39.6104 ms | 1.0029 | 0.27 | 0.0502 |
 
 #### Videos
-- [FP32](./assets/uniad_fp32_video.gif)
-![](../assets/uniad_fp32_video.gif)
-- [BEST(EQ)](./assets/uniad_best_eq_video.gif)
-![](../assets/uniad_best_eq_video.gif)
+
+<table>
+  <tr>
+    <td align="center">
+      <strong>TensorRT-10.7.0.23 FP32</strong><br>
+      <img src="../assets/uniad_fp32_video.gif" style="max-width:100%; width:700px">
+    </td>
+    <td align="center">
+      <strong>TensorRT-10.7.0.23 BEST(EQ)</strong><br>
+      <img src="../assets/uniad_best_eq_video.gif" style="max-width:100%; width:700px">
+    </td>
+  </tr>
+</table>

@@ -16,6 +16,7 @@ This repo demonstrates how to deploy UniAD on NVIDIA Drive Orin platform using T
    - [Environment Preparation](#env_setup)
    - [Data Preparation](#data_prepare)
    - [Model Training and Exportation](#uniad_tiny_train_export)
+   - [Explicit Quantization](#explicit_quantization)
    - [Inference Application](#inference_app)
 2. [Results](#results)
 3. [Reference](#ref)
@@ -49,7 +50,14 @@ The inference is showcased with a C++ sample application, it loads raw images an
 The inference application will generate output visualizations to showcase the planning trajectory and dynamic object detection. Notice that post-processing such as collision correction is not implemented in the current sample. Raw planning trajectory and object detection results are visualized.
 
 
-![](./assets/uniad-inference.gif)
+<table>
+  <tr>
+    <td align="center">
+      <strong>TensorRT-8.6.13.3 FP32</strong><br>
+      <img src="./assets/uniad-inference.gif" style="max-width:100%; width:700px">
+    </td>
+  </tr>
+</table>
 
 In the visualization, green lines depict planning trajectories of the ego car in green bounding box. Detection of other objects are visualized in bounding boxes with different colors, and with white heading and confidence scores marked. The lines starting from the center of those bounding boxes indicate the velocities of the objects. 
 
