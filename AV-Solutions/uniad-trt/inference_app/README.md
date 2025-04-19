@@ -3,7 +3,7 @@
 ## Environment
 The inference application with `TensorRT::enqueueV2` is tested on NVIDIA DRIVE platforms and X86 platform using `TensorRT 8.6`. 
 
-Since `TensorRT::enqueueV2` is being deprecated, we also demonstrate how to use `TensorRT::enqueueV3` to run engine inference with inputs or outputs with data-dependent-shape (DDS). The inference application with `TensorRT::enqueueV3` is tested on NVIDIA DRIVE platforms and X86 platform using `TensorRT 10.8`.
+Since `TensorRT::enqueueV2` is being deprecated, we also demonstrate how to use `TensorRT::enqueueV3` to run engine inference with inputs or outputs with data-dependent-shape (DDS). The inference application with `TensorRT::enqueueV3` is tested on NVIDIA DRIVE platforms and X86 platform using `TensorRT 10.7`.
 ## Dependencies
 The inference application will use [cuOSD](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and [STB](https://github.com/nothings/stb) as submodules. Notice that since cuOSD do not have separate repo, we need to manually download it from [here](https://github.com/NVIDIA-AI-IOT/Lidar_AI_Solution/tree/master/libraries/cuOSD) and put it under [the dependencies folder](../../common/dependencies/), i.e.,
 ```
@@ -100,4 +100,4 @@ LD_LIBRARY_PATH=<path_to_TensorRT>/lib/:$LD_LIBRARY_PATH ./build/uniad <engine_p
 ```
 This command will read the raw images and the dumped metadata as input, run infernece using the engine and generate visualization results under the ```<output_path>``` folder.
 
-<- Last Page: [UniAD-tiny Traning and Exportation](../documents/train_export.md)
+<- Last Page: [Explicit Quantization](../documents/explicit_quantization.md)
