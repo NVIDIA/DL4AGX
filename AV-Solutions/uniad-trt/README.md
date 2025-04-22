@@ -8,6 +8,7 @@
 This repo demonstrates how to deploy UniAD on NVIDIA Drive Orin platform using TensorRT. Specifically, we trained a tiny version of UniAD (`UniAD-tiny`) and provide step by step workflow including model training, ONNX model export, and inference with a sample C++ application.
 
 ## News
+- `[2025/04/22]` Explicit Quantization via TensorRT Model Optimizer for UniAD-tiny ONNX model is released. See [Explicit Quantization](./documents/explicit_quantization.md).
 - `[2025/02/27]` Inference application for TensorRT 10 with TensorRT::enqueueV3 is released.
 
 ## Table of Contents

@@ -9,14 +9,15 @@ This is an extended example of deploying [UniAD-tiny](https://github.com/NVIDIA/
 The following steps for explicitly quantizing ONNX model are performed inside the deployment docker container on x86_64 platform.
 
 ##### 1. Install Required Dependencies
-Install `TensorRT-Model-Optimizer`(`Modelopt-0.29.0`) .
+Install `TensorRT-Model-Optimizer`(`Modelopt`) . Please note that quantizing UniAD-tiny ONNX model requires `modelopt==0.29.0`.
 ```
 cd /workspace/
 git clone https://github.com/NVIDIA/TensorRT-Model-Optimizer.git
 cd TensorRT-Model-Optimizer
+git checkout release/0.29.0
 pip install -e ".[all]" --extra-index-url https://pypi.nvidia.com
 ```
-Install `TensorRT-10.9` on x86_64 platform.
+Install `TensorRT-10.9` on x86_64 platform. Please note that `TensorRT>=10.9` is highly recommended for quantizing the UniAD-tiny ONNX model.
 ```
 cd /workspace/
 wget https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/10.9.0/tars/TensorRT-10.9.0.34.Linux.x86_64-gnu.cuda-11.8.tar.gz
@@ -25,7 +26,7 @@ mv TensorRT-10.9.0.34 TensorRT-10.9_x86_cu118
 rm TensorRT-10.9.0.34.Linux.x86_64-gnu.cuda-11.8.tar.gz
 pip install /workspace/TensorRT/TensorRT-10.9_x86_cu118/python/tensorrt-10.9.0.34-cp38-none-linux_x86_64.whl
 ```
-Install `onnxruntime-1.21.0`
+Install `onnxruntime-gpu`, please note that `onnxruntime-gpu==1.21.0` is highly recommended for quantizing ONNX models with both data-dependent-shapes(DDS) and TensorRT plugins.
 ```
 pip install --upgrade onnxruntime-gpu==1.21.0
 ```
@@ -44,8 +45,7 @@ PYTHONPATH=$(pwd) python3 ./tools/prepare_calib_data.py
 ##### 4. Quantize ONNX Model
 ```
 cd /workspace/UniAD
-MIN=901
-SHAPES=prev_track_intances0:${MIN}x512,prev_track_intances1:${MIN}x3,prev_track_intances3:${MIN},prev_track_intances4:${MIN},prev_track_intances5:${MIN},prev_track_intances6:${MIN},prev_track_intances8:${MIN},prev_track_intances9:${MIN}x10,prev_track_intances11:${MIN}x4x256,prev_track_intances12:${MIN}x4,prev_track_intances13:${MIN}
+SHAPES=prev_track_intances0:901x512,prev_track_intances1:901x3,prev_track_intances3:901,prev_track_intances4:901,prev_track_intances5:901,prev_track_intances6:901,prev_track_intances8:901,prev_track_intances9:901x10,prev_track_intances11:901x4x256,prev_track_intances12:901x4,prev_track_intances13:901,prev_timestamp:1,prev_l2g_r_mat:1x3x3,prev_l2g_t:1x3,prev_bev:2500x1x256,timestamp:1,l2g_r_mat:1x3x3,l2g_t:1x3,img:1x6x3x256x416,img_metas_can_bus:18,img_metas_lidar2img:1x6x4x4,command:1,use_prev_bev:1,max_obj_id:1
 
 LD_LIBRARY_PATH=<path_to_cudnn>/lib:/workspace/TensorRT-10.9_x86_cu118/lib:$LD_LIBRARY_PATH python -m modelopt.onnx.quantization \
     --onnx_path=<path_to_onnx_model> \
@@ -59,11 +59,11 @@ LD_LIBRARY_PATH=<path_to_cudnn>/lib:/workspace/TensorRT-10.9_x86_cu118/lib:$LD_L
     --dq_only
 ```
 
-#### Steps on Orin Platform
-The following steps for building TensorRT engine with explicit quantization are performed on Orin platform. We recommend using `TensorRT-10.7` to build TensorRT engine for best performance on Orin platform.
+#### Steps on DRIVE Orin-X Platform
+The following steps for building TensorRT engine with explicit quantization are performed on DRIVE Orin-X platform. We use TensorRT 10.7 in our experiments.
 
-##### Build TensorRT Engine with Explicit Quantization on Orin with TensorRT-10.7
-Please follow steps in [Plugins and Application Compilation](../inference_app/README.md#plugins-and-application-compilation) to compile TensorRT plugins for `TensorRT-10.7` on Orin platform before building TensorRT engine.
+##### Build TensorRT Engine with Explicit Quantization on DRIVE Orin
+Please follow steps in [Plugins and Application Compilation](../inference_app/README.md#plugins-and-application-compilation) to compile TensorRT plugins for `TensorRT-10.7` on DRIVE Orin-X platform before building TensorRT engine.
 ```
 MIN=901
 OPT=901
@@ -78,7 +78,6 @@ ${TRT_PATH}/bin/trtexec \
   --verbose \
   --separateProfileRun \
   --profilingVerbosity=detailed \
-  --useCudaGraph \
   --tacticSources=+CUBLAS \
   --minShapes=${SHAPES//${MIN}/${MIN}} \
   --optShapes=${SHAPES//${MIN}/${OPT}} \
@@ -89,7 +88,7 @@ ${TRT_PATH}/bin/trtexec \
 
 
 ### Results
-We show the `TensorRT-10.7` deployment results on `Orin-X` in terms of runtime and accuracy. `planning MSE` is the average L2 distance between the TensorRT engine output trajectory and the `Pytorch-1.12` model output trajectory. Pytorch DL model latency is measured by Python `time.time()` function. TensorRT engine latency is from `mean` of `GPU Compute Time` measured by `trtexec` with `--iterations=100`.
+We show results on DRIVE Orin-X platform in terms of runtime and accuracy. `planning MSE` is the average L2 distance between the TensorRT engine output trajectory and the `Pytorch-1.12` model output trajectory. Pytorch DL model latency is measured by Python `time.time()` function. TensorRT engine latency is from `mean` of `GPU Compute Time` measured by `trtexec` with `--iterations=100`.
 #### Metrics
 | Model | Framework | Precision | DL model latency↓ | FPS↑ | avg. L2↓ | avg. Col↓ | planning MSE↓ |
 | :---:| :---: | :---: | :---: | :---: | :---: | :---: | :---: |

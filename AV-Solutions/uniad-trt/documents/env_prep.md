@@ -10,6 +10,7 @@ Step 2: build docker image
 cd ../../docker
 docker build -t uniad_torch1.12 -f uniad_torch1.12.dockerfile .
 ```
+By default, we use `Python-3.8.0` in the docker image.
 
 <- Last Page: [Project Installation](proj_setup.md)
 
