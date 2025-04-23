@@ -7,6 +7,7 @@
 
 ## News
 - `[2025-03-19]` Added support for a mixed precision decoder in TensorRT 10+ which reduces latency by more than 40% with marginal accuracy loss.
+- `[2025-04-23]` Added support for post training quantization for the encoder which reduces latency by an additional 35% with marginal accuracy loss.
 
 # Prerequisites
 Repository preparation
@@ -85,20 +86,30 @@ Use the following command to export the model to onnx, modifying the config and 
   export PYTHONPATH=$(pwd)/dependencies/Far3D/
   python3 tools/export_onnx.py dependencies/Far3D/projects/configs/far3d.py weights/iter_82548.pth
 ```
-
-
 The above workflow will produce a "far3d.encoder.onnx" and a "far3d.decoder.onnx" file in the root of the workspace.
 
+### Post Training Quantization
+To further reduce latency, we demonstrate how to perform post training quantization on the image encoder to enable INT8 inference. Use the following command to quantize the encoder, modifying the config and onnx path parameters accordingly.  The below command will sample 500 batches at an interval of one sample per 20 batches from the validation set for calibration.
+```shell
+    export PYTHONPATH=$(pwd)/dependencies/Far3D/
+    python3 tools/quantize_onnx.py dependencies/Far3D/projects/configs/far3d.py far3d.encoder.onnx --num_samples=500 --sample_skip_interval=20
+```
+The above command will produce a post training quantized 'far3d.encoder.int8.onnx' along with quantization data 'far3d.encoder.int8.onnx.data' and 'far3d.encoder.int8.onnx_data' for TensorRT to consume.  
+
 # Building TensorRT engine on DRIVE Orin
-This model has been tested on NVIDIA DRIVE Orin with TensorRT 8.6 and TensorRT 10.5+. To get access to these versions of TensorRT, please refer to details on the [NVIDIA DRIVE site](https://developer.nvidia.com/drive/downloads). These versions of TensorRT comes with a compatible version of MultiScaleDeformableAttention (MSDA) inside the default libnvinfer_plugins.so library which enables the Far3D transformer decoder.
+This model has been tested on NVIDIA DRIVE Orin with TensorRT 8.6 and TensorRT 10.9. To get access to these versions of TensorRT, please refer to details on the [NVIDIA DRIVE site](https://developer.nvidia.com/drive/downloads). These versions of TensorRT comes with a compatible version of MultiScaleDeformableAttention (MSDA) inside the default libnvinfer_plugins.so library which enables the Far3D transformer decoder.
 
 Far3D TensorRT engine files can be generated with trtexec on the target device:
 ```shell
   trtexec --onnx=far3d.encoder.onnx --saveEngine=far3d.encoder.fp16.engine --fp16
+  # Since we've performed explicit quantization to this model, everything that is quantized will execute in INT8, the fp16 flag here enables fp16 and fp32
+  # precision for all other layers, thus enabling TensorRT to perform more optimizations.
+  trtexec --onnx=far3d.encoder.int8.onnx --saveEngine=far3d.encoder.int8.engine --fp16
   # The stongly typed onnx file is still compatible with TensorRT 8.6 as a weakly typed fp32 model with no loss in accuracy.
   trtexec --onnx=far3d.decoder.onnx --saveEngine=far3d.decoder.fp32.engine
   # stronglyTyped is a feature of TensorRT 10+ and thus the following will not work for 8.6
   trtexec --onnx=far3d.decoder.onnx --saveEngine=far3d.decoder.fp16.engine --stronglyTyped
+  
 ```
 The strategy used here to enable FP16 in the decoder is to keep all operations on features in FP16 and to keep all operations on points and intrinsics in FP32. The reason for this is that the intrinsic matrices are sensitive to casting to FP16, and that the matrix multiplications involved with point projection are prone to overflowing FP16 precision. Both of these operations are on small amounts of data while the operations on features are much less error prone to lower precision. The strongly typed network feature that was introduced in TensorRT 10+ enables precise precision control of operations and tensors which we use to achieve a significant reduction in latency while maintaining the necessary precision for sensitive operations and tensors.
 
@@ -171,3 +182,4 @@ These results are based on the pretrained [reference model](https://github.com/m
 |FP32 encoder + FP32 decoder |  TensorRT  8.6     |          538.5               |     0.233      |
 |FP16 encoder + FP32 decoder |  TensorRT  8.6     |          367.4               |     0.233      |
 |FP16 encoder + FP16 decoder |  TensorRT  10.9    |          203.9               |     0.232      |
+|INT8 encoder + FP16 decoder |  TensorRT  10.9    |          132.3               |     0.230      |

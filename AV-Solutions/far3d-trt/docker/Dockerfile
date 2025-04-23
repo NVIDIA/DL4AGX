@@ -20,6 +20,9 @@ RUN python -c "import cv2"
 RUN python -m torch.utils.collect_env
 
 RUN apt-get install -y libyaml-cpp-dev libeigen3-dev pybind11-dev
+# here we must use an older release of modelopt to maintain compatibility with the version of torch that Far3D depends on (via it's dependency on an older version of MMCV).
+# Since we are currently only quantizing the image encoder, this should not be an issue
+RUN pip install "nvidia-modelopt[all]==0.15.1" -U --extra-index-url https://pypi.nvidia.com
 
 ENTRYPOINT /bin/bash
 WORKDIR /workspace/far3d-trt
