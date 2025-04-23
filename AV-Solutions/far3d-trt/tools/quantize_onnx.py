@@ -144,8 +144,8 @@ def main():
     quantized_onnx_path = onnx_path.replace('.onnx', '.int8.onnx')
     quantized_model = modelopt.onnx.quantization.int8.quantize(onnx_path, output_path = quantized_onnx_path, 
                                                                 calibration_data_reader=data_reader, 
-                                                                nodes_to_exclude=nodes)
-    quantized_model = convert_float_to_float16(quantized_model)    
+                                                                nodes_to_exclude=nodes,
+                                                                use_external_data_format=False)
     onnx.save_model(quantized_model, quantized_onnx_path)
     
 
