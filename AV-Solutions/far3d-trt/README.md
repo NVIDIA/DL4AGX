@@ -7,6 +7,7 @@
 
 ## News
 - `[2025-03-19]` Added support for a mixed precision decoder in TensorRT 10+ which reduces latency by more than 40% with marginal accuracy loss.
+- `[2025-04-23]` Added support for post training quantization for the encoder which reduces latency by an additional 35% with marginal accuracy loss.
 
 # Prerequisites
 Repository preparation
