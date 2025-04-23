@@ -101,8 +101,9 @@ This model has been tested on NVIDIA DRIVE Orin with TensorRT 8.6 and TensorRT 1
 Far3D TensorRT engine files can be generated with trtexec on the target device:
 ```shell
   trtexec --onnx=far3d.encoder.onnx --saveEngine=far3d.encoder.fp16.engine --fp16
-  # stronglyTyped is a feature of TensorRT 10+ thus for the encoder this could be swapped for "--fp16" on TensorRT 8.6 without loss of accuracy.
-  trtexec --onnx=far3d.encoder.int8.onnx --saveEngine=far3d.encoder.int8.engine --stronglyTyped
+  # Since we've performed explicit quantization to this model, everything that is quantized will execute in INT8, the fp16 flag here enables fp16 and fp32
+  # precision for all other layers, thus enabling TensorRT to perform more optimizations.
+  trtexec --onnx=far3d.encoder.int8.onnx --saveEngine=far3d.encoder.int8.engine --fp16
   # The stongly typed onnx file is still compatible with TensorRT 8.6 as a weakly typed fp32 model with no loss in accuracy.
   trtexec --onnx=far3d.decoder.onnx --saveEngine=far3d.decoder.fp32.engine
   # stronglyTyped is a feature of TensorRT 10+ and thus the following will not work for 8.6
