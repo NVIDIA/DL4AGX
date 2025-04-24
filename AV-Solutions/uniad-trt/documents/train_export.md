@@ -87,9 +87,8 @@ cd /workspace/UniAD
 CUDA_VISIBLE_DEVICES=0 ./tools/uniad_export_onnx.sh ./projects/configs/stage2_e2e/tiny_imgx0.25_e2e_trt_p.py ./ckpts/tiny_imgx0.25_e2e_ep20.pth 1
 ```
 
-Due to legal reasons, we can only provid an [ONNX](../onnx/uniad_tiny_dummy.onnx) model of UniAD-tiny with random weights. Please follow instructions on training to obtain a model with real weights.
+Due to legal reasons, we can only provide an [ONNX](../onnx/uniad_tiny_dummy.onnx) model of UniAD-tiny with random weights. Please follow instructions on training to obtain a model with real weights.
 
 <- Last Page: [Data Preparation](data_prep.md)
 
--> Next Page: [Engine Build, C++ Inference and Visualization](../inference_app_enqueueV3/README.md)
-
+-> Next Page: [Explicit Quantization](explicit_quantization.md)

@@ -14,6 +14,8 @@ FILES=(
     "tools/export_onnx.py"
     "tools/process_metadata.py"
     "tools/uniad_export_onnx.sh"
+    "tools/prepare_calib_data.py"
+    "tools/uniad_prepare_calib_data.sh"
 )
 
 # Copy each file to the destination directory, preserving directory structure

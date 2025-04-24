@@ -6,11 +6,11 @@ Download and prepare nuscenes dataset following UniAD's [instruction](https://gi
 ### Create a deployment docker container
 Step 1: create a deployment docker container and run
 ```
-docker run -it --gpus all --shm-size=8g -v </host/system/path/to/UniAD>:/workspace/UniAD uniad_torch1.12 /bin/bash
+docker run -it --gpus all --shm-size=8g -v </host/system/path/to/uniad-trt>:/workspace/uniad-trt uniad_torch1.12 /bin/bash
 ```
 Step 2: inside the deployment docker container, build `uniad_mmdet3d`
 ```
-cd /workspace/UniAD/third_party/uniad_mmdet3d/
+cd /workspace/uniad-trt/UniAD/third_party/uniad_mmdet3d/
 python3 setup.py build develop --user
 ```
 
@@ -19,7 +19,7 @@ python3 setup.py build develop --user
 
 Inside deployment docker container, generate six inputs to `./UniAD/nuscenes_np/uniad_onnx_input` for ONNX exportation, and `NUM_FRAME` preprocessed inputs to `./UniAD/nuscenes_np/uniad_trt_input` for inference application. By default we set `NUM_FRAME` to `69` which covers the first two scenes, user can choose any number in the range of `[6, 6018]`.
 ```
-cd /workspace/UniAD
+cd /workspace/uniad-trt/UniAD
 PYTHONPATH=$(pwd) python3  ./tools/process_metadata.py --num_frame NUM_FRAME
 ```
 

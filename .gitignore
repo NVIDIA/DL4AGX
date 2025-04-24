@@ -4,3 +4,5 @@ __pycache__/
 # don't want to push up but want to use the build system 
 experiments/
 AV-Solutions/common/dependencies/cuOSD/*
+# Ignore macOS system files
+.DS_Store

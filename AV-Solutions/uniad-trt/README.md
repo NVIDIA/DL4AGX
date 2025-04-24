@@ -8,6 +8,7 @@
 This repo demonstrates how to deploy UniAD on NVIDIA Drive Orin platform using TensorRT. Specifically, we trained a tiny version of UniAD (`UniAD-tiny`) and provide step by step workflow including model training, ONNX model export, and inference with a sample C++ application.
 
 ## News
+- `[2025/04/24]` Explicit Quantization via TensorRT Model Optimizer for UniAD-tiny ONNX model is released. See [Explicit Quantization](./documents/explicit_quantization.md).
 - `[2025/02/27]` Inference application for TensorRT 10 with TensorRT::enqueueV3 is released.
 
 ## Table of Contents
@@ -16,6 +17,7 @@ This repo demonstrates how to deploy UniAD on NVIDIA Drive Orin platform using T
    - [Environment Preparation](#env_setup)
    - [Data Preparation](#data_prepare)
    - [Model Training and Exportation](#uniad_tiny_train_export)
+   - [Explicit Quantization](#explicit_quantization)
    - [Inference Application](#inference_app)
 2. [Results](#results)
 3. [Reference](#ref)
@@ -34,6 +36,10 @@ In order to prepare data used for exporting to ONNX and inference with TensorRT,
 ### Model Training and Exportation <a name="uniad_tiny_train_export"></a>
 For efficiency when deploying a UniAD model on DRIVE platform, we trained a tiny version of UniAD(`UniAD-tiny`), with a smaller ResNet backbone and reduced image size & bev size. After training, the model needs to be exported from Pytorch to ONNX format. Please see [Model Training and Exportation](./documents/train_export.md) for details.
 
+
+### Explicit Quantization <a name="explicit_quantization"></a>
+This section showcases how to deploy [UniAD-tiny](https://github.com/NVIDIA/DL4AGX/tree/master/AV-Solutions/uniad-trt) with explicit quantization via [NVIDIA's ModelOpt Toolkit](https://github.com/NVIDIA/TensorRT-Model-Optimizer). Please see [Explicit Quantization](./documents/explicit_quantization.md) for details.
+
 ### Inference Application <a name="inference_app"></a>
 
 The inference is showcased with a C++ sample application, it loads raw images and other data as input, runs inference with a built TensorRT engine, and outputs the results of tracking and planning with visualization. We have provided two inference examples, using TensorRT::enqueueV2 and TensorRT::enqueueV3, respectively. Please follow the instructions at [Inference Application](./inference_app/README.md) on how to build the TensorRT engine, compile and run the inference application.
@@ -45,7 +51,14 @@ The inference is showcased with a C++ sample application, it loads raw images an
 The inference application will generate output visualizations to showcase the planning trajectory and dynamic object detection. Notice that post-processing such as collision correction is not implemented in the current sample. Raw planning trajectory and object detection results are visualized.
 
 
-![](./assets/uniad-inference.gif)
+<table>
+  <tr>
+    <td align="center">
+      <strong>TensorRT-8.6.13.3 FP32</strong><br>
+      <img src="./assets/uniad-inference.gif" style="max-width:100%; width:700px">
+    </td>
+  </tr>
+</table>
 
 In the visualization, green lines depict planning trajectories of the ego car in green bounding box. Detection of other objects are visualized in bounding boxes with different colors, and with white heading and confidence scores marked. The lines starting from the center of those bounding boxes indicate the velocities of the objects. 
 

@@ -3281,7 +3281,7 @@ index 78a4a87..e339d84 100644
 +                    command=None,
 +                    use_prev_bev=1.0,
 +                    max_obj_id=0,
-+                    ):
++                    **kwargs):
 +        scene_token_changed = 1-use_prev_bev
 +        prev_track_intances = [
 +            prev_track_intances0,
