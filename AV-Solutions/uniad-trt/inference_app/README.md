@@ -42,7 +42,6 @@ ${TRT_PATH}/bin/trtexec \
   --staticPlugins=<path_to_libuniad_plugin.so> \
   --verbose \
   --profilingVerbosity=detailed \
-  --useCudaGraph \
   --tacticSources=+CUBLAS \
   --minShapes=${SHAPES//${MIN}/${MIN}} \
   --optShapes=${SHAPES//${MIN}/${OPT}} \

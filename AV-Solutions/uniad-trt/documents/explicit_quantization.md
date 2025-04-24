@@ -88,14 +88,14 @@ ${TRT_PATH}/bin/trtexec \
 
 
 ### Results
-We show results on DRIVE Orin-X platform in terms of runtime and accuracy. `planning MSE` is the average L2 distance between the TensorRT engine output trajectory and the `Pytorch-1.12` model output trajectory. Pytorch DL model latency is measured by Python `time.time()` function. TensorRT engine latency is from `mean` of `GPU Compute Time` measured by `trtexec` with `--iterations=100`.
+We show results on DRIVE Orin-X platform in terms of runtime and accuracy. `planning MSE` is the average L2 distance between the TensorRT engine output trajectory and the `Pytorch-1.12` model output trajectory. Pytorch DL model latency is measured by Python `time.time()` function. TensorRT engine latency is from `median` of `GPU Compute Time` measured by `trtexec` with `--iterations=100`.
 #### Metrics
 | Model | Framework | Precision | DL model latency↓ | FPS↑ | avg. L2↓ | avg. Col↓ | planning MSE↓ |
 | :---:| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | UniAD-tiny | Pytorch-1.12 | FP32 | 843.5172 ms | 1.18 | 0.9986  | 0.27 | 0 |
-| UniAD-tiny | TensorRT-10.7 | FP32 | 64.0726 ms | 15.60 | 0.9986 | 0.27 | 9.2417e-07 |
-| UniAD-tiny | TensorRT-10.7 | FP16 |  50.1560 ms | 19.93 | 1.0021 | 0.26 | 0.0458 |
-| UniAD-tiny | TensorRT-10.7 | INT8(EQ)+FP16 | 39.6104 ms  | 25.24 | 1.0029 | 0.27 | 0.0502 |
+| UniAD-tiny | TensorRT-10.7 | FP32 | 64.0469 ms | 15.61 | 0.9986 | 0.27 | 9.2417e-07 |
+| UniAD-tiny | TensorRT-10.7 | FP16 |  49.7559 ms | 20.10 | 1.0021 | 0.26 | 0.0458 |
+| UniAD-tiny | TensorRT-10.7 | INT8(EQ)+FP16 | 39.3125 ms  | 25.44 | 1.0029 | 0.27 | 0.0502 |
 
 #### Videos
 
@@ -106,7 +106,7 @@ We show results on DRIVE Orin-X platform in terms of runtime and accuracy. `plan
       <img src="../assets/uniad_fp32_video.gif" style="max-width:100%; width:700px">
     </td>
     <td align="center">
-      <strong>TensorRT-10.7 BEST(EQ)</strong><br>
+      <strong>TensorRT-10.7 INT8(EQ)+FP16</strong><br>
       <img src="../assets/uniad_best_eq_video.gif" style="max-width:100%; width:700px">
     </td>
   </tr>
