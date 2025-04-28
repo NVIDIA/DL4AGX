@@ -254,8 +254,11 @@ def main():
 
     if has_custom_op:
         print(f"Found {len(custom_ops)} custom ops: {custom_ops}")
+        output_path = onnx_path.replace(".onnx", "_post.onnx")
+        onnx.save(model, output_path)
+        print(f"Model saved in {output_path}!")
     else:
-        print("No custom ops found!")
+        print("No custom ops found! No new ONNX model is saved.")
 
 
 if __name__ == '__main__':
