@@ -75,7 +75,7 @@ pip install <TensorRT Root>/python/tensorrt-<version>-cp38-none-linux_aarch64.wh
 ```bash
 export TRT_ROOT=<path to your tensorrt dir>
 cd /workspace/dl4agx/AV-Solutions/vad-trt/plugins/
-mkdir -p build
+mkdir build && cd build
 cmake .. 
 make
 ```
@@ -84,6 +84,10 @@ make
 ```bash
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<TRT_ROOT>/lib
 export PATH=$PATH:<TRT_ROOT>/bin
+
+mkdir /workspace/DL4AGX/AV-Solutions/vad-trt/export_eval/vadv1.extract_img_feat
+mkdir /workspace/DL4AGX/AV-Solutions/vad-trt/export_eval/vadv1.pts_bbox_head.forward
+mkdir /workspace/DL4AGX/AV-Solutions/vad-trt/export_eval/vadv1_prev.pts_bbox_head.forward
 
 # build image encoder
 trtexec --onnx=scratch/vadv1.extract_img_feat/sim_vadv1.extract_img_feat.onnx \
@@ -94,7 +98,7 @@ trtexec --onnx=scratch/vadv1.extract_img_feat/sim_vadv1.extract_img_feat.onnx \
         --saveEngine=vadv1.extract_img_feat/vadv1.extract_img_feat.fp16.engine
 
 # build heads
-trtexec --onnx=scratch/vadv1.pts_bbox_head.forward/sim_vadv1_prev.pts_bbox_head.forward.onnx \
+trtexec --onnx=scratch/vadv1.pts_bbox_head.forward/sim_vadv1.pts_bbox_head.forward.onnx \
         --staticPlugins=../plugins/build/libplugins.so \
         --profilingVerbosity=detailed --dumpProfile \
         --separateProfileRun --useSpinWait --useManagedMemory \
@@ -176,6 +180,7 @@ cd /workspace/dl4agx/AV-Solutions/vad-trt/
 cp -r export_eval/demo_data/ demo/data
 cp -r export_eval/scratch/vadv1.extract_img_feat/ demo/onnx_files
 cp -r export_eval/scratch/vadv1_prev.pts_bbox_head.forward/ demo/onnx_files
+mkdir /workspace/dl4agx/AV-Solutions/vad-trt/app/demo/engines
 ```
 
 Now the `demo` folder should be organized as:
