@@ -6,7 +6,7 @@ source trtllm_0.13/bin/activate
 
 
 # Setup model/engine path
-export path_engine=$PWD/Llama-3.1-8B_int4_awq_kv_int8
+export path_engine=$PWD/Llama-3.1-8B_int4_awq
 export path_model=$PWD/Llama-3.1-8B
 
 
