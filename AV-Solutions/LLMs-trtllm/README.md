@@ -18,7 +18,7 @@ Please make sure you have the following Orin environment setup on your device. Y
 - TensorRT 10.4.0.11
 
 
-## Generate LLMs with INT4_AWQ and INT8-KV-Cache on x86
+## Generate LLMs with INT4_AWQ on x86
 
 In this example, we are recommending quantizing the LLMs during the deployment. To quantize these LLMs model, please follow this link to install the TensorRT-LLM on an x86 system with at least 16GB GPU memory the following sample commands: 
 
@@ -34,7 +34,7 @@ Please check if your venv has the following dependency:
 After confirming the above setup, follow the commands below to quantize the Llama model:
 ```
 cd $PWD/TensorRT-LLM/examples/llama 
-python convert_checkpoint.py --model_dir $input_model --output_dir $output_model --dtype float16 --use_weight_only --weight_only_precision=int4_awq --int8_kv_cache
+python convert_checkpoint.py --model_dir $input_model --output_dir $output_model --dtype float16 --use_weight_only --weight_only_precision=int4_awq
 ```
 
 
@@ -55,7 +55,7 @@ work_dir
 ├── TensorRT-LLM
 ├── TensorRT-10.4.0.11
 ├── {MODEL_NAME}
-├── {MODEL_NAME}_int4_awq_kv_int8 
+├── {MODEL_NAME}_int4_awq
 ├── trtllm_0.13 (vitual enviornment)
 ├── nccl
 ├── json_modifier.py
