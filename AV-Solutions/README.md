@@ -25,8 +25,8 @@ As AV models are being developed with more complexity, one of the major challeng
 ## Far3D-TensorRT
 [Far3D-TensorRT](./far3d-trt) is a sample application to demonstrate the deployment of [Far3D](https://github.com/megvii-research/Far3D) on the NVIDIA Drive Orin platform using TensorRT.
 
-## Llama-3.1-8B-TensorRT-LLM
-[Llama-3.1-8B-TensorRT-LLM](./Llama-3.1-8B-trtllm) is an example that walks through the setup process for deploying the Llama-3.1-8B model with NVIDIA TensorRT-LLM on the NVIDIA Drive Orin platform.
+## Deploy LLMs with TensorRT-LLM
+[Deploy LLMs with TensorRT-LLM](./LLMs-trtllm) is an example that walks through the setup process for deploying state-of-the-art Large Language Models (LLMs) model with NVIDIA TensorRT-LLM on the NVIDIA Drive Orin platform. Currently, [Llama-3.1-8B](https://huggingface.co/meta-llama/Llama-3.1-8B) and [DeepSeek-R1-Distill-Llama-8B](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Llama-8B) are supported. 
 
 ## VAD-TensorRT
 [VAD-TensorRT](./vad-trt) is a sample application to demonstrate the deployment of [VADv1](https://github.com/hustvl/VAD.git) on the NVIDIA Drive Orin platform using TensorRT.

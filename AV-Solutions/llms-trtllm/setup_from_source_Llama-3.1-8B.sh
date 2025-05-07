@@ -6,7 +6,7 @@ source trtllm_0.13/bin/activate
 
 
 # Setup model/engine path
-export path_engine=$PWD/Llama-3.1-8B_int4_awq_kv_int8
+export path_engine=$PWD/Llama-3.1-8B_int4_awq
 export path_model=$PWD/Llama-3.1-8B
 
 
@@ -21,7 +21,7 @@ git submodule update --init --recursive
 cp -r ../batch_manager/ ./cpp/tensorrt_llm/
 cp -r ../executor/ ./cpp/tensorrt_llm/
 cp -r ../nvrtcWrapper/aarch64-linux-gnu/libtensorrt_llm_nvrtc_wrapper.so ./cpp/tensorrt_llm/kernels/decoderMaskedMultiheadAttention/decoderXQAImplJIT/nvrtcWrapper/aarch64-linux-gnu/
-git apply ../new_patch.patch
+git apply ../build_from_source_changes.patch
 
 
 # setup dependency
