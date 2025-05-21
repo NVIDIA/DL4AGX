@@ -42,5 +42,5 @@
       "outputs": {}
     }
   ],
-  "viz": "home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/viz"
+  "viz": "home/autoware/ghq/github.com/Shin-kyoto/DL4AGX_ns_rosbag/DL4AGX/AV-Solutions/vad-trt/app/demo/viz"
 }

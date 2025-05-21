@@ -842,7 +842,7 @@ load_lidar2img_from_rosbag(const std::string& bag_path, int32_t n_frames, float 
                     std::string child_frame_id = transform.child_frame_id;
                     
                     if (child_frame_id.find("camera") != std::string::npos && 
-                        child_frame_id.find("/optical_link") != std::string::npos) {
+                        child_frame_id.find("/camera_optical_link") != std::string::npos) {
                         // Autowareカメラ名からカメラIDを抽出
                         int32_t autoware_camera_id = std::stoi(child_frame_id.substr(
                             child_frame_id.find("camera") + 6, 1));
