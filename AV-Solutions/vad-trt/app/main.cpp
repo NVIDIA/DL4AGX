@@ -66,6 +66,7 @@ namespace fs = std::filesystem;
 
 #include "net.h"
 #include "visualize.hpp"  
+#include "vad_model.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 #include <autoware_planning_msgs/msg/trajectory.hpp>
@@ -216,13 +217,8 @@ private:
 };
 
 // バイナリ画像データをROS CompressedImageに変換し、その後TensorRTのバインディングに渡す関数
-void processImageForInference(
-    const std::vector<std::vector<float>>& frame_images,
-    std::shared_ptr<nv::Net>& net,
-    const std::string& tensor_name,
-    cudaStream_t stream) {
-    
-    auto tensor = net->bindings[tensor_name];
+std::vector<float> processImageForInference(
+    const std::vector<std::vector<float>>& frame_images) {
     
     // 画像データを連結
     std::vector<float> concatenated_data;
@@ -238,14 +234,7 @@ void processImageForInference(
         concatenated_data.insert(concatenated_data.end(), img_data.begin(), img_data.end());
     }
 
-    // TensorRTのバインディングにデータを渡す
-    cudaMemcpyAsync(
-        tensor->ptr,                               // destination (GPU memory)
-        concatenated_data.data(),                  // source (CPU memory)
-        concatenated_data.size() * sizeof(float),  // size (bytes)
-        cudaMemcpyHostToDevice,                   // direction
-        stream                                    // CUDA stream
-    );
+    return concatenated_data;
 }
 
 
@@ -1084,59 +1073,22 @@ int main(int argc, char** argv) {
   for (int frame_id = 1; frame_id < n_frames; frame_id++) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
     
-    try {
-        // // リファレンスデータとの比較を追加
-        // compare_with_reference(
-        //     subscribed_image_dict[frame_id],
-        //     frame_dir + "img.bin"
-        // );
-
-        // compare_with_reference_lidar2img(
-        //     subscribed_lidar2img_dict[frame_id],
-        //     frame_dir + "img_metas.0[lidar2img].bin"
-        // );
-        
-        // 画像処理と推論
-        processImageForInference(
-            subscribed_image_dict[frame_id],
-            nets["backbone"],
-            "img",
-            stream
-        );
-    } catch (const std::exception& e) {
-        std::cerr << "エラー発生: " << e.what() << std::endl;
-        return -1;
-    }
-    
+    // 画像をconcatenate
+    auto image_data = processImageForInference(subscribed_image_dict[frame_id]);    
+    autoware::tensorrt_vad::VadInputData vad_input_data{
+        image_data,    // camera_images_
+        subscribed_shift_dict[frame_id],    // shift_
+        subscribed_lidar2img_dict[frame_id], // lidar2img_
+        subscribed_can_bus_dict[frame_id],  // can_bus_
+        2                                   // command_
+    };
+    nets["backbone"]->bindings["img"]->load(vad_input_data.camera_images_, stream);
     nets["backbone"]->Enqueue(stream);
 
-    std::vector<float> can_bus_data = subscribed_can_bus_dict[frame_id];
-    std::vector<float> shift_data = subscribed_shift_dict[frame_id];
-    std::vector<float> lidar2img_data = subscribed_lidar2img_dict[frame_id];
     if (is_first_frame) {
-        cudaMemcpyAsync(
-            nets["head_no_prev"]->bindings["img_metas.0[shift]"]->ptr, // GPU のアドレス
-            shift_data.data(),                                         // ホスト側のデータ
-            shift_data.size() * sizeof(float),                         // 転送サイズ
-            cudaMemcpyHostToDevice,
-            stream
-        );
-
-        cudaMemcpyAsync(
-            nets["head_no_prev"]->bindings["img_metas.0[lidar2img]"]->ptr, // GPU のアドレス
-            lidar2img_data.data(),                                         // ホスト側のデータ
-            lidar2img_data.size() * sizeof(float),                         // 転送サイズ
-            cudaMemcpyHostToDevice,
-            stream
-        );
-
-        cudaMemcpyAsync(
-            nets["head_no_prev"]->bindings["img_metas.0[can_bus]"]->ptr,
-            can_bus_data.data(),
-            can_bus_data.size() * sizeof(float),
-            cudaMemcpyHostToDevice,
-            stream
-        );
+        nets["head_no_prev"]->bindings["img_metas.0[shift]"]->load(vad_input_data.shift_, stream);
+        nets["head_no_prev"]->bindings["img_metas.0[lidar2img]"]->load(vad_input_data.lidar2img_, stream);
+        nets["head_no_prev"]->bindings["img_metas.0[can_bus]"]->load(vad_input_data.can_bus_, stream);
         nets["head_no_prev"]->Enqueue(stream);
         
         // prev_bevを保存
@@ -1156,27 +1108,9 @@ int main(int argc, char** argv) {
     }
     else {
         nets["head"]->bindings["prev_bev"] = saved_prev_bev;
-        cudaMemcpyAsync(
-            nets["head"]->bindings["img_metas.0[shift]"]->ptr, // GPU のアドレス
-            shift_data.data(),                                         // ホスト側のデータ
-            shift_data.size() * sizeof(float),                         // 転送サイズ
-            cudaMemcpyHostToDevice,
-            stream
-        );
-        cudaMemcpyAsync(
-            nets["head"]->bindings["img_metas.0[lidar2img]"]->ptr, // GPU のアドレス
-            lidar2img_data.data(),                                         // ホスト側のデータ
-            lidar2img_data.size() * sizeof(float),                         // 転送サイズ
-            cudaMemcpyHostToDevice,
-            stream
-        );
-        cudaMemcpyAsync(
-            nets["head"]->bindings["img_metas.0[can_bus]"]->ptr,
-            can_bus_data.data(),
-            can_bus_data.size() * sizeof(float),
-            cudaMemcpyHostToDevice,
-            stream
-        );
+        nets["head"]->bindings["img_metas.0[shift]"]->load(vad_input_data.shift_, stream);
+        nets["head"]->bindings["img_metas.0[lidar2img]"]->load(vad_input_data.lidar2img_, stream);
+        nets["head"]->bindings["img_metas.0[can_bus]"]->load(vad_input_data.can_bus_, stream);
         nets["head"]->Enqueue(stream);
         // prev_bevを保存
         auto bev_embed = nets["head"]->bindings["out.bev_embed"];

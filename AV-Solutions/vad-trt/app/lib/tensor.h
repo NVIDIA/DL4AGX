@@ -68,6 +68,31 @@ struct Tensor {
     return volume * getElementSize(dtype);
   }
 
+  template<class Dtype=float>
+  void load(const std::vector<float>& data, cudaStream_t stream = 0) {
+    if (data.size() != volume) {
+      std::cerr << "Data size mismatch: expected " << volume << ", got " << data.size() << std::endl;
+      return;
+    }
+    
+    size_t dsize = volume * getElementSize(dtype);
+    
+    if (dtype == nvinfer1::DataType::kFLOAT) {
+      // Direct copy for float data
+      cudaMemcpyAsync(ptr, data.data(), dsize, cudaMemcpyHostToDevice, stream);
+    } else {
+      // Type conversion needed
+      std::vector<char> buffer(dsize);
+      Dtype* dbuffer = reinterpret_cast<Dtype*>(buffer.data());
+      
+      for (int i = 0; i < volume; i++) {
+        dbuffer[i] = static_cast<Dtype>(data[i]);
+      }
+      
+      cudaMemcpyAsync(ptr, buffer.data(), dsize, cudaMemcpyHostToDevice, stream);
+    }
+  }
+
   template<class T>
   std::vector<T> cpu() {
     std::vector<T> buffer(volume);
