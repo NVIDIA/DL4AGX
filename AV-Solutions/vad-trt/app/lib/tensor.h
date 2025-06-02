@@ -68,60 +68,6 @@ struct Tensor {
     return volume * getElementSize(dtype);
   }
 
-  void mov(std::shared_ptr<Tensor> other, cudaStream_t stream) {
-    // copy from 'other'
-    cudaMemcpyAsync(
-      ptr, other->ptr, 
-      nbytes(), 
-      cudaMemcpyHostToDevice,
-      stream);
-  }
-
-  template<class Htype=float, class Dtype=float>
-  void load(std::string fname) {
-    size_t hsize = volume * sizeof(Htype);
-    size_t dsize = volume * getElementSize(dtype);
-    std::vector<char> b1(hsize);
-    std::vector<char> b2(dsize);
-    std::ifstream file_(fname, std::ios::binary);
-    if( file_.fail() ) {
-      std::cerr << fname << " missing!" << std::endl;
-      return;
-    }
-    file_.read(b1.data(), hsize);
-    Htype* hbuffer = reinterpret_cast<Htype*>(b1.data());
-    Dtype* dbuffer = reinterpret_cast<Dtype*>(b2.data());
-    // in some cases we want to load from different dtype
-    for( int i=0; i<volume; i++ ) {
-      dbuffer[i] = (Dtype)hbuffer[i];
-    }
-
-    cudaMemcpy(ptr, b2.data(), dsize, cudaMemcpyHostToDevice);
-  }
-
-  template<class Htype=float, class Dtype=float>
-  void save(std::string fname) {
-    size_t hsize = volume * sizeof(Htype);
-    size_t dsize = volume * getElementSize(dtype);
-    std::vector<char> b1(hsize);
-    std::vector<char> b2(dsize);
-    std::ofstream file_(fname, std::ios::binary);
-    if( file_.fail() ) {
-        std::cerr << fname << " can't open!" << std::endl;
-        return;
-    }
-    // file_.read(b1.data(), hsize);
-    Htype* hbuffer = reinterpret_cast<Htype*>(b1.data());
-    Dtype* dbuffer = reinterpret_cast<Dtype*>(b2.data());
-    cudaMemcpy(b2.data(), ptr, dsize, cudaMemcpyDeviceToHost);
-    // in some cases we want to load from different dtype
-    for( int i=0; i<volume; i++ ) {
-        hbuffer[i] = (Htype)dbuffer[i];
-    }
-    file_.write(b2.data(), hsize);
-    file_.close();
-  }
-
   template<class T>
   std::vector<T> cpu() {
     std::vector<T> buffer(volume);
