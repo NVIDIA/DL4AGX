@@ -987,6 +987,23 @@ void compare_with_reference_lidar2img(
     std::cout << "lidar2imgデータは参照ファイルと一致しています: " << reference_file_path << std::endl;
 }
 
+// VadModel::postprocess
+autoware::tensorrt_vad::VadOutputData postprocess(const std::vector<float>& ego_fut_preds, int32_t cmd) {
+    // Extract planning for the given command
+    std::vector<float> planning(
+        ego_fut_preds.begin() + cmd * 12,
+        ego_fut_preds.begin() + (cmd + 1) * 12
+    );
+    
+    // cumsum to build trajectory in 3d space
+    for (int32_t i = 1; i < 6; i++) {
+        planning[i * 2] += planning[(i-1) * 2];
+        planning[i * 2 + 1] += planning[(i-1) * 2 + 1];
+    }
+    
+    return autoware::tensorrt_vad::VadOutputData{planning};
+}
+
 int main(int argc, char** argv) {
   // ROSの初期化
   rclcpp::init(argc, argv);
@@ -1141,20 +1158,8 @@ int main(int argc, char** argv) {
 
     // pred -> frame.planning
     std::vector<float> ego_fut_preds = nets["head"]->bindings["out.ego_fut_preds"]->cpu<float>();
-    std::vector<float> planning = std::vector<float>(
-      ego_fut_preds.begin() + frame.cmd * 12, 
-      ego_fut_preds.begin() + (frame.cmd + 1) * 12);
-    // cumsum to build trajectory in 3d space
-    for( int32_t i=1; i<6; i++) {
-      planning[i * 2    ] += planning[(i-1) * 2    ];
-      planning[i * 2 + 1] += planning[(i-1) * 2 + 1];
-    }    
-    frame.planning = planning;
-
-    autoware::tensorrt_vad::VadOutputData vad_output_data{
-        frame.planning,
-    };
-
+    auto vad_output_data = postprocess(ego_fut_preds, frame.cmd);
+    frame.planning = vad_output_data.predicted_trajectory_;
     node->publishTrajectory(frame.planning);
     printf("publish trajectory");
     rclcpp::spin_some(node);
