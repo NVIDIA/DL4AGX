@@ -251,11 +251,24 @@ public:
 Logger gLogger;
 
 // TensorRTランタイムを作成する関数
+// VadModelのコンストラクタで使用
 std::unique_ptr<nvinfer1::IRuntime, std::function<void(nvinfer1::IRuntime*)>> create_runtime(Logger logger) {
   auto runtime_deleter = [](nvinfer1::IRuntime *runtime) {};
   std::unique_ptr<nvinfer1::IRuntime, decltype(runtime_deleter)> runtime{
     nvinfer1::createInferRuntime(gLogger), runtime_deleter};
   return runtime;
+}
+
+// VadModelのコンストラクタで使用
+bool load_plugin(const std::string& plugin_dir) {
+    void* h_ = dlopen(plugin_dir.c_str(), RTLD_NOW);
+    printf("[INFO] loading plugin from: %s\n", plugin_dir.c_str());
+    if (!h_) {
+        const char* error = dlerror();
+        std::cerr << "Failed to load library: " << error << std::endl;
+        return false;
+    }
+    return true;
 }
 
 class EventTimer {
@@ -1025,17 +1038,9 @@ int main(int argc, char** argv) {
   std::ifstream f(config);
   json cfg = json::parse(f);
 
-  std::vector<void*> plugins;
-  for( std::string plugin_name: cfg["plugins"]) {
-    std::string plugin_dir = cfg_dir.string() + "/" + plugin_name;
-    void* h_ = dlopen(plugin_dir.c_str(), RTLD_NOW);
-    printf("[INFO] loading plugin from: %s\n", plugin_dir.c_str());
-    if (!h_) {
-      const char* error = dlerror();
-      std::cerr << "Failed to load library: " << error << std::endl;
-      return -1;
-    }
-    plugins.push_back(h_);
+  std::string plugin_dir = cfg_dir.string() + "/" + cfg["plugins"][0].get<std::string>();
+  if (!load_plugin(plugin_dir)) {
+    return -1;
   }
 
   cudaStream_t stream;
