@@ -1152,6 +1152,11 @@ int main(int argc, char** argv) {
       planning[i * 2 + 1] += planning[(i-1) * 2 + 1];
     }    
     frame.planning = planning;
+
+    autoware::tensorrt_vad::VadOutputData vad_output_data{
+        frame.planning,
+    };
+
     node->publishTrajectory(frame.planning);
     printf("publish trajectory");
     rclcpp::spin_some(node);
