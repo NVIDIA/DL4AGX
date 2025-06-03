@@ -1085,18 +1085,20 @@ int main(int argc, char** argv) {
     nets["backbone"]->bindings["img"]->load(vad_input_data.camera_images_, stream);
     nets["backbone"]->Enqueue(stream);
 
-    if (is_first_frame) {
-        nets["head_no_prev"]->bindings["img_metas.0[shift]"]->load(vad_input_data.shift_, stream);
-        nets["head_no_prev"]->bindings["img_metas.0[lidar2img]"]->load(vad_input_data.lidar2img_, stream);
-        nets["head_no_prev"]->bindings["img_metas.0[can_bus]"]->load(vad_input_data.can_bus_, stream);
-        nets["head_no_prev"]->Enqueue(stream);
+    const std::string head_name = is_first_frame ? "head_no_prev" : "head";
+
+    nets[head_name]->bindings["img_metas.0[shift]"]->load(vad_input_data.shift_, stream);
+    nets[head_name]->bindings["img_metas.0[lidar2img]"]->load(vad_input_data.lidar2img_, stream);
+    nets[head_name]->bindings["img_metas.0[can_bus]"]->load(vad_input_data.can_bus_, stream);
+    nets[head_name]->Enqueue(stream);
         
         // prev_bevを保存
-        auto bev_embed = nets["head_no_prev"]->bindings["out.bev_embed"];
+    auto bev_embed = nets[head_name]->bindings["out.bev_embed"];
         saved_prev_bev = std::make_shared<nv::Tensor>("prev_bev", bev_embed->dim, bev_embed->dtype);
         cudaMemcpyAsync(saved_prev_bev->ptr, bev_embed->ptr, bev_embed->nbytes(), 
                       cudaMemcpyDeviceToDevice, stream);
         
+    if (is_first_frame) {
         // head_no_prevを解放
         releaseNetwork(nets, "head_no_prev");
         cudaStreamSynchronize(stream);  // メモリ解放を確実に
@@ -1105,18 +1107,6 @@ int main(int argc, char** argv) {
         loadHeadEngine(nets, cfg, cfg_dir.string(), runtime.get(), stream);
         
         is_first_frame = false;
-    }
-    else {
-        nets["head"]->bindings["prev_bev"] = saved_prev_bev;
-        nets["head"]->bindings["img_metas.0[shift]"]->load(vad_input_data.shift_, stream);
-        nets["head"]->bindings["img_metas.0[lidar2img]"]->load(vad_input_data.lidar2img_, stream);
-        nets["head"]->bindings["img_metas.0[can_bus]"]->load(vad_input_data.can_bus_, stream);
-        nets["head"]->Enqueue(stream);
-        // prev_bevを保存
-        auto bev_embed = nets["head"]->bindings["out.bev_embed"];
-        saved_prev_bev = std::make_shared<nv::Tensor>("prev_bev", bev_embed->dim, bev_embed->dtype);
-        cudaMemcpyAsync(saved_prev_bev->ptr, bev_embed->ptr, bev_embed->nbytes(), 
-                      cudaMemcpyDeviceToDevice, stream);
     }
 
     cudaStreamSynchronize(stream);
