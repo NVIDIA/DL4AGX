@@ -252,10 +252,10 @@ Logger gLogger;
 
 // TensorRTランタイムを作成する関数
 // VadModelのコンストラクタで使用
-std::unique_ptr<nvinfer1::IRuntime, std::function<void(nvinfer1::IRuntime*)>> create_runtime(Logger logger) {
+std::unique_ptr<nvinfer1::IRuntime, std::function<void(nvinfer1::IRuntime*)>> create_runtime(Logger& logger) {
   auto runtime_deleter = [](nvinfer1::IRuntime *runtime) {};
   std::unique_ptr<nvinfer1::IRuntime, decltype(runtime_deleter)> runtime{
-    nvinfer1::createInferRuntime(gLogger), runtime_deleter};
+    nvinfer1::createInferRuntime(logger), runtime_deleter};
   return runtime;
 }
 
