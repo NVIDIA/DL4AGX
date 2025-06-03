@@ -250,6 +250,14 @@ public:
 
 Logger gLogger;
 
+// TensorRTランタイムを作成する関数
+std::unique_ptr<nvinfer1::IRuntime, std::function<void(nvinfer1::IRuntime*)>> create_runtime(Logger logger) {
+  auto runtime_deleter = [](nvinfer1::IRuntime *runtime) {};
+  std::unique_ptr<nvinfer1::IRuntime, decltype(runtime_deleter)> runtime{
+    nvinfer1::createInferRuntime(gLogger), runtime_deleter};
+  return runtime;
+}
+
 class EventTimer {
 public:
   EventTimer() {
@@ -987,9 +995,9 @@ int main(int argc, char** argv) {
   printf("nvinfer: %d.%d.%d\n", NV_TENSORRT_MAJOR, NV_TENSORRT_MINOR, NV_TENSORRT_PATCH);
   cudaSetDevice(0);
 
-  auto runtime_deleter = [](nvinfer1::IRuntime *runtime) {};
-	std::unique_ptr<nvinfer1::IRuntime, decltype(runtime_deleter)> runtime{
-    nvinfer1::createInferRuntime(gLogger), runtime_deleter};
+  Logger logger;
+
+  std::unique_ptr<nvinfer1::IRuntime, std::function<void(nvinfer1::IRuntime*)>> runtime = create_runtime(logger);
 
   const std::string config = argv[1];
   fs::path cfg_pth = config;
@@ -1091,13 +1099,13 @@ int main(int argc, char** argv) {
     nets[head_name]->bindings["img_metas.0[lidar2img]"]->load(vad_input_data.lidar2img_, stream);
     nets[head_name]->bindings["img_metas.0[can_bus]"]->load(vad_input_data.can_bus_, stream);
     nets[head_name]->Enqueue(stream);
-        
-        // prev_bevを保存
+
+    // prev_bevを保存
     auto bev_embed = nets[head_name]->bindings["out.bev_embed"];
-        saved_prev_bev = std::make_shared<nv::Tensor>("prev_bev", bev_embed->dim, bev_embed->dtype);
-        cudaMemcpyAsync(saved_prev_bev->ptr, bev_embed->ptr, bev_embed->nbytes(), 
-                      cudaMemcpyDeviceToDevice, stream);
-        
+    saved_prev_bev = std::make_shared<nv::Tensor>("prev_bev", bev_embed->dim, bev_embed->dtype);
+    cudaMemcpyAsync(saved_prev_bev->ptr, bev_embed->ptr, bev_embed->nbytes(), 
+                    cudaMemcpyDeviceToDevice, stream);
+
     if (is_first_frame) {
         // head_no_prevを解放
         releaseNetwork(nets, "head_no_prev");
