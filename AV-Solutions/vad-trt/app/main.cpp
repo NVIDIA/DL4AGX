@@ -271,6 +271,15 @@ bool load_plugin(const std::string& plugin_dir) {
     return true;
 }
 
+// VadModelのコンストラクタで使用
+void warm_up(int32_t warm_up_num, std::unordered_map<std::string, std::shared_ptr<nv::Net>>& nets, cudaStream_t stream) {
+  for( int32_t iw=0; iw < warm_up_num; iw++ ) {
+    nets["backbone"]->Enqueue(stream);
+    nets["head_no_prev"]->Enqueue(stream);
+    cudaStreamSynchronize(stream);
+  }
+}
+
 class EventTimer {
 public:
   EventTimer() {
@@ -1078,13 +1087,9 @@ int main(int argc, char** argv) {
     }
   }
   
-  int32_t warm_up = cfg["warm_up"];
-  printf("[INFO] warm_up=%d\n", warm_up);
-  for( int32_t iw=0; iw < warm_up; iw++ ) {
-    nets["backbone"]->Enqueue(stream);
-    nets["head_no_prev"]->Enqueue(stream);
-    cudaStreamSynchronize(stream);
-  }
+  int32_t warm_up_num = cfg["warm_up"];
+  printf("[INFO] warm_up=%d\n", warm_up_num);
+  warm_up(warm_up_num, nets, stream);
 
   EventTimer timer;
   std::string data_dir = cfg_dir.string() + "/data/";
