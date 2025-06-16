@@ -1101,6 +1101,10 @@ int main(int argc, char** argv) {
   printf("[INFO] n_frames=%d\n", n_frames);
   std::vector<float> lidar2img;
 
+  // commandパラメータを読み込む
+  int32_t default_command = node->declare_parameter<int>("model_params.default_command", 0);
+  printf("[INFO] default_command=%d\n", default_command);
+
   auto subscribed_image_dict = load_image_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
   auto [subscribed_can_bus_dict, subscribed_shift_dict] = load_can_bus_shift_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
   int32_t input_image_width = cfg["input_image_width"];
@@ -1117,7 +1121,7 @@ int main(int argc, char** argv) {
         subscribed_shift_dict[frame_id],    // shift_
         subscribed_lidar2img_dict[frame_id], // lidar2img_
         subscribed_can_bus_dict[frame_id],  // can_bus_
-        2                                   // command_
+        default_command                    // command_
     };
     
     // VadModelのinfer関数を使用
