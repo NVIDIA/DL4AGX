@@ -196,14 +196,16 @@ public:
         {
             autoware_planning_msgs::msg::TrajectoryPoint point;
             
-            point.pose.position.x = planning[i];
-            point.pose.position.y = planning[i + 1];
+            point.pose.position.x = planning[i + 1];
+            point.pose.position.y = - planning[i];
             point.pose.position.z = 0.0;
 
             if (i + 2 < planning.size()) {
-                float dx = planning[i + 2] - planning[i];
-                float dy = planning[i + 3] - planning[i + 1];
-                float yaw = std::atan2(dy, dx);
+                float ns_dx = planning[i + 2] - planning[i];
+                float ns_dy = planning[i + 3] - planning[i + 1];
+                float aw_dx = ns_dy; // Autowareの座標系に変換
+                float aw_dy = - ns_dx; // Autowareの座標系に変換
+                float yaw = std::atan2(aw_dy, aw_dx);
                 point.pose.orientation = createQuaternionFromYaw(yaw);
             }
 
