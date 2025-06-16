@@ -1145,10 +1145,7 @@ int main(int argc, char** argv) {
     std::string font_path = cfg_dir.string() + "/" + cfg["font_path"].get<std::string>();
 
     nv::VisualizeFrame frame;
-
-    std::ifstream cmd_file(frame_dir + "cmd.bin", std::ios::binary);    
-    cmd_file.read((char*)(&frame.cmd), sizeof(int));
-    cmd_file.close();
+    frame.cmd = vad_input_data.command_;  // VadInputDataのcommand_の値（2 = "KEEP FORWARD"）を使用
 
     frame.img_metas_lidar2img = vad_model.nets_["head"]->bindings["img_metas.0[lidar2img]"]->cpu<float>();
 
