@@ -15,6 +15,9 @@
  * limitations under the License.
  */
 
+#ifndef NET_H_
+#define NET_H_
+
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -124,19 +127,6 @@ struct Net {
   }
 }; // class Net
 
-void validate(Net& net, std::string frame_dir, std::string key) {
-  auto ref = net.bindings[key]->load_ref(frame_dir + key + ".bin");
-  float* f_ref = reinterpret_cast<float*>(ref.data());
-  auto fresult = net.bindings[key]->cpu<float>();
-  std::cout << key << std::endl;
-  for(int n=0; n<16; n++ ) {
-      printf("%6.4f ", fresult[n]);
-  }
-  printf("\n");
-  for(int n=0; n<16; n++ ) {
-      printf("%6.4f ", f_ref[n]);
-  }
-  printf("\n");
-}
-
 } // namespace nv
+
+#endif // NET_H_

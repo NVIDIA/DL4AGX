@@ -6,6 +6,10 @@
   "input_image_hight": 960,
   "plugins": ["home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/libplugins.so"],
   "font_path": "home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/simhei.ttf",
+  "yaml_config_paths": [
+    "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX_ns_rosbag/DL4AGX/AV-Solutions/vad-trt/app/demo/vad_tiny.param.yaml",
+    "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX_ns_rosbag/DL4AGX/AV-Solutions/vad-trt/app/demo/ml_package_vad_tiny.param.yaml"
+  ],
   "images": [
     "CAM_FRONT.jpg", "CAM_FRONT_RIGHT.jpg", "CAM_FRONT_LEFT.jpg", 
     "CAM_BACK.jpg", "CAM_BACK_LEFT.jpg", "CAM_BACK_RIGHT.jpg"],

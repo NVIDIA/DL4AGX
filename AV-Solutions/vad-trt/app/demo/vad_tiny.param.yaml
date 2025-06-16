@@ -1,0 +1,5 @@
+/**:
+  ros__parameters:
+    model_params:
+      plugins_path: "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/libplugins.so"
+      warm_up_num: 20

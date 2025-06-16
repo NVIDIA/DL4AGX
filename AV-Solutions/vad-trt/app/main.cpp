@@ -64,9 +64,9 @@
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-#include "net.h"
 #include "visualize.hpp"  
 #include "vad_model.hpp"
+#include "ros_vad_logger.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 #include <autoware_planning_msgs/msg/trajectory.hpp>
@@ -93,11 +93,65 @@ Eigen::Quaternionf aw2ns_quaternion(const Eigen::Quaternionf& q_aw) {
     return q_rotation * q_aw;
 }
 
+unsigned char* convert_normalized_to_rgb(const std::vector<float>& normalized_data) {
+    const int src_width = 640;
+    const int src_height = 384;
+    const int dst_width = 1600;
+    const int dst_height = 960;
+
+    // 正規化の逆変換用パラメータ
+    float mean[3] = {103.530f, 116.280f, 123.675f};
+    float std[3] = {1.0f, 1.0f, 1.0f};
+    
+    // まず元の正規化データから一時的なRGB画像を作成
+    const int channels = 3;
+    unsigned char* temp_rgb = new unsigned char[src_width * src_height * channels];
+    
+    // CHW形式（正規化）からHWC形式（RGB）に変換
+    for (int h = 0; h < src_height; ++h) {
+        for (int w = 0; w < src_width; ++w) {
+            for (int c = 0; c < channels; ++c) {
+                // CHW形式でのソースインデックス
+                int src_idx = c * src_height * src_width + h * src_width + w;
+                
+                // HWC形式（RGB）でのデスティネーションインデックス
+                int dst_idx = (h * src_width + w) * channels + (2 - c);  // BGRからRGBに変換
+                
+                // 正規化を逆にして、unsigned charに変換
+                float pixel_value = normalized_data[src_idx] * std[c] + mean[c];
+                temp_rgb[dst_idx] = static_cast<unsigned char>(std::max(0.0f, std::min(255.0f, pixel_value)));
+            }
+        }
+    }
+    
+    // 拡大後のRGB画像用にメモリを確保
+    unsigned char* rgb_data = new unsigned char[dst_width * dst_height * channels];
+    
+    // stbir_resize_uint8を使用してリサイズ
+    int resize_result = stbir_resize_uint8(
+        temp_rgb, src_width, src_height, 0,
+        rgb_data, dst_width, dst_height, 0,
+        channels
+    );
+    
+    // 一時メモリを解放
+    delete[] temp_rgb;
+    
+    // リサイズ失敗の場合のエラーハンドリング
+    if (!resize_result) {
+        std::cerr << "画像のリサイズに失敗しました" << std::endl;
+        delete[] rgb_data;
+        return nullptr;
+    }
+    
+    return rgb_data;
+}
+
 class VADNode : public rclcpp::Node 
 {
 public:
-    VADNode() 
-        : Node("vad_node") 
+    VADNode(const std::vector<std::string>& yaml_config_paths) 
+        : Node("vad_node", createNodeOptions(yaml_config_paths))
     {
         // Publishers
         trajectory_publisher_ = this->create_publisher<autoware_planning_msgs::msg::Trajectory>(
@@ -123,7 +177,15 @@ public:
             );
         }
 
+        // VadConfigを読み込み
+        loadVadConfig();
+
         RCLCPP_INFO(this->get_logger(), "VAD Node has been initialized");
+    }
+
+    // VadConfigを取得する関数
+    const autoware::tensorrt_vad::VadConfig& getVadConfig() const {
+        return vad_config_;
     }
 
     void publishTrajectory(const std::vector<float>& planning) 
@@ -198,6 +260,70 @@ private:
     rclcpp::Publisher<autoware_planning_msgs::msg::Trajectory>::SharedPtr trajectory_publisher_;
     rclcpp::Publisher<autoware_perception_msgs::msg::DetectedObjects>::SharedPtr objects_publisher_;
     std::vector<rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr> camera_subscribers_;
+    
+    // VadConfig
+    autoware::tensorrt_vad::VadConfig vad_config_;
+
+    // yamlファイルのパスからNodeOptionsを作成する静的関数
+    static rclcpp::NodeOptions createNodeOptions(const std::vector<std::string>& yaml_config_paths) {
+        rclcpp::NodeOptions node_options;
+        std::vector<std::string> ros_args = {"--ros-args"};
+        for (const auto& yaml_path : yaml_config_paths) {
+            ros_args.push_back("--params-file");
+            ros_args.push_back(yaml_path);
+        }
+        node_options.arguments(ros_args);
+        return node_options;
+    }
+
+    void loadVadConfig() {
+        // このノード自体からパラメータを読み込み
+        vad_config_.plugins_path = this->declare_parameter<std::string>("model_params.plugins_path", "");
+        vad_config_.warm_up_num = this->declare_parameter<int>("model_params.warm_up_num", 20);
+        
+        // ネットワーク設定の読み込み
+        loadNetConfigs();
+    }
+    
+    void loadNetConfigs() {
+        // 階層構造でネットワーク設定を読み込み
+        
+        // backbone設定
+        autoware::tensorrt_vad::NetConfig backbone_config;
+        backbone_config.name = this->declare_parameter<std::string>("model_params.nets.backbone.name", "backbone");
+        backbone_config.engine_file = this->declare_parameter<std::string>("model_params.nets.backbone.engine_file", "");
+        backbone_config.use_graph = this->declare_parameter<bool>("model_params.nets.backbone.use_graph", true);
+        
+        // head設定
+        autoware::tensorrt_vad::NetConfig head_config;
+        head_config.name = this->declare_parameter<std::string>("model_params.nets.head.name", "head");
+        head_config.engine_file = this->declare_parameter<std::string>("model_params.nets.head.engine_file", "");
+        head_config.use_graph = this->declare_parameter<bool>("model_params.nets.head.use_graph", true);
+        
+        // head inputsの読み込み
+        std::string input_feature = this->declare_parameter<std::string>("model_params.nets.head.inputs.input_feature", "mlvl_feats.0");
+        std::string net_param = this->declare_parameter<std::string>("model_params.nets.head.inputs.net", "backbone");
+        std::string name_param = this->declare_parameter<std::string>("model_params.nets.head.inputs.name", "out.0");
+        head_config.inputs[input_feature]["net"] = net_param;
+        head_config.inputs[input_feature]["name"] = name_param;
+        
+        // head_no_prev設定
+        autoware::tensorrt_vad::NetConfig head_no_prev_config;
+        head_no_prev_config.name = this->declare_parameter<std::string>("model_params.nets.head_no_prev.name", "head_no_prev");
+        head_no_prev_config.engine_file = this->declare_parameter<std::string>("model_params.nets.head_no_prev.engine_file", "");
+        head_no_prev_config.use_graph = this->declare_parameter<bool>("model_params.nets.head_no_prev.use_graph", true);
+        
+        // head_no_prev inputsの読み込み
+        std::string input_feature_no_prev = this->declare_parameter<std::string>("model_params.nets.head_no_prev.inputs.input_feature", "mlvl_feats.0");
+        std::string net_param_no_prev = this->declare_parameter<std::string>("model_params.nets.head_no_prev.inputs.net", "backbone");
+        std::string name_param_no_prev = this->declare_parameter<std::string>("model_params.nets.head_no_prev.inputs.name", "out.0");
+        head_no_prev_config.inputs[input_feature_no_prev]["net"] = net_param_no_prev;
+        head_no_prev_config.inputs[input_feature_no_prev]["name"] = name_param_no_prev;
+        
+        vad_config_.nets_config.push_back(backbone_config);
+        vad_config_.nets_config.push_back(head_config);
+        vad_config_.nets_config.push_back(head_no_prev_config);
+    }
 
     void onImageReceived(const sensor_msgs::msg::CompressedImage::SharedPtr msg, int32_t camera_index)
     {
@@ -250,35 +376,6 @@ public:
 
 Logger gLogger;
 
-// TensorRTランタイムを作成する関数
-// VadModelのコンストラクタで使用
-std::unique_ptr<nvinfer1::IRuntime, std::function<void(nvinfer1::IRuntime*)>> create_runtime(Logger& logger) {
-  auto runtime_deleter = [](nvinfer1::IRuntime *runtime) {};
-  std::unique_ptr<nvinfer1::IRuntime, decltype(runtime_deleter)> runtime{
-    nvinfer1::createInferRuntime(logger), runtime_deleter};
-  return runtime;
-}
-
-// VadModelのコンストラクタで使用
-bool load_plugin(const std::string& plugin_dir) {
-    void* h_ = dlopen(plugin_dir.c_str(), RTLD_NOW);
-    printf("[INFO] loading plugin from: %s\n", plugin_dir.c_str());
-    if (!h_) {
-        const char* error = dlerror();
-        std::cerr << "Failed to load library: " << error << std::endl;
-        return false;
-    }
-    return true;
-}
-
-// VadModelのコンストラクタで使用
-void warm_up(int32_t warm_up_num, std::unordered_map<std::string, std::shared_ptr<nv::Net>>& nets, cudaStream_t stream) {
-  for( int32_t iw=0; iw < warm_up_num; iw++ ) {
-    nets["backbone"]->Enqueue(stream);
-    nets["head_no_prev"]->Enqueue(stream);
-    cudaStreamSynchronize(stream);
-  }
-}
 
 class EventTimer {
 public:
@@ -307,53 +404,6 @@ public:
 private:
   cudaEvent_t begin_ = nullptr, end_ = nullptr;
 };
-
-void releaseNetwork(std::unordered_map<std::string, std::shared_ptr<nv::Net>>& nets, 
-                   const std::string& name) {
-    if (nets.find(name) != nets.end()) {
-        // まずbindingsをクリア
-        nets[name]->bindings.clear();
-        cudaDeviceSynchronize();
-        
-        // 次にNetオブジェクトを解放
-        nets[name].reset();
-        nets.erase(name);
-        cudaDeviceSynchronize();
-    }
-}
-
-void loadHeadEngine(
-    std::unordered_map<std::string, std::shared_ptr<nv::Net>>& nets,
-    const json& cfg,
-    const std::string& cfg_dir,
-    nvinfer1::IRuntime* runtime,
-    cudaStream_t stream) {
-    
-    auto head_engine = std::find_if(cfg["nets"].begin(), cfg["nets"].end(),
-        [](const json& engine) { return engine["name"] == "head"; });
-    
-    std::string eng_file = (*head_engine)["file"];
-    std::string eng_pth = cfg_dir + "/" + eng_file;
-    printf("-> loading head engine: %s\n", eng_pth.c_str());
-    
-    std::unordered_map<std::string, std::shared_ptr<nv::Tensor>> ext;
-    auto inputs = (*head_engine)["inputs"];
-    for (auto it = inputs.begin(); it != inputs.end(); ++it) {
-        std::string k = it.key();
-        auto ext_map = it.value();      
-        std::string ext_net = ext_map["net"];
-        std::string ext_name = ext_map["name"];
-        printf("%s <- %s[%s]\n", k.c_str(), ext_net.c_str(), ext_name.c_str());
-        ext[k] = nets[ext_net]->bindings[ext_name];
-    }
-
-    nets["head"] = std::make_shared<nv::Net>(eng_pth, runtime, ext);
-
-    bool use_graph = (*head_engine)["use_graph"];
-    if (use_graph) {
-        nets["head"]->EnableCudaGraph(stream);
-    }
-}
 
 std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
     const std::string& bag_path, int32_t n_frames) {
@@ -741,6 +791,8 @@ load_can_bus_shift_from_rosbag(const std::string& bag_path, int32_t n_frames) {
                     
                     std::vector<float> shift = calculateShift(delta_x, delta_y, yaw);
                     shift_dict[current_frame_id] = shift;
+                } else {
+                    shift_dict[current_frame_id] = {0.0f, 0.0f};
                 }
                 
                 // 次のフレームの準備
@@ -1009,76 +1061,12 @@ void compare_with_reference_lidar2img(
     std::cout << "lidar2imgデータは参照ファイルと一致しています: " << reference_file_path << std::endl;
 }
 
-// VadModel::postprocess
-autoware::tensorrt_vad::VadOutputData postprocess(const std::vector<float>& ego_fut_preds, int32_t cmd) {
-    // Extract planning for the given command
-    std::vector<float> planning(
-        ego_fut_preds.begin() + cmd * 12,
-        ego_fut_preds.begin() + (cmd + 1) * 12
-    );
-    
-    // cumsum to build trajectory in 3d space
-    for (int32_t i = 1; i < 6; i++) {
-        planning[i * 2] += planning[(i-1) * 2];
-        planning[i * 2 + 1] += planning[(i-1) * 2 + 1];
-    }
-    
-    return autoware::tensorrt_vad::VadOutputData{planning};
-}
-
-// VadModelのコンストラクタで使用
-std::unordered_map<std::string, std::shared_ptr<nv::Net>> init_engines(
-    const json& engines_cfg,
-    const std::string& cfg_dir,
-    std::unique_ptr<nvinfer1::IRuntime, std::function<void(nvinfer1::IRuntime*)>>& runtime,
-    cudaStream_t stream) {
-    
-    std::unordered_map<std::string, std::shared_ptr<nv::Net>> nets;
-    
-    for (auto engine : engines_cfg) {
-        if (engine["name"] == "head") {
-            continue;  // headは後で初期化
-        }
-        
-        std::string eng_name = engine["name"];
-        std::string eng_file = engine["file"];
-        std::string eng_pth = cfg_dir + "/" + eng_file;
-        printf("-> engine: %s\n", eng_name.c_str());
-        
-        std::unordered_map<std::string, std::shared_ptr<nv::Tensor>> ext;
-        // reuse memory
-        auto inputs = engine["inputs"];
-        for (auto it = inputs.begin(); it != inputs.end(); ++it) {
-            std::string k = it.key();
-            auto ext_map = it.value();      
-            std::string ext_net = ext_map["net"];
-            std::string ext_name = ext_map["name"];
-            printf("%s <- %s[%s]\n", k.c_str(), ext_net.c_str(), ext_name.c_str());
-            ext[k] = nets[ext_net]->bindings[ext_name];
-        }
-
-        nets[eng_name] = std::make_shared<nv::Net>(eng_pth, runtime.get(), ext);
-
-        bool use_graph = engine["use_graph"];
-        if (use_graph) {
-            nets[eng_name]->EnableCudaGraph(stream);
-        }
-    }
-    
-    return nets;
-}
-
 int main(int argc, char** argv) {
   // ROSの初期化
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<VADNode>();
   
   printf("nvinfer: %d.%d.%d\n", NV_TENSORRT_MAJOR, NV_TENSORRT_MINOR, NV_TENSORRT_PATCH);
   cudaSetDevice(0);
-
-  Logger logger;
-
-  std::unique_ptr<nvinfer1::IRuntime, std::function<void(nvinfer1::IRuntime*)>> runtime = create_runtime(logger);
 
   const std::string config = argv[1];
   fs::path cfg_pth = config;
@@ -1089,33 +1077,27 @@ int main(int argc, char** argv) {
   std::ifstream f(config);
   json cfg = json::parse(f);
 
-  std::string plugin_dir = cfg_dir.string() + "/" + cfg["plugins"][0].get<std::string>();
-  if (!load_plugin(plugin_dir)) {
-    return -1;
+  // jsonからyamlパスを読み込み
+  std::vector<std::string> yaml_config_paths;
+  for (const auto& yaml_path : cfg["yaml_config_paths"]) {
+    yaml_config_paths.push_back(yaml_path.get<std::string>());
   }
-
-  cudaStream_t stream;
-  cudaStreamCreate(&stream);
-
-  // init engines
-  std::unordered_map<std::string, std::shared_ptr<nv::Net>> nets = init_engines(
-      cfg["nets"],
-      cfg_dir.string(),
-      runtime,
-      stream
-  );
   
-  int32_t warm_up_num = cfg["warm_up"];
-  printf("[INFO] warm_up=%d\n", warm_up_num);
-  warm_up(warm_up_num, nets, stream);
+  // VADNodeを作成（yamlパスを渡す）
+  auto node = std::make_shared<VADNode>(yaml_config_paths);
+
+  // VADNodeからVadConfigを取得
+  const auto& vad_config = node->getVadConfig();
+
+  // VadModelを初期化
+  auto ros_logger = std::make_shared<autoware::tensorrt_vad::RosVadLogger>(node);
+  autoware::tensorrt_vad::VadModel vad_model(vad_config, ros_logger);
 
   EventTimer timer;
   std::string data_dir = cfg_dir.string() + "/data/";
   int32_t n_frames = cfg["n_frames"];
   printf("[INFO] n_frames=%d\n", n_frames);
-  std::shared_ptr<nv::Tensor> saved_prev_bev;
   std::vector<float> lidar2img;
-  bool is_first_frame = true;
 
   auto subscribed_image_dict = load_image_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
   auto [subscribed_can_bus_dict, subscribed_shift_dict] = load_can_bus_shift_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
@@ -1135,44 +1117,28 @@ int main(int argc, char** argv) {
         subscribed_can_bus_dict[frame_id],  // can_bus_
         2                                   // command_
     };
-    nets["backbone"]->bindings["img"]->load(vad_input_data.camera_images_, stream);
-    nets["backbone"]->Enqueue(stream);
-
-    const std::string head_name = is_first_frame ? "head_no_prev" : "head";
-
-    nets[head_name]->bindings["img_metas.0[shift]"]->load(vad_input_data.shift_, stream);
-    nets[head_name]->bindings["img_metas.0[lidar2img]"]->load(vad_input_data.lidar2img_, stream);
-    nets[head_name]->bindings["img_metas.0[can_bus]"]->load(vad_input_data.can_bus_, stream);
-    nets[head_name]->Enqueue(stream);
-
-    // prev_bevを保存
-    auto bev_embed = nets[head_name]->bindings["out.bev_embed"];
-    saved_prev_bev = std::make_shared<nv::Tensor>("prev_bev", bev_embed->dim, bev_embed->dtype);
-    cudaMemcpyAsync(saved_prev_bev->ptr, bev_embed->ptr, bev_embed->nbytes(), 
-                    cudaMemcpyDeviceToDevice, stream);
-
-    if (is_first_frame) {
-        // head_no_prevを解放
-        releaseNetwork(nets, "head_no_prev");
-        cudaStreamSynchronize(stream);  // メモリ解放を確実に
-        
-        // headをロード
-        loadHeadEngine(nets, cfg, cfg_dir.string(), runtime.get(), stream);
-        
-        is_first_frame = false;
+    
+    // VadModelのinfer関数を使用
+    auto inference_result = vad_model.infer(vad_input_data);
+    if (!inference_result.has_value()) {
+        std::cerr << "Inference failed for frame " << frame_id << std::endl;
+        continue;
     }
 
-    cudaStreamSynchronize(stream);
+    cudaStreamSynchronize(vad_model.stream_);
+
+    auto vad_output_data = inference_result.value();    
 
     std::string viz_dir = cfg["viz"];
     viz_dir = cfg_dir.string() + "/" + viz_dir;
 
     std::vector<unsigned char*> images;
-    for( std::string image_name: cfg["images"]) {    
-      std::string image_pth = data_dir + std::to_string(frame_id) + "/" + image_name;
-      
-      int32_t width, height, channels;
-      images.push_back(stbi_load(image_pth.c_str(), &width, &height, &channels, 0));
+    
+    // 各カメラからの画像をRGBに変換
+    for (int cam_idx = 0; cam_idx < 6; ++cam_idx) {
+        const auto& normalized_img = subscribed_image_dict[frame_id][cam_idx];
+        unsigned char* rgb_img = convert_normalized_to_rgb(normalized_img);
+        images.push_back(rgb_img);
     }
     std::string font_path = cfg_dir.string() + "/" + cfg["font_path"].get<std::string>();
 
@@ -1182,18 +1148,16 @@ int main(int argc, char** argv) {
     cmd_file.read((char*)(&frame.cmd), sizeof(int));
     cmd_file.close();
 
-    frame.img_metas_lidar2img = nets["head"]->bindings["img_metas.0[lidar2img]"]->cpu<float>();
+    frame.img_metas_lidar2img = vad_model.nets_["head"]->bindings["img_metas.0[lidar2img]"]->cpu<float>();
 
     // pred -> frame.planning
-    std::vector<float> ego_fut_preds = nets["head"]->bindings["out.ego_fut_preds"]->cpu<float>();
-    auto vad_output_data = postprocess(ego_fut_preds, frame.cmd);
     frame.planning = vad_output_data.predicted_trajectory_;
     node->publishTrajectory(frame.planning);
     printf("publish trajectory");
     rclcpp::spin_some(node);
 
-    std::vector<float> bbox_preds = nets["head"]->bindings["out.all_bbox_preds"]->cpu<float>();
-    std::vector<float> cls_scores = nets["head"]->bindings["out.all_cls_scores"]->cpu<float>();
+    std::vector<float> bbox_preds = vad_model.nets_["head"]->bindings["out.all_bbox_preds"]->cpu<float>();
+    std::vector<float> cls_scores = vad_model.nets_["head"]->bindings["out.all_cls_scores"]->cpu<float>();
 
     // det to frame.det
     constexpr int32_t N_MAX_DET = 300;
@@ -1237,7 +1201,7 @@ int main(int argc, char** argv) {
       frame,
       font_path,
       viz_dir + "/" + std::to_string(frame_id) + ".jpg",
-      stream);
+      vad_model.stream_);
 
     printf("[INFO] %d, cmd=%d finished\n", frame_id, frame.cmd);
   }
@@ -1247,16 +1211,15 @@ int main(int argc, char** argv) {
     printf("[INFO] running %d rounds of perf_loop\n", perf_loop);
   }
   for( int32_t i=0; i < perf_loop; i++ ) {
-    timer.start(stream);
-    nets["backbone"]->Enqueue(stream);
-    nets["head"]->Enqueue(stream);
-    timer.end(stream);
-    cudaStreamSynchronize(stream);
+    timer.start(vad_model.stream_);
+    vad_model.nets_["backbone"]->Enqueue(vad_model.stream_);
+    vad_model.nets_["head"]->Enqueue(vad_model.stream_);
+    timer.end(vad_model.stream_);
+    cudaStreamSynchronize(vad_model.stream_);
     timer.report("vad-trt");
   }
   
-  cudaStreamSynchronize(stream);
-  cudaStreamDestroy(stream);
+  cudaStreamSynchronize(vad_model.stream_);
 
   // ROSのシャットダウン
   rclcpp::shutdown();
