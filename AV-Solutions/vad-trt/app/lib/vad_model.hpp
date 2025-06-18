@@ -23,6 +23,7 @@
 #include <unordered_map>
 #include <cuda_runtime.h>
 #include <NvInfer.h>
+#include <dlfcn.h>
 #include "net.h"
 
 namespace autoware::tensorrt_vad
