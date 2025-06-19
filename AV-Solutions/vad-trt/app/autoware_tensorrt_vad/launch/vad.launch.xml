@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="log_level" default="info"/>
+
+  <arg name="camera_info0" default="/sensing/camera/camera0/camera_info"/>
+  <arg name="camera_info1" default="/sensing/camera/camera1/camera_info"/>
+  <arg name="camera_info2" default="/sensing/camera/camera2/camera_info"/>
+  <arg name="camera_info3" default="/sensing/camera/camera3/camera_info"/>
+  <arg name="camera_info4" default="/sensing/camera/camera4/camera_info"/>
+  <arg name="camera_info5" default="/sensing/camera/camera5/camera_info"/>
+
+  <arg name="image0" default="/sensing/camera/camera0/image_rect_color"/>
+  <arg name="image1" default="/sensing/camera/camera1/image_rect_color"/>
+  <arg name="image2" default="/sensing/camera/camera2/image_rect_color"/>
+  <arg name="image3" default="/sensing/camera/camera3/image_rect_color"/>
+  <arg name="image4" default="/sensing/camera/camera4/image_rect_color"/>
+  <arg name="image5" default="/sensing/camera/camera5/image_rect_color"/>
+  <arg name="output/objects" default="detection/objects"/>
+  <arg name="output/trajectory" default="planning/trajectory"/>
+
+  <node pkg="autoware_tensorrt_vad" exec="vad_node" name="vad" output="screen" args="--ros-args --log-level $(var log_level)">
+    <remap from="~/output/objects" to="$(var output/objects)"/>
+    <remap from="~/output/trajectory" to="$(var output/trajectory)"/>
+
+    <remap from="~/input/camera_info0" to="$(var camera_info0)"/>
+    <remap from="~/input/camera_info1" to="$(var camera_info1)"/>
+    <remap from="~/input/camera_info2" to="$(var camera_info2)"/>
+    <remap from="~/input/camera_info3" to="$(var camera_info3)"/>
+    <remap from="~/input/camera_info4" to="$(var camera_info4)"/>
+    <remap from="~/input/camera_info5" to="$(var camera_info5)"/>
+    <remap from="~/input/image0" to="$(var image0)"/>
+    <remap from="~/input/image1" to="$(var image1)"/>
+    <remap from="~/input/image2" to="$(var image2)"/>
+    <remap from="~/input/image3" to="$(var image3)"/>
+    <remap from="~/input/image4" to="$(var image4)"/>
+    <remap from="~/input/image5" to="$(var image5)"/>
+  </node>
+</launch>
