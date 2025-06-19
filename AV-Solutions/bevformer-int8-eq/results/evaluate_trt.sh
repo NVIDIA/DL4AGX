@@ -1,5 +1,5 @@
 MODEL_DIR="/mnt/models"
-TRT_VERSION="10.3.0.26"
+TRT_VERSION="10.9.0.34"
 DEVICE="A40"
 LOGS_DIR="${MODEL_DIR}/logs_${DEVICE}_trt${TRT_VERSION}"
 BEVFORMER_REPO=/workspace/BEVFormer_tensorrt

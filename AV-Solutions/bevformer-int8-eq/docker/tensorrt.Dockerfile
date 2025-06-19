@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/tensorrt:24.08-py3
+FROM nvcr.io/nvidia/tensorrt:25.04-py3
 
 ARG CMAKE_VERSION=3.29.3
 ARG NUM_JOBS=8
@@ -46,17 +46,18 @@ RUN cd /tmp && \
     bash cmake-${CMAKE_VERSION}-linux-x86_64.sh --prefix=/usr/local --exclude-subdir --skip-license
 RUN rm -rf /tmp/*
 
-RUN pip install --upgrade pip setuptools wheel
-RUN pip install cuda-python==12.3.0 \
+RUN pip install --upgrade pip
+RUN pip install setuptools wheel
+RUN pip install cuda-python==12.6.2 \
                 numpy==1.26.3 \
-                onnx==1.16.1 \
+                onnx==1.17.0 \
                 onnxsim
-RUN pip install --extra-index-url https://pypi.ngc.nvidia.com onnx_graphsurgeon==0.3.27
-RUN pip install torch==2.3.0 torchvision==0.18.0 --index-url https://download.pytorch.org/whl/cu121
+RUN pip install --extra-index-url https://pypi.ngc.nvidia.com onnx_graphsurgeon==0.5.8
+RUN pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu126
 
 # ======== Install ModelOpt Toolkit for quantization and ORT for CUDA 12 =========
-RUN pip install nvidia-modelopt[onnx]==0.27.1
-ENV LD_LIBRARY_PATH=/usr/local/lib/python3.10/dist-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
+RUN pip install nvidia-modelopt[onnx]==0.29.0
+ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
 # ======== Prepare repo to convert BEVFormer model from PyTorch to ONNX ========
 ARG TORCH_CUDA_ARCH_LIST="7.5;6.1;8.0;8.6"
@@ -68,14 +69,16 @@ RUN cd ${PROJECT_DIR} && git clone https://github.com/DerryHub/BEVFormer_tensorr
     cd BEVFormer_tensorrt && git checkout 303d3140
 
 # Install requirements except pytorch_quantization (requirements.txt file except the last 3 lines)
+# Replace all packages' requirements to '>=' except for 'nuscenes_devkit', which throws an error with Python 3.12 and the latest package version ('1.1.9' is okay).
 RUN head -n $(($(wc -l < ${DERRYHUB_PROJECT_DIR}/requirements.txt) - 3)) ${DERRYHUB_PROJECT_DIR}/requirements.txt > temp.txt && \
     sed -i 's/==/>=/g' temp.txt && \
+    sed -i 's/nuscenes_devkit>=/nuscenes_devkit==/g' temp.txt && \
     mv temp.txt ${DERRYHUB_PROJECT_DIR}/requirements.txt && \
     pip install -r ${DERRYHUB_PROJECT_DIR}/requirements.txt
 
 # Install pytorch-quantization from source (needed for PyTorch 2 support)
 # WAR for issue with package installed via "pip install --no-cache-dir --extra-index-url https://pypi.nvidia.com pytorch-quantization"
-RUN cd ${PROJECT_DIR} && git clone https://github.com/NVIDIA/TensorRT.git -b release/10.0 && \
+RUN cd ${PROJECT_DIR} && git clone https://github.com/NVIDIA/TensorRT.git -b release/10.9 && \
     cd TensorRT/tools/pytorch-quantization && \
     MAX_JOBS=4 python setup.py install
 
@@ -90,11 +93,11 @@ RUN cd ${DERRYHUB_PROJECT_DIR} && \
 RUN cd ${DERRYHUB_PROJECT_DIR} && \
     git clone https://github.com/open-mmlab/mmdetection.git && \
     cd mmdetection && git checkout v2.25.1 && \
-    pip install -v -e .
+    pip install -v .
 
 RUN cd ${DERRYHUB_PROJECT_DIR}/third_party/bev_mmdet3d && \
     MAX_JOBS=4 python setup.py build develop --user
 
-RUN sudo apt-get install -y libgl1-mesa-glx
+RUN apt-get install -y libgl1-mesa-glx || apt-get install -y libgl1 libglx-mesa0
 
 WORKDIR /mnt

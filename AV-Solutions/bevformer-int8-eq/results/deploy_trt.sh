@@ -1,6 +1,6 @@
 MODEL_DIR="/mnt/models"
 CALIB_PATH="/workspace/BEVFormer_tensorrt/data/nuscenes/calib_data.npz"
-TRT_VERSION="10.3.0.26"
+TRT_VERSION="10.9.0.34"
 DEVICE="A40"
 
 LOGS_DIR="${MODEL_DIR}/logs_${DEVICE}_trt${TRT_VERSION}"
@@ -39,13 +39,13 @@ for (( i=0; i<$len; i++ )); do
   done
 
   echo "Quantize model - ModelOpt PTQ (Explicit Quantization):"
-  python /mnt/tools/quantize_model.py \
-    --onnx_path=${MODEL_DIR}/${MODEL_NAME}.onnx \
-    --output_path=${MODEL_DIR}/${MODEL_NAME}.quant.onnx \
-    --trt_plugins=$PLUGIN_PATH \
-    --op_types_to_exclude MatMul \
-    --calibration_data_path=$CALIB_PATH \
-    --simplify
+  python -m modelopt.onnx.quantization \
+      --onnx_path=${MODEL_DIR}/${MODEL_NAME}.onnx \
+      --output_path=${MODEL_DIR}/${MODEL_NAME}.quant.onnx \
+      --trt_plugins=$PLUGIN_PATH \
+      --op_types_to_exclude MatMul \
+      --calibration_data_path=$CALIB_PATH \
+      --simplify
   wait
   for PRECISION in best; do
     echo "    - ${PRECISION}"
