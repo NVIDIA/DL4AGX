@@ -67,6 +67,7 @@ namespace fs = std::filesystem;
 #include "visualize.hpp"  
 #include "vad_model.hpp"
 #include "ros_vad_logger.hpp"
+#include "vad_interface.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 #include <autoware_planning_msgs/msg/trajectory.hpp>
@@ -1063,6 +1064,148 @@ void compare_with_reference_lidar2img(
     std::cout << "lidar2imgデータは参照ファイルと一致しています: " << reference_file_path << std::endl;
 }
 
+std::vector<autoware::tensorrt_vad::VadTopicData> extract_vad_topic_data_from_rosbag(
+    const std::string& bag_path) {
+
+    std::vector<autoware::tensorrt_vad::VadTopicData> vad_topic_data_list;
+
+    try {
+        // ROSバッグの設定
+        rosbag2_storage::StorageOptions storage_options;
+        storage_options.uri = bag_path;
+        storage_options.storage_id = "sqlite3";
+        rosbag2_cpp::ConverterOptions converter_options;
+        converter_options.input_serialization_format = "cdr";
+        converter_options.output_serialization_format = "cdr";
+        rosbag2_cpp::readers::SequentialReader reader;
+        reader.open(storage_options, converter_options);
+
+        autoware::tensorrt_vad::VadTopicData current_frame;
+        bool frame_started = false;
+
+        while (reader.has_next()) {
+            auto bag_message = reader.read_next();
+
+            // 画像トピックの処理
+            for (int autoware_idx = 0; autoware_idx < 6; ++autoware_idx) {
+                std::string image_topic = "/sensing/camera/camera" + std::to_string(autoware_idx) + "/image_rect_color/compressed";
+                if (bag_message->topic_name == image_topic) {
+                    auto msg = std::make_shared<sensor_msgs::msg::CompressedImage>();
+                    rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                    rclcpp::Serialization<sensor_msgs::msg::CompressedImage>().deserialize_message(
+                        &serialized_msg, msg.get());
+
+                    // CompressedImageをImageに変換
+                    auto image_msg = std::make_shared<sensor_msgs::msg::Image>();
+                    image_msg->header = msg->header;
+                    image_msg->height = msg->format.find("height=") != std::string::npos ? 
+                        std::stoi(msg->format.substr(msg->format.find("height=") + 7, msg->format.find(";") - msg->format.find("height=") - 7)) : 0;
+                    image_msg->width = msg->format.find("width=") != std::string::npos ? 
+                        std::stoi(msg->format.substr(msg->format.find("width=") + 6, msg->format.find(";") - msg->format.find("width=") - 6)) : 0;
+                    image_msg->encoding = "bgr8";
+                    image_msg->data = msg->data;
+                    image_msg->step = image_msg->width * 3;
+
+                    if (!frame_started) {
+                        current_frame.stamp = msg->header.stamp;
+                        current_frame.images.resize(6);
+                        current_frame.camera_infos.resize(6);
+                        frame_started = true;
+                    }
+
+                    current_frame.images[autoware_idx] = image_msg;
+                }
+            }
+
+            // カメラ情報トピックの処理
+            for (int autoware_idx = 0; autoware_idx < 6; ++autoware_idx) {
+                std::string camera_info_topic = "/sensing/camera/camera" + std::to_string(autoware_idx) + "/camera_info";
+                if (bag_message->topic_name == camera_info_topic) {
+                    auto msg = std::make_shared<sensor_msgs::msg::CameraInfo>();
+                    rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                    rclcpp::Serialization<sensor_msgs::msg::CameraInfo>().deserialize_message(
+                        &serialized_msg, msg.get());
+
+                    if (!frame_started) {
+                        current_frame.stamp = msg->header.stamp;
+                        current_frame.images.resize(6);
+                        current_frame.camera_infos.resize(6);
+                        frame_started = true;
+                    }
+
+                    current_frame.camera_infos[autoware_idx] = msg;
+                }
+            }
+
+            // TF staticトピックの処理
+            if (bag_message->topic_name == "/tf_static") {
+                auto msg = std::make_shared<tf2_msgs::msg::TFMessage>();
+                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                rclcpp::Serialization<tf2_msgs::msg::TFMessage>().deserialize_message(
+                    &serialized_msg, msg.get());
+
+                if (!frame_started) {
+                    current_frame.stamp = rclcpp::Time(0);
+                    current_frame.images.resize(6);
+                    current_frame.camera_infos.resize(6);
+                    frame_started = true;
+                }
+
+                current_frame.tf_static = msg;
+            }
+
+            // 運動状態トピックの処理
+            if (bag_message->topic_name == "/localization/kinematic_state") {
+                auto msg = std::make_shared<nav_msgs::msg::Odometry>();
+                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                rclcpp::Serialization<nav_msgs::msg::Odometry>().deserialize_message(
+                    &serialized_msg, msg.get());
+
+                if (!frame_started) {
+                    current_frame.stamp = msg->header.stamp;
+                    current_frame.images.resize(6);
+                    current_frame.camera_infos.resize(6);
+                    frame_started = true;
+                }
+
+                current_frame.kinematic_state = msg;
+            }
+
+            // IMUトピックの処理
+            if (bag_message->topic_name == "/sensing/imu/tamagawa/imu_raw") {
+                auto msg = std::make_shared<sensor_msgs::msg::Imu>();
+                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                rclcpp::Serialization<sensor_msgs::msg::Imu>().deserialize_message(
+                    &serialized_msg, msg.get());
+
+                if (!frame_started) {
+                    current_frame.stamp = msg->header.stamp;
+                    current_frame.images.resize(6);
+                    current_frame.camera_infos.resize(6);
+                    frame_started = true;
+                }
+
+                current_frame.imu_raw = msg;
+            }
+
+            // フレームが完成したらリストに追加
+            if (frame_started && current_frame.is_complete()) {
+                vad_topic_data_list.push_back(current_frame);
+
+                // 次のフレームの準備
+                current_frame = autoware::tensorrt_vad::VadTopicData();
+                frame_started = false;
+            }
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "ROSバッグの読み込み中にエラーが発生: " << e.what() << std::endl;
+        throw;
+    }
+
+    return vad_topic_data_list;
+}
+
 int main(int argc, char** argv) {
   // ROSの初期化
   rclcpp::init(argc, argv);
@@ -1105,6 +1248,7 @@ int main(int argc, char** argv) {
   int32_t default_command = node->declare_parameter<int>("model_params.default_command", 0);
   printf("[INFO] default_command=%d\n", default_command);
 
+  auto vad_topic_data_list = extract_vad_topic_data_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/");
   auto subscribed_image_dict = load_image_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
   auto [subscribed_can_bus_dict, subscribed_shift_dict] = load_can_bus_shift_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
   int32_t input_image_width = cfg["input_image_width"];
