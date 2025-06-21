@@ -456,97 +456,55 @@ load_image_from_rosbag_single_frame(const std::vector<sensor_msgs::msg::Image::C
   const int32_t target_width = 640;
   const int32_t target_height = 384;
 
-  try {
-    // 各カメラの画像を処理
-    for (int autoware_idx = 0; autoware_idx < 6; ++autoware_idx) {
-      const auto &image_msg = images[autoware_idx];
+  // 正規化のパラメータ
+  float mean[3] = {103.530f, 116.280f, 123.675f};
+  float std[3] = {1.0f, 1.0f, 1.0f};
 
-      if (!image_msg) {
-        std::cerr << "Frame " << (frame_id + 1) << " camera " << autoware_idx
-                  << " image is null" << std::endl;
-        std::cerr << "Available images in frame: ";
-        for (int i = 0; i < 6; ++i) {
-          std::cerr << (images[i] ? "1" : "0") << " ";
-        }
-        std::cerr << std::endl;
-        throw std::runtime_error("Null image message");
-      }
+  // 各カメラの画像を処理
+  for (int autoware_idx = 0; autoware_idx < 6; ++autoware_idx) {
+    const auto &image_msg = images[autoware_idx];
 
-      // 画像データの処理
-      int32_t width, height, channels;
-      unsigned char *image_data = stbi_load_from_memory(
-          image_msg->data.data(), static_cast<int>(image_msg->data.size()),
-          &width, &height, &channels, STBI_rgb); // RGBとして読み込む
+    // 画像データの処理
+    int32_t width, height, channels;
+    unsigned char *image_data = stbi_load_from_memory(
+        image_msg->data.data(), static_cast<int>(image_msg->data.size()),
+        &width, &height, &channels, STBI_rgb); // RGBとして読み込む
 
-      if (image_data == nullptr) {
-        std::cerr << "Failed to load image data for frame " << (frame_id + 1)
-                  << " camera " << autoware_idx << std::endl;
-        throw std::runtime_error("Failed to load image data");
-      }
+    // サイズが目標と違う場合はリサイズする
+    unsigned char *resized_data = nullptr;
+    if (width != target_width || height != target_height) {
+      // stb_image_resizeを使用してリサイズ
+      resized_data =
+          (unsigned char *)malloc(target_width * target_height * channels);
 
-      // サイズが目標と違う場合はリサイズする
-      unsigned char *resized_data = nullptr;
-      if (width != target_width || height != target_height) {
-        // stb_image_resizeを使用してリサイズ
-        resized_data =
-            (unsigned char *)malloc(target_width * target_height * channels);
-        if (!resized_data) {
-          std::cerr << "リサイズ用のメモリ確保に失敗しました" << std::endl;
-          stbi_image_free(image_data);
-          throw std::runtime_error("Memory allocation failed");
-        }
+      // stb_image_resizeを使ってリサイズ
+      int resize_result =
+          stbir_resize_uint8(image_data, width, height, 0, resized_data,
+                              target_width, target_height, 0, channels);
 
-        // stb_image_resizeを使ってリサイズ
-        int resize_result =
-            stbir_resize_uint8(image_data, width, height, 0, resized_data,
-                               target_width, target_height, 0, channels);
-
-        if (!resize_result) {
-          std::cerr << "画像のリサイズに失敗しました" << std::endl;
-          free(resized_data);
-          stbi_image_free(image_data);
-          throw std::runtime_error("Image resize failed");
-        }
-
-        // 元のデータを解放し、リサイズしたデータを使用
-        stbi_image_free(image_data);
-        image_data = resized_data;
-        width = target_width;
-        height = target_height;
-      }
-
-      // 正規化のパラメータ
-      float mean[3] = {103.530f, 116.280f, 123.675f};
-      float std[3] = {1.0f, 1.0f, 1.0f};
-
-      // BGRの順で処理
-      std::vector<float> normalized_image_data(width * height * 3);
-      for (int c = 0; c < 3; ++c) {
-        for (int h = 0; h < height; ++h) {
-          for (int w = 0; w < width; ++w) {
-            int32_t src_idx = (h * width + w) * 3 + (2 - c); // BGR -> RGB
-            int32_t dst_idx = c * height * width + h * width + w; // CHW形式
-            float pixel_value = static_cast<float>(image_data[src_idx]);
-            normalized_image_data[dst_idx] = (pixel_value - mean[c]) / std[c];
-          }
-        }
-      }
-
-      // 画像データを解放
-      if (image_data == resized_data) {
-        free(resized_data);
-      } else {
-        stbi_image_free(image_data);
-      }
-
-      // VADカメラ順序で格納
-      int vad_idx = autoware_to_vad[autoware_idx];
-      frame_images[vad_idx] = normalized_image_data;
+      // 元のデータを解放し、リサイズしたデータを使用
+      stbi_image_free(image_data);
+      image_data = resized_data;
+      width = target_width;
+      height = target_height;
     }
 
-  } catch (const std::exception &e) {
-    std::cerr << "Error in load_image_from_rosbag: " << e.what() << std::endl;
-    throw;
+    // BGRの順で処理
+    std::vector<float> normalized_image_data(width * height * 3);
+    for (int c = 0; c < 3; ++c) {
+      for (int h = 0; h < height; ++h) {
+        for (int w = 0; w < width; ++w) {
+          int32_t src_idx = (h * width + w) * 3 + (2 - c); // BGR -> RGB
+          int32_t dst_idx = c * height * width + h * width + w; // CHW形式
+          float pixel_value = static_cast<float>(image_data[src_idx]);
+          normalized_image_data[dst_idx] = (pixel_value - mean[c]) / std[c];
+        }
+      }
+    }
+
+    // VADカメラ順序で格納
+    int vad_idx = autoware_to_vad[autoware_idx];
+    frame_images[vad_idx] = normalized_image_data;
   }
 
   return frame_images;
@@ -661,116 +619,106 @@ load_can_bus_shift_from_rosbag_single_frame(
     int frame_id,
     const std::vector<float> &prev_can_bus = {}) {
 
+  // default patch_angle
+  float default_patch_angle = -1.0353195667266846f;
+
   std::vector<float> can_bus(18, 0.0f);
   std::vector<float> shift(2, 0.0f);
 
-  try {
-    if (!kinematic_state || !imu_raw) {
-      std::cerr << "Frame " << (frame_id + 1)
-                << " missing kinematic_state or imu_raw" << std::endl;
-      throw std::runtime_error("Missing required data");
-    }
+  // Apply Autoware to nuScenes coordinate transformation to position
+  auto [ns_x, ns_y] =
+      aw2ns_xy(kinematic_state->pose.pose.position.x,
+                kinematic_state->pose.pose.position.y);
 
-    // Apply Autoware to nuScenes coordinate transformation to position
-    auto [ns_x, ns_y] =
-        aw2ns_xy(kinematic_state->pose.pose.position.x,
-                 kinematic_state->pose.pose.position.y);
+  std::vector<float> translation = {
+      ns_x, ns_y,
+      static_cast<float>(
+          kinematic_state->pose.pose.position.z)};
 
-    std::vector<float> translation = {
-        ns_x, ns_y,
-        static_cast<float>(
-            kinematic_state->pose.pose.position.z)};
+  // Apply Autoware to nuScenes coordinate transformation to orientation
+  Eigen::Quaternionf q_aw(
+      kinematic_state->pose.pose.orientation.w,
+      kinematic_state->pose.pose.orientation.x,
+      kinematic_state->pose.pose.orientation.y,
+      kinematic_state->pose.pose.orientation.z);
 
-    // Apply Autoware to nuScenes coordinate transformation to orientation
-    Eigen::Quaternionf q_aw(
-        kinematic_state->pose.pose.orientation.w,
-        kinematic_state->pose.pose.orientation.x,
-        kinematic_state->pose.pose.orientation.y,
-        kinematic_state->pose.pose.orientation.z);
+  Eigen::Quaternionf q_ns = aw2ns_quaternion(q_aw);
 
-    Eigen::Quaternionf q_ns = aw2ns_quaternion(q_aw);
+  std::vector<float> rotation = {q_ns.x(), q_ns.y(), q_ns.z(), q_ns.w()};
 
-    std::vector<float> rotation = {q_ns.x(), q_ns.y(), q_ns.z(), q_ns.w()};
+  // Apply Autoware to nuScenes coordinate transformation to velocity
+  auto [ns_vx, ns_vy] =
+      aw2ns_xy(kinematic_state->twist.twist.linear.x,
+                kinematic_state->twist.twist.linear.y);
 
-    // Apply Autoware to nuScenes coordinate transformation to velocity
-    auto [ns_vx, ns_vy] =
-        aw2ns_xy(kinematic_state->twist.twist.linear.x,
-                 kinematic_state->twist.twist.linear.y);
+  std::vector<float> velocity = {
+      ns_vx, ns_vy,
+      static_cast<float>(
+          kinematic_state->twist.twist.linear.z)};
 
-    std::vector<float> velocity = {
-        ns_vx, ns_vy,
-        static_cast<float>(
-            kinematic_state->twist.twist.linear.z)};
+  // Apply Autoware to nuScenes coordinate transformation to angular
+  // velocity
+  auto [ns_wx, ns_wy] =
+      aw2ns_xy(kinematic_state->twist.twist.angular.x,
+                kinematic_state->twist.twist.angular.y);
 
-    // Apply Autoware to nuScenes coordinate transformation to angular
-    // velocity
-    auto [ns_wx, ns_wy] =
-        aw2ns_xy(kinematic_state->twist.twist.angular.x,
-                 kinematic_state->twist.twist.angular.y);
+  std::vector<float> angular_velocity = {
+      ns_wx, ns_wy,
+      static_cast<float>(
+          kinematic_state->twist.twist.angular.z)};
 
-    std::vector<float> angular_velocity = {
-        ns_wx, ns_wy,
-        static_cast<float>(
-            kinematic_state->twist.twist.angular.z)};
+  // Apply Autoware to nuScenes coordinate transformation to acceleration
+  auto [ns_ax, ns_ay] =
+      aw2ns_xy(imu_raw->linear_acceleration.x,
+                imu_raw->linear_acceleration.y);
 
-    // Apply Autoware to nuScenes coordinate transformation to acceleration
-    auto [ns_ax, ns_ay] =
-        aw2ns_xy(imu_raw->linear_acceleration.x,
-                 imu_raw->linear_acceleration.y);
+  std::vector<float> acceleration = {
+      ns_ax, ns_ay,
+      static_cast<float>(imu_raw->linear_acceleration.z)};
 
-    std::vector<float> acceleration = {
-        ns_ax, ns_ay,
-        static_cast<float>(imu_raw->linear_acceleration.z)};
+  // can_busデータの構築（18次元ベクトル）
 
-    // can_busデータの構築（18次元ベクトル）
+  // translation (0:3)
+  std::copy(translation.begin(), translation.end(), can_bus.begin());
 
-    // translation (0:3)
-    std::copy(translation.begin(), translation.end(), can_bus.begin());
+  // rotation (3:7)
+  std::copy(rotation.begin(), rotation.end(), can_bus.begin() + 3);
 
-    // rotation (3:7)
-    std::copy(rotation.begin(), rotation.end(), can_bus.begin() + 3);
+  // acceleration (7:10)
+  std::copy(acceleration.begin(), acceleration.end(), can_bus.begin() + 7);
 
-    // acceleration (7:10)
-    std::copy(acceleration.begin(), acceleration.end(), can_bus.begin() + 7);
+  // angular velocity (10:13)
+  std::copy(angular_velocity.begin(), angular_velocity.end(),
+            can_bus.begin() + 10);
 
-    // angular velocity (10:13)
-    std::copy(angular_velocity.begin(), angular_velocity.end(),
-              can_bus.begin() + 10);
+  // velocity (13:16)
+  std::copy(velocity.begin(), velocity.begin() + 2, can_bus.begin() + 13);
+  can_bus[15] = 0.0f; // z方向の速度は0とする
 
-    // velocity (13:16)
-    std::copy(velocity.begin(), velocity.begin() + 2, can_bus.begin() + 13);
-    can_bus[15] = 0.0f; // z方向の速度は0とする
+  // patch_angle[rad]の計算 (16)
+  double yaw = std::atan2(
+      2.0 * (can_bus[6] * can_bus[5] + can_bus[3] * can_bus[4]),
+      1.0 - 2.0 * (can_bus[4] * can_bus[4] + can_bus[5] * can_bus[5]));
+  if (yaw < 0)
+    yaw += 2 * M_PI;
+  can_bus[16] = static_cast<float>(yaw);
 
-    // patch_angle[rad]の計算 (16)
-    double yaw = std::atan2(
-        2.0 * (can_bus[6] * can_bus[5] + can_bus[3] * can_bus[4]),
-        1.0 - 2.0 * (can_bus[4] * can_bus[4] + can_bus[5] * can_bus[5]));
-    if (yaw < 0)
-      yaw += 2 * M_PI;
-    can_bus[16] = static_cast<float>(yaw);
+  // patch_angle[deg]の計算 (17)
+  if (frame_id > 0 && !prev_can_bus.empty()) {
+    float prev_angle = prev_can_bus[16];
+    can_bus[17] = (yaw - prev_angle) * 180.0f / M_PI;
+  } else {
+    can_bus[17] = default_patch_angle; // 最初のフレームのデフォルト値
+  }
 
-    // patch_angle[deg]の計算 (17)
-    if (frame_id > 0 && !prev_can_bus.empty()) {
-      float prev_angle = prev_can_bus[16];
-      can_bus[17] = (yaw - prev_angle) * 180.0f / M_PI;
-    } else {
-      can_bus[17] = -1.0353195667266846f; // 最初のフレームのデフォルト値
-    }
+  // シフトデータの計算
+  if (frame_id > 0 && !prev_can_bus.empty()) {
+    float delta_x = translation[0] - prev_can_bus[0];
+    float delta_y = translation[1] - prev_can_bus[1];
 
-    // シフトデータの計算
-    if (frame_id > 0 && !prev_can_bus.empty()) {
-      float delta_x = translation[0] - prev_can_bus[0];
-      float delta_y = translation[1] - prev_can_bus[1];
-
-      shift = calculateShift(delta_x, delta_y, yaw);
-    } else {
-      shift = {0.0f, 0.0f};
-    }
-
-  } catch (const std::exception &e) {
-    std::cerr << "ROSバッグの読み込み中にエラーが発生: " << e.what()
-              << std::endl;
-    throw;
+    shift = calculateShift(delta_x, delta_y, yaw);
+  } else {
+    shift = {0.0f, 0.0f};
   }
 
   return std::make_pair(can_bus, shift);
@@ -833,123 +781,87 @@ std::vector<float> load_lidar2img_from_rosbag_single_frame(
       {5, 5}  // BACK_RIGHT
   };
 
-  try {
-    if (!tf_static) {
-      std::cerr << "Frame " << (frame_id + 1) << " missing tf_static"
-                << std::endl;
-      throw std::runtime_error("Missing tf_static data");
-    }
+  // 各カメラのTF変換を処理
+  for (const auto &transform : tf_static->transforms) {
+    std::string child_frame_id = transform.child_frame_id;
 
-    bool frame_complete = true;
+    if (child_frame_id.find("camera") != std::string::npos &&
+        child_frame_id.find("/camera_optical_link") != std::string::npos) {
+      // Autowareカメラ名からカメラIDを抽出
+      int32_t autoware_camera_id = std::stoi(
+          child_frame_id.substr(child_frame_id.find("camera") + 6, 1));
 
-    // 各カメラのTF変換を処理
-    for (const auto &transform : tf_static->transforms) {
-      std::string child_frame_id = transform.child_frame_id;
+      // カメラの内部パラメータを確認
+      if (autoware_camera_id >= 0 && autoware_camera_id < 6 &&
+          camera_infos[autoware_camera_id]) {
 
-      if (child_frame_id.find("camera") != std::string::npos &&
-          child_frame_id.find("/camera_optical_link") != std::string::npos) {
-        // Autowareカメラ名からカメラIDを抽出
-        int32_t autoware_camera_id = std::stoi(
-            child_frame_id.substr(child_frame_id.find("camera") + 6, 1));
-
-        // カメラの内部パラメータを確認
-        if (autoware_camera_id >= 0 && autoware_camera_id < 6 &&
-            camera_infos[autoware_camera_id]) {
-
-          // カメラ行列Kを3x3行列として抽出
-          Eigen::Matrix3f k_matrix;
-          const auto &camera_info = camera_infos[autoware_camera_id];
-          for (int i = 0; i < 3; ++i) {
-            for (int j = 0; j < 3; ++j) {
-              k_matrix(i, j) = camera_info->k[i * 3 + j];
-            }
+        // カメラ行列Kを3x3行列として抽出
+        Eigen::Matrix3f k_matrix;
+        const auto &camera_info = camera_infos[autoware_camera_id];
+        for (int i = 0; i < 3; ++i) {
+          for (int j = 0; j < 3; ++j) {
+            k_matrix(i, j) = camera_info->k[i * 3 + j];
           }
+        }
 
-          // 変換行列の構築
-          Eigen::Vector3f aw_translation(transform.transform.translation.x,
-                                         transform.transform.translation.y,
-                                         transform.transform.translation.z);
+        // 変換行列の構築
+        Eigen::Vector3f aw_translation(transform.transform.translation.x,
+                                        transform.transform.translation.y,
+                                        transform.transform.translation.z);
 
-          // Apply Autoware to nuScenes coordinate transformation to
-          // translation
-          auto [ns_x, ns_y] = aw2ns_xy(aw_translation[0], aw_translation[1]);
-          Eigen::Vector3f ns_translation(ns_x, ns_y, aw_translation[2]);
+        // Apply Autoware to nuScenes coordinate transformation to
+        // translation
+        auto [ns_x, ns_y] = aw2ns_xy(aw_translation[0], aw_translation[1]);
+        Eigen::Vector3f ns_translation(ns_x, ns_y, aw_translation[2]);
 
-          Eigen::Quaternionf q_aw(
-              transform.transform.rotation.w, transform.transform.rotation.x,
-              transform.transform.rotation.y, transform.transform.rotation.z);
+        Eigen::Quaternionf q_aw(
+            transform.transform.rotation.w, transform.transform.rotation.x,
+            transform.transform.rotation.y, transform.transform.rotation.z);
 
-          // Apply Autoware to nuScenes coordinate transformation to
-          // quaternion
-          Eigen::Quaternionf q_ns = aw2ns_quaternion(q_aw);
+        // Apply Autoware to nuScenes coordinate transformation to
+        // quaternion
+        Eigen::Quaternionf q_ns = aw2ns_quaternion(q_aw);
 
-          // lidar2cam_rtを構築 (nuScenes座標系)
-          Eigen::Matrix4f lidar2cam_rt = Eigen::Matrix4f::Identity();
-          lidar2cam_rt.block<3, 3>(0, 0) = q_ns.toRotationMatrix();
-          lidar2cam_rt.block<3, 1>(0, 3) = ns_translation;
+        // lidar2cam_rtを構築 (nuScenes座標系)
+        Eigen::Matrix4f lidar2cam_rt = Eigen::Matrix4f::Identity();
+        lidar2cam_rt.block<3, 3>(0, 0) = q_ns.toRotationMatrix();
+        lidar2cam_rt.block<3, 1>(0, 3) = ns_translation;
 
-          // lidar2cam_rt.Tを計算
-          Eigen::Matrix4f lidar2cam_rt_T = lidar2cam_rt.transpose();
+        // lidar2cam_rt.Tを計算
+        Eigen::Matrix4f lidar2cam_rt_T = lidar2cam_rt.transpose();
 
-          // viewpadを作成
-          Eigen::Matrix4f viewpad = Eigen::Matrix4f::Zero();
-          viewpad.block<3, 3>(0, 0) = k_matrix;
-          viewpad(3, 3) = 1.0f;
+        // viewpadを作成
+        Eigen::Matrix4f viewpad = Eigen::Matrix4f::Zero();
+        viewpad.block<3, 3>(0, 0) = k_matrix;
+        viewpad(3, 3) = 1.0f;
 
-          // lidar2img = viewpad @ lidar2cam_rt.T を計算
-          Eigen::Matrix4f lidar2img = viewpad * lidar2cam_rt_T;
+        // lidar2img = viewpad @ lidar2cam_rt.T を計算
+        Eigen::Matrix4f lidar2img = viewpad * lidar2cam_rt_T;
 
-          // スケーリングを適用
-          Eigen::Matrix4f scale_matrix = Eigen::Matrix4f::Identity();
-          scale_matrix(0, 0) = scale_width;
-          scale_matrix(1, 1) = scale_height;
+        // スケーリングを適用
+        Eigen::Matrix4f scale_matrix = Eigen::Matrix4f::Identity();
+        scale_matrix(0, 0) = scale_width;
+        scale_matrix(1, 1) = scale_height;
 
-          lidar2img = scale_matrix * lidar2img;
+        lidar2img = scale_matrix * lidar2img;
 
-          // 結果を格納
-          std::vector<float> lidar2img_flat(16);
-          int32_t k = 0;
-          for (int i = 0; i < 4; ++i) {
-            for (int j = 0; j < 4; ++j) {
-              lidar2img_flat[k++] = lidar2img(i, j);
-            }
+        // 結果を格納
+        std::vector<float> lidar2img_flat(16);
+        int32_t k = 0;
+        for (int i = 0; i < 4; ++i) {
+          for (int j = 0; j < 4; ++j) {
+            lidar2img_flat[k++] = lidar2img(i, j);
           }
+        }
 
-          // lidar2imgの計算後、VADカメラIDの位置に格納
-          int vad_camera_id = autoware_to_vad[autoware_camera_id];
-          if (vad_camera_id >= 0 && vad_camera_id < 6) {
-            std::copy(lidar2img_flat.begin(), lidar2img_flat.end(),
-                      frame_lidar2img.begin() + vad_camera_id * 16);
-          }
+        // lidar2imgの計算後、VADカメラIDの位置に格納
+        int vad_camera_id = autoware_to_vad[autoware_camera_id];
+        if (vad_camera_id >= 0 && vad_camera_id < 6) {
+          std::copy(lidar2img_flat.begin(), lidar2img_flat.end(),
+                    frame_lidar2img.begin() + vad_camera_id * 16);
         }
       }
     }
-
-    // すべてのカメラのデータが揃っているか確認
-    for (int i = 0; i < 6; i++) {
-      bool camera_data_exists = false;
-      for (int j = 0; j < 16; j++) {
-        if (frame_lidar2img[i * 16 + j] != 0.0f) {
-          camera_data_exists = true;
-          break;
-        }
-      }
-      if (!camera_data_exists) {
-        frame_complete = false;
-        break;
-      }
-    }
-
-    if (!frame_complete) {
-      std::cerr << "Frame " << (frame_id + 1) << " is incomplete. Aborting."
-                << std::endl;
-      throw std::runtime_error("Incomplete frame");
-    }
-
-  } catch (const std::exception &e) {
-    std::cerr << "ROSバッグの読み込み中にエラーが発生: " << e.what()
-              << std::endl;
-    throw;
   }
 
   return frame_lidar2img;
