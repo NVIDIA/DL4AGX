@@ -409,10 +409,9 @@ private:
 };
 
 std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
-    const std::string& bag_path, int32_t n_frames) {
+    const std::vector<autoware::tensorrt_vad::VadTopicData>& vad_topic_data_list) {
     
     std::unordered_map<int, std::vector<std::vector<float>>> subscribed_image_dict;
-    std::unordered_map<int, std::vector<float>> frame_images_dict;
     
     // AutowareカメラインデックスからVADカメラインデックスへのマッピング
     std::unordered_map<int, int> autoware_to_vad = {
@@ -429,54 +428,45 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
     const int32_t target_height = 384;
     
     try {
-        rosbag2_storage::StorageOptions storage_options;
-        storage_options.uri = bag_path;
-        storage_options.storage_id = "sqlite3";
-        rosbag2_cpp::ConverterOptions converter_options;
-        converter_options.input_serialization_format = "cdr";
-        converter_options.output_serialization_format = "cdr";
-        rosbag2_cpp::readers::SequentialReader reader;
-        reader.open(storage_options, converter_options);
-        
-        int32_t current_frame_id = 1;
-        
-        while (reader.has_next() && current_frame_id <= n_frames) {
-            auto bag_message = reader.read_next();
+        for (size_t frame_id = 0; frame_id < vad_topic_data_list.size(); ++frame_id) {
+            const auto& vad_topic_data = vad_topic_data_list[frame_id];
+            std::vector<std::vector<float>> frame_images;
+            frame_images.resize(6); // VADカメラ順序で初期化
             
+            // 各カメラの画像を処理
             for (int autoware_idx = 0; autoware_idx < 6; ++autoware_idx) {
-                std::string topic = "/sensing/camera/camera" + std::to_string(autoware_idx) + "/image_rect_color/compressed";
-                if (bag_message->topic_name == topic) {
-                    auto msg = std::make_shared<sensor_msgs::msg::CompressedImage>();
-                    rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
-                    rclcpp::Serialization<sensor_msgs::msg::CompressedImage>().deserialize_message(
-                        &serialized_msg, msg.get());
-                    
-                    int32_t vad_idx = autoware_to_vad[autoware_idx];
-                    
+                const auto& image_msg = vad_topic_data.images[autoware_idx];
+                
+                if (!image_msg) {
+                    std::cerr << "Frame " << (frame_id + 1) << " camera " << autoware_idx << " image is null" << std::endl;
+                    std::cerr << "Available images in frame: ";
+                    for (int i = 0; i < 6; ++i) {
+                        std::cerr << (vad_topic_data.images[i] ? "1" : "0") << " ";
+                    }
+                    std::cerr << std::endl;
+                    throw std::runtime_error("Null image message");
+                }
+                
                     // 画像データの処理
                     int32_t width, height, channels;
                     unsigned char* image_data = stbi_load_from_memory(
-                        msg->data.data(), static_cast<int>(msg->data.size()),
+                        image_msg->data.data(), static_cast<int>(image_msg->data.size()),
                         &width, &height, &channels, STBI_rgb); // RGBとして読み込む
                     
                     if (image_data == nullptr) {
-                        std::cerr << "Failed to load image data" << std::endl;
-                        continue;
+                        std::cerr << "Failed to load image data for frame " << (frame_id + 1) << " camera " << autoware_idx << std::endl;
+                        throw std::runtime_error("Failed to load image data");
                     }
-                    
+                
                     // サイズが目標と違う場合はリサイズする
                     unsigned char* resized_data = nullptr;
                     if (width != target_width || height != target_height) {
-                        // RCLCPP_INFO(rclcpp::get_logger("load_image_from_rosbag"),
-                        //     "カメラ %d の画像をリサイズします: %dx%d から %dx%d へ",
-                        //     autoware_idx, width, height, target_width, target_height);
-                        
                         // stb_image_resizeを使用してリサイズ
                         resized_data = (unsigned char*)malloc(target_width * target_height * channels);
                         if (!resized_data) {
                             std::cerr << "リサイズ用のメモリ確保に失敗しました" << std::endl;
                             stbi_image_free(image_data);
-                            continue;
+                            throw std::runtime_error("Memory allocation failed");
                         }
                         
                         // stb_image_resizeを使ってリサイズ
@@ -489,7 +479,7 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
                             std::cerr << "画像のリサイズに失敗しました" << std::endl;
                             free(resized_data);
                             stbi_image_free(image_data);
-                            continue;
+                            throw std::runtime_error("Image resize failed");
                         }
                         
                         // 元のデータを解放し、リサイズしたデータを使用
@@ -498,7 +488,7 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
                         width = target_width;
                         height = target_height;
                     }
-                    
+                
                     // 正規化のパラメータ
                     float mean[3] = {103.530f, 116.280f, 123.675f};
                     float std[3] = {1.0f, 1.0f, 1.0f};
@@ -515,52 +505,25 @@ std::unordered_map<int, std::vector<std::vector<float>>> load_image_from_rosbag(
                             }
                         }
                     }
-                    
+                
                     // 画像データを解放
                     if (image_data == resized_data) {
                         free(resized_data);
                     } else {
                         stbi_image_free(image_data);
                     }
-                    
-                    // 正規化された画像データを保存
-                    frame_images_dict[vad_idx] = normalized_image_data;
-                    
-                    // 6画像がそろった場合
-                    if (frame_images_dict.size() == 6) {
-                        std::vector<std::vector<float>> frame_images;
-                        frame_images.reserve(6);
-                        
-                        // 各カメラの画像を正しい順序で保存
-                        for (int i = 0; i < 6; ++i) {
-                            if (frame_images_dict.find(i) == frame_images_dict.end()) {
-                                std::cerr << "カメラ " << i << " の画像が見つかりません" << std::endl;
-                                throw std::runtime_error("Missing camera image");
-                            }
-                            frame_images.push_back(frame_images_dict[i]);
-                        }
-                        
-                        subscribed_image_dict[current_frame_id] = frame_images;
-                        
-                        // frame_images_dictをクリア
-                        frame_images_dict.clear();
-                        current_frame_id++;
-                    }
-                }
+                
+                // VADカメラ順序で格納
+                int vad_idx = autoware_to_vad[autoware_idx];
+                frame_images[vad_idx] = normalized_image_data;
             }
+            
+            subscribed_image_dict[frame_id + 1] = frame_images;
         }
                 
     } catch (const std::exception& e) {
         std::cerr << "Error in load_image_from_rosbag: " << e.what() << std::endl;
         throw;
-    }
-    
-    // すべてのフレームが揃っているか確認
-    for (int frame_id = 1; frame_id <= n_frames; ++frame_id) {
-        if (subscribed_image_dict.find(frame_id) == subscribed_image_dict.end()) {
-            std::cerr << "Frame " << frame_id << " not found in dictionary" << std::endl;
-            throw std::runtime_error("Frame not found in dictionary");
-        }
     }
     
     return subscribed_image_dict;
@@ -648,124 +611,72 @@ std::vector<float> calculateShift(float delta_x, float delta_y, float patch_angl
 }
 
 std::tuple<std::unordered_map<int, std::vector<float>>, std::unordered_map<int, std::vector<float>>> 
-load_can_bus_shift_from_rosbag(const std::string& bag_path, int32_t n_frames) {
+load_can_bus_shift_from_rosbag(const std::vector<autoware::tensorrt_vad::VadTopicData>& vad_topic_data_list) {
     std::unordered_map<int, std::vector<float>> can_bus_dict;
     std::unordered_map<int, std::vector<float>> shift_dict;
-    int32_t current_frame_id = 1;
     
     try {
-        // ROSバッグの設定
-        rosbag2_storage::StorageOptions storage_options;
-        storage_options.uri = bag_path;
-        storage_options.storage_id = "sqlite3";
-
-        rosbag2_cpp::ConverterOptions converter_options;
-        converter_options.input_serialization_format = "cdr";
-        converter_options.output_serialization_format = "cdr";
-
-        rosbag2_cpp::readers::SequentialReader reader;
-        reader.open(storage_options, converter_options);
-
-        // フレームごとのデータを一時保存する構造体
-        struct FrameData {
-            bool has_kinematic = false;
-            bool has_imu = false;
-            std::vector<float> translation;
-            std::vector<float> rotation;
-            std::vector<float> acceleration;
-            std::vector<float> angular_velocity;
-            std::vector<float> velocity;
-        };
-        
-        FrameData current_frame;
-        
-        while (reader.has_next() && current_frame_id <= n_frames) {
-            auto bag_message = reader.read_next();
+        for (size_t frame_id = 0; frame_id < vad_topic_data_list.size(); ++frame_id) {
+            const auto& vad_topic_data = vad_topic_data_list[frame_id];
             
-            if (bag_message->topic_name == "/localization/kinematic_state") {
-                auto msg = std::make_shared<nav_msgs::msg::Odometry>();
-                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
-                rclcpp::Serialization<nav_msgs::msg::Odometry>().deserialize_message(
-                    &serialized_msg, msg.get());
-                
-                current_frame.has_kinematic = true;
-                
-                // Apply Autoware to nuScenes coordinate transformation to position
-                auto [ns_x, ns_y] = aw2ns_xy(msg->pose.pose.position.x, msg->pose.pose.position.y);
-                
-                current_frame.translation.clear();
-                current_frame.translation.push_back(ns_x);
-                current_frame.translation.push_back(ns_y);
-                current_frame.translation.push_back(static_cast<float>(msg->pose.pose.position.z));
+            if (!vad_topic_data.kinematic_state || !vad_topic_data.imu_raw) {
+                std::cerr << "Frame " << (frame_id + 1) << " missing kinematic_state or imu_raw" << std::endl;
+                throw std::runtime_error("Missing required data");
+            }
+            
+            // Apply Autoware to nuScenes coordinate transformation to position
+            auto [ns_x, ns_y] = aw2ns_xy(vad_topic_data.kinematic_state->pose.pose.position.x, 
+                                        vad_topic_data.kinematic_state->pose.pose.position.y);
+            
+            std::vector<float> translation = {ns_x, ns_y, static_cast<float>(vad_topic_data.kinematic_state->pose.pose.position.z)};
 
-                // Apply Autoware to nuScenes coordinate transformation to orientation
-                Eigen::Quaternionf q_aw(
-                    msg->pose.pose.orientation.w,
-                    msg->pose.pose.orientation.x,
-                    msg->pose.pose.orientation.y,
-                    msg->pose.pose.orientation.z
-                );
-                
+            // Apply Autoware to nuScenes coordinate transformation to orientation
+            Eigen::Quaternionf q_aw(
+                vad_topic_data.kinematic_state->pose.pose.orientation.w,
+                vad_topic_data.kinematic_state->pose.pose.orientation.x,
+                vad_topic_data.kinematic_state->pose.pose.orientation.y,
+                vad_topic_data.kinematic_state->pose.pose.orientation.z
+            );
+            
                 Eigen::Quaternionf q_ns = aw2ns_quaternion(q_aw);
-                
-                current_frame.rotation.clear();
-                current_frame.rotation.push_back(q_ns.x());
-                current_frame.rotation.push_back(q_ns.y());
-                current_frame.rotation.push_back(q_ns.z());
-                current_frame.rotation.push_back(q_ns.w());
-
-                // Apply Autoware to nuScenes coordinate transformation to velocity
-                auto [ns_vx, ns_vy] = aw2ns_xy(msg->twist.twist.linear.x, msg->twist.twist.linear.y);
-                
-                current_frame.velocity.clear();
-                current_frame.velocity.push_back(ns_vx);
-                current_frame.velocity.push_back(ns_vy);
-                current_frame.velocity.push_back(static_cast<float>(msg->twist.twist.linear.z));
-
-                // Apply Autoware to nuScenes coordinate transformation to angular velocity
-                auto [ns_wx, ns_wy] = aw2ns_xy(msg->twist.twist.angular.x, msg->twist.twist.angular.y);
-                
-                current_frame.angular_velocity.clear();
-                current_frame.angular_velocity.push_back(ns_wx);
-                current_frame.angular_velocity.push_back(ns_wy);
-                current_frame.angular_velocity.push_back(static_cast<float>(msg->twist.twist.angular.z));
-            }
-            else if (bag_message->topic_name == "/sensing/imu/tamagawa/imu_raw") {
-                auto msg = std::make_shared<sensor_msgs::msg::Imu>();
-                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
-                rclcpp::Serialization<sensor_msgs::msg::Imu>().deserialize_message(
-                    &serialized_msg, msg.get());
-                
-                current_frame.has_imu = true;
-                
-                // Apply Autoware to nuScenes coordinate transformation to acceleration
-                auto [ns_ax, ns_ay] = aw2ns_xy(msg->linear_acceleration.x, msg->linear_acceleration.y);
-                
-                current_frame.acceleration.clear();
-                current_frame.acceleration.push_back(ns_ax);
-                current_frame.acceleration.push_back(ns_ay);
-                current_frame.acceleration.push_back(static_cast<float>(msg->linear_acceleration.z));
-            }
             
-            // kinematicとimuの両方のデータが揃った場合
-            if (current_frame.has_kinematic && current_frame.has_imu) {
+            std::vector<float> rotation = {q_ns.x(), q_ns.y(), q_ns.z(), q_ns.w()};
+
+            // Apply Autoware to nuScenes coordinate transformation to velocity
+            auto [ns_vx, ns_vy] = aw2ns_xy(vad_topic_data.kinematic_state->twist.twist.linear.x, 
+                                          vad_topic_data.kinematic_state->twist.twist.linear.y);
+            
+            std::vector<float> velocity = {ns_vx, ns_vy, static_cast<float>(vad_topic_data.kinematic_state->twist.twist.linear.z)};
+
+            // Apply Autoware to nuScenes coordinate transformation to angular velocity
+            auto [ns_wx, ns_wy] = aw2ns_xy(vad_topic_data.kinematic_state->twist.twist.angular.x, 
+                                          vad_topic_data.kinematic_state->twist.twist.angular.y);
+            
+            std::vector<float> angular_velocity = {ns_wx, ns_wy, static_cast<float>(vad_topic_data.kinematic_state->twist.twist.angular.z)};
+
+            // Apply Autoware to nuScenes coordinate transformation to acceleration
+            auto [ns_ax, ns_ay] = aw2ns_xy(vad_topic_data.imu_raw->linear_acceleration.x, 
+                                          vad_topic_data.imu_raw->linear_acceleration.y);
+            
+            std::vector<float> acceleration = {ns_ax, ns_ay, static_cast<float>(vad_topic_data.imu_raw->linear_acceleration.z)};
+            
                 // can_busデータの構築（18次元ベクトル）
                 std::vector<float> can_bus(18, 0.0f);
                 
                 // translation (0:3)
-                std::copy(current_frame.translation.begin(), current_frame.translation.end(), can_bus.begin());
+                std::copy(translation.begin(), translation.end(), can_bus.begin());
                 
                 // rotation (3:7)
-                std::copy(current_frame.rotation.begin(), current_frame.rotation.end(), can_bus.begin() + 3);
+                std::copy(rotation.begin(), rotation.end(), can_bus.begin() + 3);
                 
                 // acceleration (7:10)
-                std::copy(current_frame.acceleration.begin(), current_frame.acceleration.end(), can_bus.begin() + 7);
+                std::copy(acceleration.begin(), acceleration.end(), can_bus.begin() + 7);
                 
                 // angular velocity (10:13)
-                std::copy(current_frame.angular_velocity.begin(), current_frame.angular_velocity.end(), can_bus.begin() + 10);
+                std::copy(angular_velocity.begin(), angular_velocity.end(), can_bus.begin() + 10);
                 
                 // velocity (13:16)
-                std::copy(current_frame.velocity.begin(), current_frame.velocity.begin() + 2, can_bus.begin() + 13);
+                std::copy(velocity.begin(), velocity.begin() + 2, can_bus.begin() + 13);
                 can_bus[15] = 0.0f;  // z方向の速度は0とする
                 
                 // patch_angle[rad]の計算 (16)
@@ -777,30 +688,25 @@ load_can_bus_shift_from_rosbag(const std::string& bag_path, int32_t n_frames) {
                 can_bus[16] = static_cast<float>(yaw);
                 
                 // patch_angle[deg]の計算 (17)
-                if (current_frame_id > 1 && can_bus_dict.find(current_frame_id - 1) != can_bus_dict.end()) {
-                    float prev_angle = can_bus_dict[current_frame_id - 1][16];
+                if (frame_id > 0 && can_bus_dict.find(frame_id) != can_bus_dict.end()) {
+                    float prev_angle = can_bus_dict[frame_id][16];
                     can_bus[17] = (yaw - prev_angle) * 180.0f / M_PI;
                 } else {
                     can_bus[17] = -1.0353195667266846f;  // 最初のフレームのデフォルト値
                 }
-                
-                can_bus_dict[current_frame_id] = can_bus;
-                
-                // シフトデータの計算
-                if (current_frame_id > 1) {
-                    const auto& prev_translation = can_bus_dict[current_frame_id - 1];
-                    float delta_x = current_frame.translation[0] - prev_translation[0];
-                    float delta_y = current_frame.translation[1] - prev_translation[1];
+            
+            can_bus_dict[frame_id + 1] = can_bus;
+            
+            // シフトデータの計算
+            if (frame_id > 0) {
+                    const auto& prev_translation = can_bus_dict[frame_id];
+                    float delta_x = translation[0] - prev_translation[0];
+                    float delta_y = translation[1] - prev_translation[1];
                     
                     std::vector<float> shift = calculateShift(delta_x, delta_y, yaw);
-                    shift_dict[current_frame_id] = shift;
+                    shift_dict[frame_id + 1] = shift;
                 } else {
-                    shift_dict[current_frame_id] = {0.0f, 0.0f};
-                }
-                
-                // 次のフレームの準備
-                current_frame = FrameData();
-                current_frame_id++;
+                    shift_dict[frame_id + 1] = {0.0f, 0.0f};
             }
         }
         
@@ -826,93 +732,34 @@ std::optional<int> extract_autoware_camera_id(
 }
 
 std::unordered_map<int, std::vector<float>> 
-load_lidar2img_from_rosbag(const std::string& bag_path, int32_t n_frames, float scale_width, float scale_height) {
+load_lidar2img_from_rosbag(const std::vector<autoware::tensorrt_vad::VadTopicData>& vad_topic_data_list, float scale_width, float scale_height) {
     std::unordered_map<int, std::vector<float>> result;
     
-    // VADカメラIDからAutowareカメラIDへのマッピング
-    std::unordered_map<int, int> vad_to_autoware_camera = {
-        {0, 0},  // CAM_FRONT -> camera0
-        {1, 4},  // CAM_FRONT_RIGHT -> camera4
-        {2, 2},  // CAM_FRONT_LEFT -> camera2
-        {3, 1},  // CAM_BACK -> camera1
-        {4, 3},  // CAM_BACK_LEFT -> camera3
-        {5, 5}   // CAM_BACK_RIGHT -> camera5
+    // AutowareカメラインデックスからVADカメラインデックスへのマッピング
+    std::unordered_map<int, int> autoware_to_vad = {
+        {0, 0},  // FRONT
+        {4, 1},  // FRONT_RIGHT
+        {2, 2},  // FRONT_LEFT
+        {1, 3},  // BACK
+        {3, 4},  // BACK_LEFT
+        {5, 5}   // BACK_RIGHT
     };
     
-    // Autowareカメラ名からVADカメラIDへの逆マッピング
-    std::unordered_map<int, int> autoware_to_vad_camera;
-    for (const auto& [vad_id, autoware_id] : vad_to_autoware_camera) {
-        autoware_to_vad_camera[autoware_id] = vad_id;
-    }
-
     try {
-        // ROSバッグの設定
-        rosbag2_storage::StorageOptions storage_options;
-        storage_options.uri = bag_path;
-        storage_options.storage_id = "sqlite3";
-
-        rosbag2_cpp::ConverterOptions converter_options;
-        converter_options.input_serialization_format = "cdr";
-        converter_options.output_serialization_format = "cdr";
-
-        // カメラの内部パラメータを格納する辞書
-        std::unordered_map<int, Eigen::Matrix3f> cameras_intrinsics;
-
-        // ROSバッグリーダーの初期化
-        rosbag2_cpp::readers::SequentialReader reader;
-        reader.open(storage_options, converter_options);
-
-        // まずはすべてのカメラの内部パラメータを読み込む
-        while (reader.has_next()) {
-            auto bag_message = reader.read_next();
+        for (size_t frame_id = 0; frame_id < vad_topic_data_list.size(); ++frame_id) {
+            const auto& vad_topic_data = vad_topic_data_list[frame_id];
             
-            if (bag_message->topic_name.find("/camera_info") != std::string::npos) {
-                // AutowareカメラIDを抽出
-                std::optional<int> autoware_camera_id = extract_autoware_camera_id(bag_message->topic_name, vad_to_autoware_camera);
-
-                if (autoware_camera_id.has_value()) {
-                    // CameraInfoメッセージをデシリアライズ
-                    auto msg = std::make_shared<sensor_msgs::msg::CameraInfo>();
-                    rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
-                    rclcpp::Serialization<sensor_msgs::msg::CameraInfo>().deserialize_message(
-                        &serialized_msg, msg.get());
-
-                    // カメラ行列Kを3x3行列として抽出
-                    Eigen::Matrix3f k_matrix;
-                    for (int i = 0; i < 3; ++i) {
-                        for (int j = 0; j < 3; ++j) {
-                            k_matrix(i, j) = msg->k[i * 3 + j];
-                        }
-                    }
-                    cameras_intrinsics[autoware_camera_id.value()] = k_matrix;
-                } else {
-                    RCLCPP_ERROR(rclcpp::get_logger("load_lidar2img_from_rosbag"),
-                        "Could not extract Autoware camera ID from topic name: %s", bag_message->topic_name.c_str());
-                }
+            if (!vad_topic_data.tf_static) {
+                std::cerr << "Frame " << (frame_id + 1) << " missing tf_static" << std::endl;
+                throw std::runtime_error("Missing tf_static data");
             }
-        }
-
-        // バッグファイルを再度開く
-        rosbag2_cpp::readers::SequentialReader reader2;
-        reader2.open(storage_options, converter_options);
-
-        int32_t current_frame_id = 1;
-        while (reader2.has_next() && current_frame_id <= n_frames) {
-            auto bag_message = reader2.read_next();
             
-            if (bag_message->topic_name == "/tf_static") {
                 // 現在のフレームのlidar2imgデータを格納する一時配列
                 std::vector<float> frame_lidar2img(16 * 6, 0.0f);  // 6カメラ分のスペースを確保
                 bool frame_complete = true;
 
-                // TFメッセージをデシリアライズ
-                auto msg = std::make_shared<tf2_msgs::msg::TFMessage>();
-                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
-                rclcpp::Serialization<tf2_msgs::msg::TFMessage>().deserialize_message(
-                    &serialized_msg, msg.get());
-
                 // 各カメラのTF変換を処理
-                for (const auto& transform : msg->transforms) {
+            for (const auto& transform : vad_topic_data.tf_static->transforms) {
                     std::string child_frame_id = transform.child_frame_id;
                     
                     if (child_frame_id.find("camera") != std::string::npos && 
@@ -921,16 +768,17 @@ load_lidar2img_from_rosbag(const std::string& bag_path, int32_t n_frames, float 
                         int32_t autoware_camera_id = std::stoi(child_frame_id.substr(
                             child_frame_id.find("camera") + 6, 1));
 
-                        // VADカメラIDに変換
-                        if (autoware_to_vad_camera.find(autoware_camera_id) == autoware_to_vad_camera.end()) {
-                            continue;
-                        }
-                        int32_t vad_camera_id = autoware_to_vad_camera[autoware_camera_id];
-
-                        // カメラの内部パラメータを確認
-                        if (cameras_intrinsics.find(autoware_camera_id) == cameras_intrinsics.end()) {
-                            std::cout << "Warning: No camera intrinsics for camera" << autoware_camera_id << std::endl;
-                            continue;
+                    // カメラの内部パラメータを確認
+                    if (autoware_camera_id >= 0 && autoware_camera_id < 6 && 
+                        vad_topic_data.camera_infos[autoware_camera_id]) {
+                        
+                        // カメラ行列Kを3x3行列として抽出
+                        Eigen::Matrix3f k_matrix;
+                        const auto& camera_info = vad_topic_data.camera_infos[autoware_camera_id];
+                        for (int i = 0; i < 3; ++i) {
+                            for (int j = 0; j < 3; ++j) {
+                                k_matrix(i, j) = camera_info->k[i * 3 + j];
+                            }
                         }
 
                         // 変換行列の構築
@@ -964,7 +812,7 @@ load_lidar2img_from_rosbag(const std::string& bag_path, int32_t n_frames, float 
 
                         // viewpadを作成
                         Eigen::Matrix4f viewpad = Eigen::Matrix4f::Zero();
-                        viewpad.block<3,3>(0,0) = cameras_intrinsics[autoware_camera_id];
+                        viewpad.block<3,3>(0,0) = k_matrix;
                         viewpad(3,3) = 1.0f;
 
                         // lidar2img = viewpad @ lidar2cam_rt.T を計算
@@ -987,10 +835,12 @@ load_lidar2img_from_rosbag(const std::string& bag_path, int32_t n_frames, float 
                         }
 
                         // lidar2imgの計算後、VADカメラIDの位置に格納
+                        int vad_camera_id = autoware_to_vad[autoware_camera_id];
                         if (vad_camera_id >= 0 && vad_camera_id < 6) {
                             std::copy(lidar2img_flat.begin(), 
                                     lidar2img_flat.end(), 
                                     frame_lidar2img.begin() + vad_camera_id * 16);
+                        }
                         }
                     }
                 }
@@ -1011,12 +861,10 @@ load_lidar2img_from_rosbag(const std::string& bag_path, int32_t n_frames, float 
                 }
 
                 if (frame_complete) {
-                    result[current_frame_id] = frame_lidar2img;
-                    current_frame_id++;
+                result[frame_id + 1] = frame_lidar2img;
                 } else {
-                    std::cerr << "Frame " << current_frame_id << " is incomplete. Aborting." << std::endl;
+                    std::cerr << "Frame " << (frame_id + 1) << " is incomplete. Aborting." << std::endl;
                     throw std::runtime_error("Incomplete frame");
-                }
             }
         }
 
@@ -1066,9 +914,9 @@ void compare_with_reference_lidar2img(
 
 std::vector<autoware::tensorrt_vad::VadTopicData> extract_vad_topic_data_from_rosbag(
     const std::string& bag_path) {
-
+    
     std::vector<autoware::tensorrt_vad::VadTopicData> vad_topic_data_list;
-
+    
     try {
         // ROSバッグの設定
         rosbag2_storage::StorageOptions storage_options;
@@ -1249,13 +1097,13 @@ int main(int argc, char** argv) {
   printf("[INFO] default_command=%d\n", default_command);
 
   auto vad_topic_data_list = extract_vad_topic_data_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/");
-  auto subscribed_image_dict = load_image_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
-  auto [subscribed_can_bus_dict, subscribed_shift_dict] = load_can_bus_shift_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames);
+  auto subscribed_image_dict = load_image_from_rosbag(vad_topic_data_list);
+  auto [subscribed_can_bus_dict, subscribed_shift_dict] = load_can_bus_shift_from_rosbag(vad_topic_data_list);
   int32_t input_image_width = cfg["input_image_width"];
   int32_t input_image_height = cfg["input_image_hight"];
-  auto subscribed_lidar2img_dict = load_lidar2img_from_rosbag("/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/rosbag/output_bag/", n_frames, 640.0f / static_cast<float>(input_image_width), 384.0f / static_cast<float>(input_image_height));
+  auto subscribed_lidar2img_dict = load_lidar2img_from_rosbag(vad_topic_data_list, 640.0f / static_cast<float>(input_image_width), 384.0f / static_cast<float>(input_image_height));
   // img.binと値を比較
-  for (int frame_id = 1; frame_id < n_frames; frame_id++) {
+  for (int frame_id = 1; frame_id <= vad_topic_data_list.size(); frame_id++) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
     
     // 画像をconcatenate
