@@ -439,6 +439,45 @@ private:
 std::vector<std::vector<float>>
 load_image_from_rosbag_single_frame(const std::vector<sensor_msgs::msg::Image::ConstSharedPtr> &images, int frame_id) {
 
+  // 画像リサイズ処理を関数内関数として切り出し
+  auto resize_image = [](unsigned char *image_data, int32_t width, int32_t height, int32_t channels, 
+                         int32_t target_width, int32_t target_height) -> std::optional<std::tuple<unsigned char*, int32_t, int32_t>> {
+    unsigned char *resized_data = (unsigned char *)malloc(target_width * target_height * channels);
+    
+    int resize_result = stbir_resize_uint8(image_data, width, height, 0, resized_data,
+                                          target_width, target_height, 0, channels);
+    
+    if (!resize_result) {
+      free(resized_data);
+      return std::nullopt;
+    }
+    
+    // 元のデータを解放
+    stbi_image_free(image_data);
+    
+    return std::make_tuple(resized_data, target_width, target_height);
+  };
+
+  // 画像正規化処理を関数内関数として切り出し
+  auto normalize_image = [](unsigned char *image_data, int32_t width, int32_t height, 
+                           const float mean[3], const float std[3]) -> std::vector<float> {
+    std::vector<float> normalized_image_data(width * height * 3);
+    
+    // BGRの順で処理
+    for (int c = 0; c < 3; ++c) {
+      for (int h = 0; h < height; ++h) {
+        for (int w = 0; w < width; ++w) {
+          int32_t src_idx = (h * width + w) * 3 + (2 - c); // BGR -> RGB
+          int32_t dst_idx = c * height * width + h * width + w; // CHW形式
+          float pixel_value = static_cast<float>(image_data[src_idx]);
+          normalized_image_data[dst_idx] = (pixel_value - mean[c]) / std[c];
+        }
+      }
+    }
+    
+    return normalized_image_data;
+  };
+
   std::vector<std::vector<float>> frame_images;
   frame_images.resize(6); // VADカメラ順序で初期化
 
@@ -471,36 +510,20 @@ load_image_from_rosbag_single_frame(const std::vector<sensor_msgs::msg::Image::C
         &width, &height, &channels, STBI_rgb); // RGBとして読み込む
 
     // サイズが目標と違う場合はリサイズする
-    unsigned char *resized_data = nullptr;
     if (width != target_width || height != target_height) {
-      // stb_image_resizeを使用してリサイズ
-      resized_data =
-          (unsigned char *)malloc(target_width * target_height * channels);
-
-      // stb_image_resizeを使ってリサイズ
-      int resize_result =
-          stbir_resize_uint8(image_data, width, height, 0, resized_data,
-                              target_width, target_height, 0, channels);
-
-      // 元のデータを解放し、リサイズしたデータを使用
-      stbi_image_free(image_data);
-      image_data = resized_data;
-      width = target_width;
-      height = target_height;
-    }
-
-    // BGRの順で処理
-    std::vector<float> normalized_image_data(width * height * 3);
-    for (int c = 0; c < 3; ++c) {
-      for (int h = 0; h < height; ++h) {
-        for (int w = 0; w < width; ++w) {
-          int32_t src_idx = (h * width + w) * 3 + (2 - c); // BGR -> RGB
-          int32_t dst_idx = c * height * width + h * width + w; // CHW形式
-          float pixel_value = static_cast<float>(image_data[src_idx]);
-          normalized_image_data[dst_idx] = (pixel_value - mean[c]) / std[c];
-        }
+      auto resize_result = resize_image(image_data, width, height, channels, target_width, target_height);
+      
+      if (resize_result.has_value()) {
+        // リサイズされたデータとサイズを取得
+        auto [new_image_data, new_width, new_height] = resize_result.value();
+        image_data = new_image_data;
+        width = new_width;
+        height = new_height;
       }
     }
+
+    // 画像を正規化
+    std::vector<float> normalized_image_data = normalize_image(image_data, width, height, mean, std);
 
     // VADカメラ順序で格納
     int vad_idx = autoware_to_vad[autoware_idx];
@@ -619,11 +642,58 @@ load_can_bus_shift_from_rosbag_single_frame(
     int frame_id,
     const std::vector<float> &prev_can_bus = {}) {
 
+  // can_busデータの構築を関数内関数として切り出し
+  auto build_can_bus_data = [&](const std::vector<float> &translation,
+                                const std::vector<float> &rotation,
+                                const std::vector<float> &acceleration,
+                                const std::vector<float> &angular_velocity,
+                                const std::vector<float> &velocity,
+                                const std::vector<float> &prev_can_bus,
+                                int frame_id,
+                                float default_patch_angle) -> std::vector<float> {
+    std::vector<float> can_bus(18, 0.0f);
+
+    // translation (0:3)
+    std::copy(translation.begin(), translation.end(), can_bus.begin());
+
+    // rotation (3:7)
+    std::copy(rotation.begin(), rotation.end(), can_bus.begin() + 3);
+
+    // acceleration (7:10)
+    std::copy(acceleration.begin(), acceleration.end(), can_bus.begin() + 7);
+
+    // angular velocity (10:13)
+    std::copy(angular_velocity.begin(), angular_velocity.end(),
+              can_bus.begin() + 10);
+
+    // velocity (13:16)
+    std::copy(velocity.begin(), velocity.begin() + 2, can_bus.begin() + 13);
+    can_bus[15] = 0.0f; // z方向の速度は0とする
+
+    // patch_angle[rad]の計算 (16)
+    double yaw = std::atan2(
+        2.0 * (can_bus[6] * can_bus[5] + can_bus[3] * can_bus[4]),
+        1.0 - 2.0 * (can_bus[4] * can_bus[4] + can_bus[5] * can_bus[5]));
+    if (yaw < 0)
+      yaw += 2 * M_PI;
+    can_bus[16] = static_cast<float>(yaw);
+
+    // patch_angle[deg]の計算 (17)
+    if (frame_id > 0 && !prev_can_bus.empty()) {
+      float prev_angle = prev_can_bus[16];
+      can_bus[17] = (yaw - prev_angle) * 180.0f / M_PI;
+    } else {
+      can_bus[17] = default_patch_angle; // 最初のフレームのデフォルト値
+    }
+
+    return can_bus;
+  };
+
   // default patch_angle
   float default_patch_angle = -1.0353195667266846f;
 
-  std::vector<float> can_bus(18, 0.0f);
-  std::vector<float> shift(2, 0.0f);
+  std::vector<float> can_bus;
+  std::vector<float> shift;
 
   // Apply Autoware to nuScenes coordinate transformation to position
   auto [ns_x, ns_y] =
@@ -677,44 +747,20 @@ load_can_bus_shift_from_rosbag_single_frame(
       static_cast<float>(imu_raw->linear_acceleration.z)};
 
   // can_busデータの構築（18次元ベクトル）
-
-  // translation (0:3)
-  std::copy(translation.begin(), translation.end(), can_bus.begin());
-
-  // rotation (3:7)
-  std::copy(rotation.begin(), rotation.end(), can_bus.begin() + 3);
-
-  // acceleration (7:10)
-  std::copy(acceleration.begin(), acceleration.end(), can_bus.begin() + 7);
-
-  // angular velocity (10:13)
-  std::copy(angular_velocity.begin(), angular_velocity.end(),
-            can_bus.begin() + 10);
-
-  // velocity (13:16)
-  std::copy(velocity.begin(), velocity.begin() + 2, can_bus.begin() + 13);
-  can_bus[15] = 0.0f; // z方向の速度は0とする
-
-  // patch_angle[rad]の計算 (16)
-  double yaw = std::atan2(
-      2.0 * (can_bus[6] * can_bus[5] + can_bus[3] * can_bus[4]),
-      1.0 - 2.0 * (can_bus[4] * can_bus[4] + can_bus[5] * can_bus[5]));
-  if (yaw < 0)
-    yaw += 2 * M_PI;
-  can_bus[16] = static_cast<float>(yaw);
-
-  // patch_angle[deg]の計算 (17)
-  if (frame_id > 0 && !prev_can_bus.empty()) {
-    float prev_angle = prev_can_bus[16];
-    can_bus[17] = (yaw - prev_angle) * 180.0f / M_PI;
-  } else {
-    can_bus[17] = default_patch_angle; // 最初のフレームのデフォルト値
-  }
+  can_bus = build_can_bus_data(
+      translation, rotation, acceleration, angular_velocity, velocity,
+      prev_can_bus, frame_id, default_patch_angle);
 
   // シフトデータの計算
   if (frame_id > 0 && !prev_can_bus.empty()) {
     float delta_x = translation[0] - prev_can_bus[0];
     float delta_y = translation[1] - prev_can_bus[1];
+
+    double yaw = std::atan2(
+        2.0 * (can_bus[6] * can_bus[5] + can_bus[3] * can_bus[4]),
+        1.0 - 2.0 * (can_bus[4] * can_bus[4] + can_bus[5] * can_bus[5]));
+    if (yaw < 0)
+      yaw += 2 * M_PI;
 
     shift = calculateShift(delta_x, delta_y, yaw);
   } else {
@@ -769,6 +815,37 @@ std::vector<float> load_lidar2img_from_rosbag_single_frame(
     int frame_id,
     float scale_width, float scale_height) {
   
+  // スケーリング処理を関数内関数として切り出し
+  auto apply_scaling = [](const Eigen::Matrix4f &lidar2img, float scale_width, float scale_height) -> Eigen::Matrix4f {
+    Eigen::Matrix4f scale_matrix = Eigen::Matrix4f::Identity();
+    scale_matrix(0, 0) = scale_width;
+    scale_matrix(1, 1) = scale_height;
+    return scale_matrix * lidar2img;
+  };
+
+  // 4x4行列を1次元ベクトルに変換する処理を関数内関数として切り出し
+  auto matrix_to_flat = [](const Eigen::Matrix4f &matrix) -> std::vector<float> {
+    std::vector<float> flat(16);
+    int32_t k = 0;
+    for (int i = 0; i < 4; ++i) {
+      for (int j = 0; j < 4; ++j) {
+        flat[k++] = matrix(i, j);
+      }
+    }
+    return flat;
+  };
+
+  // camera_infoからk_matrixを作成する処理を関数内関数として切り出し
+  auto create_k_matrix = [](const sensor_msgs::msg::CameraInfo::ConstSharedPtr &camera_info) -> Eigen::Matrix3f {
+    Eigen::Matrix3f k_matrix;
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        k_matrix(i, j) = camera_info->k[i * 3 + j];
+      }
+    }
+    return k_matrix;
+  };
+
   std::vector<float> frame_lidar2img(16 * 6, 0.0f); // 6カメラ分のスペースを確保
 
   // AutowareカメラインデックスからVADカメラインデックスへのマッピング
@@ -796,13 +873,7 @@ std::vector<float> load_lidar2img_from_rosbag_single_frame(
           camera_infos[autoware_camera_id]) {
 
         // カメラ行列Kを3x3行列として抽出
-        Eigen::Matrix3f k_matrix;
-        const auto &camera_info = camera_infos[autoware_camera_id];
-        for (int i = 0; i < 3; ++i) {
-          for (int j = 0; j < 3; ++j) {
-            k_matrix(i, j) = camera_info->k[i * 3 + j];
-          }
-        }
+        Eigen::Matrix3f k_matrix = create_k_matrix(camera_infos[autoware_camera_id]);
 
         // 変換行列の構築
         Eigen::Vector3f aw_translation(transform.transform.translation.x,
@@ -839,20 +910,10 @@ std::vector<float> load_lidar2img_from_rosbag_single_frame(
         Eigen::Matrix4f lidar2img = viewpad * lidar2cam_rt_T;
 
         // スケーリングを適用
-        Eigen::Matrix4f scale_matrix = Eigen::Matrix4f::Identity();
-        scale_matrix(0, 0) = scale_width;
-        scale_matrix(1, 1) = scale_height;
-
-        lidar2img = scale_matrix * lidar2img;
+        lidar2img = apply_scaling(lidar2img, scale_width, scale_height);
 
         // 結果を格納
-        std::vector<float> lidar2img_flat(16);
-        int32_t k = 0;
-        for (int i = 0; i < 4; ++i) {
-          for (int j = 0; j < 4; ++j) {
-            lidar2img_flat[k++] = lidar2img(i, j);
-          }
-        }
+        std::vector<float> lidar2img_flat = matrix_to_flat(lidar2img);
 
         // lidar2imgの計算後、VADカメラIDの位置に格納
         int vad_camera_id = autoware_to_vad[autoware_camera_id];
