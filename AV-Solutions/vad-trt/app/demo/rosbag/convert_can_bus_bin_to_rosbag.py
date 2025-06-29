@@ -182,117 +182,6 @@ def ns2aw_imu(imu_msg: Imu) -> Imu:
     
     return aw_msg
 
-def ns2aw_tf_static(tf_static_msg: TFMessage) -> TFMessage:
-    """
-    Convert TF static message from nuScenes to Autoware coordinate system.
-    
-    Args:
-        tf_static_msg: TF static message in nuScenes coordinate system
-        
-    Returns:
-        TFMessage: Converted message in Autoware coordinate system
-    """
-    # Create a new TF message
-    aw_msg = TFMessage()
-    
-    # Process each transform in the message
-    for transform in tf_static_msg.transforms:
-        # Create a deep copy of the transform
-        aw_transform = TransformStamped()
-        aw_transform.header = transform.header
-        aw_transform.child_frame_id = transform.child_frame_id
-        
-        # Transform translation
-        ns_x = transform.transform.translation.x
-        ns_y = transform.transform.translation.y
-        aw_x, aw_y = ns2aw_xy(ns_x, ns_y)
-        
-        aw_transform.transform.translation.x = aw_x
-        aw_transform.transform.translation.y = aw_y
-        aw_transform.transform.translation.z = transform.transform.translation.z
-        
-        # Transform orientation quaternion
-        # Create a Quaternion from the original message
-        q_ns = Quaternion(
-            w=transform.transform.rotation.w,
-            x=transform.transform.rotation.x,
-            y=transform.transform.rotation.y,
-            z=transform.transform.rotation.z
-        )
-        
-        # Create a 90-degree rotation around Z-axis (yaw)
-        q_rotation = Quaternion(axis=[0, 0, 1], angle=np.pi/2)
-        
-        # Apply the rotation
-        q_aw = q_rotation * q_ns
-        
-        # Set the transformed quaternion
-        aw_transform.transform.rotation.x = q_aw.x
-        aw_transform.transform.rotation.y = q_aw.y
-        aw_transform.transform.rotation.z = q_aw.z
-        aw_transform.transform.rotation.w = q_aw.w
-        
-        # Add the transformed transform to the message
-        aw_msg.transforms.append(aw_transform)
-    
-    return aw_msg
-
-def ns2aw_camera_info(camera_info_msg: CameraInfo) -> CameraInfo:
-    """
-    Convert camera info message from nuScenes to Autoware coordinate system.
-    
-    Args:
-        camera_info_msg: Camera info message in nuScenes coordinate system
-        
-    Returns:
-        CameraInfo: Converted message in Autoware coordinate system
-    """
-    # Create a deep copy to avoid modifying the original message
-    aw_msg = CameraInfo()
-    aw_msg.header = camera_info_msg.header
-    aw_msg.height = camera_info_msg.height
-    aw_msg.width = camera_info_msg.width
-    aw_msg.distortion_model = camera_info_msg.distortion_model
-    aw_msg.d = camera_info_msg.d  # Distortion coefficients remain the same
-    
-    # The intrinsic camera matrix K remains the same as it's defined in camera's local coordinate system
-    aw_msg.k = camera_info_msg.k
-    
-    # The rectification matrix R depends on the camera's orientation
-    # For a rotated coordinate system, we need to modify it
-    # However, if R is identity (no rectification), it can remain the same
-    if all(val == 0.0 for i, val in enumerate(camera_info_msg.r) if i % 4 != 0) and all(val == 1.0 for i, val in enumerate(camera_info_msg.r) if i % 4 == 0):
-        # R is identity, keep it as is
-        aw_msg.r = camera_info_msg.r
-    else:
-        # R is not identity, apply rotation
-        # Convert R to numpy matrix for easier manipulation
-        r_matrix = np.array(camera_info_msg.r).reshape(3, 3)
-        
-        # Create rotation matrix for 90-degree rotation around Z-axis
-        rot_z = np.array([
-            [0, -1, 0],
-            [1, 0, 0],
-            [0, 0, 1]
-        ])
-        
-        # Apply rotation
-        r_matrix_aw = np.dot(rot_z, r_matrix)
-        
-        # Convert back to list
-        aw_msg.r = r_matrix_aw.flatten().tolist()
-    
-    # The projection matrix P combines K with the extrinsic parameters
-    # If there's a change in coordinate system, P needs to be updated
-    # For simplicity, we just copy P here since the camera's intrinsic parameters
-    # and its projection in its own coordinate system remain the same
-    aw_msg.p = camera_info_msg.p
-    
-    # Note: If the camera's extrinsic parameters (position and orientation relative to the vehicle)
-    # are encoded in P, a more complex transformation might be needed
-    
-    return aw_msg
-
 def calculate_shift(delta_x, delta_y, patch_angle_rad, grid_length=grid_length, bev_h=bev_h_, bev_w=bev_w_):
     ego_angle = np.array(patch_angle_rad / np.pi * 180)
 
@@ -414,6 +303,29 @@ def convert_bin_to_kinematic_state(can_bus_data: np.ndarray, timestamp: Time, fr
     
     return odom_msg
 
+def add_vad_base_link_to_base_link(ros_timestamp):
+    """
+    vad_base_link -> base_linkの変換を追加
+    """
+    transform_stamped = TransformStamped()
+    transform_stamped.header.stamp = ros_timestamp
+    transform_stamped.header.frame_id = "vad_base_link"
+    transform_stamped.child_frame_id = "base_link"
+    # translation: vad_base_link -> base_linkは(0, 0, 0)
+    transform_stamped.transform.translation.x = 0.0
+    transform_stamped.transform.translation.y = 0.0
+    transform_stamped.transform.translation.z = 0.0
+    # rotation: vad_base_linkのy軸はbase_linkのx軸と同じ方向，vad_base_linkのx軸はbase_linkのy軸の-方向
+    # Z軸周りに+90度 (pi/2ラジアン) の回転
+    # オイラー角からクォータニオンを計算
+    quaternion = Quaternion(axis=[0, 0, 1], angle=np.pi/2)
+    transform_stamped.transform.rotation.x = float(quaternion.x)
+    transform_stamped.transform.rotation.y = float(quaternion.y)
+    transform_stamped.transform.rotation.z = float(quaternion.z)
+    transform_stamped.transform.rotation.w = float(quaternion.w)
+    
+    return transform_stamped
+
 def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: Time, 
                              scale_width: float = IMAGE_SCALE_WIDTH, 
                              scale_height: float = IMAGE_SCALE_HIGHT) -> TFMessage:
@@ -531,8 +443,8 @@ def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: T
         # TransformStampedメッセージの作成
         transform_stamped = TransformStamped()
         transform_stamped.header.stamp = timestamp
-        transform_stamped.header.frame_id = "base_link"  # LiDARのフレーム
-        transform_stamped.child_frame_id = f"camera{autoware_camera_id}/optical_link"  # カメラのフレーム
+        transform_stamped.header.frame_id = "vad_base_link"  # LiDARのフレーム
+        transform_stamped.child_frame_id = f"camera{autoware_camera_id}/camera_optical_link"  # カメラのフレーム
         
         # 平行移動の設定
         transform_stamped.transform.translation.x = float(translation[0])
@@ -629,7 +541,7 @@ def create_camera_info_messages(timestamp: Time) -> dict[int, CameraInfo]:
         # CameraInfoメッセージの作成
         camera_info = CameraInfo()
         camera_info.header.stamp = timestamp
-        camera_info.header.frame_id = f"camera{autoware_camera_id}/optical_link"
+        camera_info.header.frame_id = f"camera{autoware_camera_id}/camera_optical_link"
         
         # 画像サイズの設定（一般的な値を仮定）
         camera_info.width = 1920
@@ -815,15 +727,16 @@ def main():
         write_to_rosbag(writer, "/localization/kinematic_state", kinematic_msg, ros_timestamp)
 
         # 3. lidar2imgのtf_staticへの変換と書き込み
-        # base_link(lidar) to camera{vad_camera_id}/optical_link
+        # base_link(lidar) to camera{vad_camera_id}/camera_optical_link
         tf_static_msg = convert_bin_to_tf_static(lidar2img_data_dict[frame], ros_timestamp)
-        tf_static_msg = ns2aw_tf_static(tf_static_msg)
+        # add vad_base_link to base_link        
+        tf_static_msg.transforms.append(add_vad_base_link_to_base_link(ros_timestamp))
+
         write_to_rosbag(writer, "/tf_static", tf_static_msg, ros_timestamp)
 
         # 4. intrinsicsのcamera_infoへの変換と書き込み
         camera_infos = create_camera_info_messages(ros_timestamp)
         for autoware_camera_id in range(6):
-            camera_infos[autoware_camera_id] = ns2aw_camera_info(camera_infos[autoware_camera_id])
             write_to_rosbag(writer, f"/sensing/camera/camera{autoware_camera_id}/camera_info", camera_infos[autoware_camera_id], ros_timestamp)
         
         print(f"Processed frame {frame}")

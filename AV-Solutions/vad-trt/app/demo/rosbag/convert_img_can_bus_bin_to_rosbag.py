@@ -11,7 +11,7 @@ from builtin_interfaces.msg import Time
 import rosbag2_py
 
 from convert_can_bus_bin_to_rosbag import convert_bin_to_imu, convert_bin_to_kinematic_state, write_to_rosbag, convert_bin_to_tf_static, create_camera_info_messages
-from convert_can_bus_bin_to_rosbag import ns2aw_kinematic_state, ns2aw_imu, ns2aw_tf_static, ns2aw_camera_info
+from convert_can_bus_bin_to_rosbag import ns2aw_kinematic_state, ns2aw_imu, add_vad_base_link_to_base_link
 
 def main():
     parser = argparse.ArgumentParser(
@@ -26,7 +26,7 @@ def main():
 
     input_dir = config.get("input_dir", "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/data/demo_data")
     n_frames = config.get("n_frames", 30)
-    output_file = config.get("output_file", "output.mcap")
+    output_file = config.get("output_file", "output_ns.db3")
     topic_template = config.get("topic", "/sensing/camera/camera{i}/image_rect_color/compressed")
     image_format = config.get("image_format", "jpeg")
     init_time = config.get("init_time", 1672531200)
@@ -42,7 +42,7 @@ def main():
     std = np.array([1.0, 1.0, 1.0], dtype=np.float32)
 
     writer = rosbag2_py.SequentialWriter()
-    storage_options = rosbag2_py.StorageOptions(uri=output_file, storage_id="mcap")
+    storage_options = rosbag2_py.StorageOptions(uri=output_file, storage_id="sqlite3")
     converter_options = rosbag2_py.ConverterOptions(
         input_serialization_format="cdr",
         output_serialization_format="cdr"
@@ -168,14 +168,14 @@ def main():
                 lidar2img_dict[vad_camera_id] = lidar2img_data[16*vad_camera_id:16*(vad_camera_id+1)]
             
             tf_static_msg = convert_bin_to_tf_static(lidar2img_dict, ros_timestamp)
-            tf_static_msg = ns2aw_tf_static(tf_static_msg)  # 座標変換を適用
+            # add vad_base_link to base_link        
+            tf_static_msg.transforms.append(add_vad_base_link_to_base_link(ros_timestamp))
             write_to_rosbag(writer, "/tf_static", tf_static_msg, ros_timestamp)
 
         # camera_infoメッセージの作成と書き込み
         camera_infos = create_camera_info_messages(ros_timestamp)
         for autoware_camera_id in range(6):
             camera_info_msg = camera_infos[autoware_camera_id]
-            camera_info_msg = ns2aw_camera_info(camera_info_msg)  # 座標変換を適用
             write_to_rosbag(writer, 
                           f"/sensing/camera/camera{autoware_camera_id}/camera_info", 
                           camera_info_msg, 

@@ -1,6 +1,8 @@
 data/
+log/
 onnx_files/
 engines/
 viz/
 *.so
 *.ttf
+*.db3
