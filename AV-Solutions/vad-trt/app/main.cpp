@@ -852,7 +852,93 @@ std::vector<float> load_lidar2img_from_rosbag_single_frame(
     return viewpad;
   };
 
-  std::vector<float> frame_lidar2img(16 * 6, 0.0f); // 6カメラ分のスペースを確保
+  // TFバッファに vad_base_link -> base_link の変換を追加する
+  auto add_vad_to_base_link_transform =
+      [](tf2_ros::Buffer &buffer, const rclcpp::Time &stamp) {
+    geometry_msgs::msg::TransformStamped transform;
+    transform.header.stamp = stamp;
+    transform.header.frame_id = "vad_base_link";
+    transform.child_frame_id = "base_link";
+    transform.transform.translation.x = 0.0;
+    transform.transform.translation.y = 0.0;
+    transform.transform.translation.z = 0.0;
+    // nuScenes(vad) -> Autoware(base) は +90度 Z回転
+    Eigen::Quaternionf q_rot(Eigen::AngleAxisf(static_cast<float>(M_PI / 2.0), Eigen::Vector3f::UnitZ()));
+    transform.transform.rotation = tf2::toMsg(q_rot.cast<double>());
+    buffer.setTransform(transform, "default_authority", true); // 静的変換として登録
+  };
+
+  auto lookup_vad_to_base_rt =
+      [](tf2_ros::Buffer &buffer) -> std::optional<Eigen::Matrix4f> {
+    // この変換はカメラIDに依存しない
+    std::string target_frame = "base_link";
+    std::string source_frame = "vad_base_link";
+
+    try {
+      geometry_msgs::msg::TransformStamped lookup_result =
+          buffer.lookupTransform(target_frame, source_frame, tf2::TimePointZero);
+      
+      // geometry_msgs::msg::TransformからEigen::Matrix4fへの手動変換
+      Eigen::Matrix4f transform_matrix = Eigen::Matrix4f::Identity();
+      
+      // 並進部分
+      transform_matrix(0, 3) = lookup_result.transform.translation.x;
+      transform_matrix(1, 3) = lookup_result.transform.translation.y;
+      transform_matrix(2, 3) = lookup_result.transform.translation.z;
+      
+      // 回転部分（クォータニオンから回転行列への変換）
+      Eigen::Quaternionf q(
+          lookup_result.transform.rotation.w,
+          lookup_result.transform.rotation.x,
+          lookup_result.transform.rotation.y,
+          lookup_result.transform.rotation.z);
+      transform_matrix.block<3, 3>(0, 0) = q.toRotationMatrix();
+      
+      return transform_matrix;
+
+    } catch (const tf2::TransformException &ex) {
+      RCLCPP_ERROR(rclcpp::get_logger("load_lidar2img"), "TF変換の取得に失敗: %s -> %s. Reason: %s",
+                   source_frame.c_str(), target_frame.c_str(), ex.what());
+      return std::nullopt;
+    }
+  };
+
+  auto lookup_base_to_camera_rt =
+      [](tf2_ros::Buffer &buffer, int autoware_camera_id) -> std::optional<Eigen::Matrix4f> {
+    std::string target_frame = "camera" + std::to_string(autoware_camera_id) + "/camera_optical_link";
+    std::string source_frame = "base_link";
+
+    try {
+      geometry_msgs::msg::TransformStamped lookup_result =
+          buffer.lookupTransform(target_frame, source_frame, tf2::TimePointZero);
+      
+      // geometry_msgs::msg::TransformからEigen::Matrix4fへの手動変換
+      Eigen::Matrix4f transform_matrix = Eigen::Matrix4f::Identity();
+      
+      // 並進部分
+      transform_matrix(0, 3) = lookup_result.transform.translation.x;
+      transform_matrix(1, 3) = lookup_result.transform.translation.y;
+      transform_matrix(2, 3) = lookup_result.transform.translation.z;
+      
+      // 回転部分（クォータニオンから回転行列への変換）
+      Eigen::Quaternionf q(
+          lookup_result.transform.rotation.w,
+          lookup_result.transform.rotation.x,
+          lookup_result.transform.rotation.y,
+          lookup_result.transform.rotation.z);
+      transform_matrix.block<3, 3>(0, 0) = q.toRotationMatrix();
+      
+      return transform_matrix;
+
+    } catch (const tf2::TransformException &ex) {
+      RCLCPP_ERROR(rclcpp::get_logger("load_lidar2img"), "TF変換の取得に失敗: %s -> %s. Reason: %s",
+                   source_frame.c_str(), target_frame.c_str(), ex.what());
+      return std::nullopt;
+    }
+  };
+
+
+  std::vector<float> frame_lidar2img(16 * 6, 0.0f); // 6カメラ分のスペースを確保, 907行目
 
   // AutowareカメラインデックスからVADカメラインデックスへのマッピング
   std::unordered_map<int, int> autoware_to_vad = {
@@ -864,51 +950,37 @@ std::vector<float> load_lidar2img_from_rosbag_single_frame(
       {5, 5}  // BACK_RIGHT
   };
 
-  // 各カメラのTF変換を処理
+  // TFバッファの初期化
+  auto clock = std::make_shared<rclcpp::Clock>(RCL_ROS_TIME);
+  tf2_ros::Buffer tf_buffer(clock);
+
+  // rosbagから読み込んだ変換 (base_link -> camera) をバッファに登録
   for (const auto &transform : tf_static->transforms) {
-    std::string child_frame_id = transform.child_frame_id;
+    tf_buffer.setTransform(transform, "default_authority", true);
+  }
 
-    if (child_frame_id.find("camera") != std::string::npos &&
-        child_frame_id.find("/camera_optical_link") != std::string::npos) {
-      // Autowareカメラ名からカメラIDを抽出
-      int32_t autoware_camera_id = std::stoi(
-          child_frame_id.substr(child_frame_id.find("camera") + 6, 1));
+  // vad_base_link -> base_link の変換をバッファに登録
+  rclcpp::Time stamp(0, 0, RCL_ROS_TIME);
+  if (!tf_static->transforms.empty()) {
+    stamp = tf_static->transforms[0].header.stamp;
+  }
+  add_vad_to_base_link_transform(tf_buffer, stamp);
 
-      // カメラの内部パラメータを確認
-      if (autoware_camera_id >= 0 && autoware_camera_id < 6 &&
-          camera_infos[autoware_camera_id]) {
+  // 各カメラの処理
+  for (int autoware_camera_id = 0; autoware_camera_id < 6; ++autoware_camera_id) {
+    if (!camera_infos[autoware_camera_id]) {
+      continue;
+    }
 
-        // viewpadを作成
-        Eigen::Matrix4f viewpad = create_viewpad(camera_infos[autoware_camera_id]);
+    auto base_to_camera_rt_opt = lookup_base_to_camera_rt(tf_buffer, autoware_camera_id);
+    Eigen::Matrix4f base_to_camera_rt = *base_to_camera_rt_opt;
 
-        // 変換行列の構築
-        Eigen::Vector3f aw_translation(transform.transform.translation.x,
-                                        transform.transform.translation.y,
-                                        transform.transform.translation.z);
+    auto vad_to_base_rt_opt = lookup_vad_to_base_rt(tf_buffer);
+    Eigen::Matrix4f vad_to_base_rt = *vad_to_base_rt_opt;
 
-        // Apply Autoware to nuScenes coordinate transformation to
-        // translation
-        auto [ns_x, ns_y] = aw2ns_xy(aw_translation[0], aw_translation[1]);
-        Eigen::Vector3f ns_translation(ns_x, ns_y, aw_translation[2]);
-
-        Eigen::Quaternionf q_aw(
-            transform.transform.rotation.w, transform.transform.rotation.x,
-            transform.transform.rotation.y, transform.transform.rotation.z);
-
-        // Apply Autoware to nuScenes coordinate transformation to
-        // quaternion
-        Eigen::Quaternionf q_ns = aw2ns_quaternion(q_aw);
-
-        // lidar2cam_rtを構築 (nuScenes座標系)
-        Eigen::Matrix4f lidar2cam_rt = Eigen::Matrix4f::Identity();
-        lidar2cam_rt.block<3, 3>(0, 0) = q_ns.toRotationMatrix();
-        lidar2cam_rt.block<3, 1>(0, 3) = ns_translation;
-
-        // lidar2cam_rt.Tを計算
-        Eigen::Matrix4f lidar2cam_rt_T = lidar2cam_rt.transpose();
-
-        // lidar2img = viewpad @ lidar2cam_rt.T を計算
-        Eigen::Matrix4f lidar2img = viewpad * lidar2cam_rt_T;
+    Eigen::Matrix4f viewpad = create_viewpad(camera_infos[autoware_camera_id]);
+    Eigen::Matrix4f lidar2cam_rt = base_to_camera_rt * vad_to_base_rt;
+    Eigen::Matrix4f lidar2img = viewpad * lidar2cam_rt;
 
         // スケーリングを適用
         lidar2img = apply_scaling(lidar2img, scale_width, scale_height);
@@ -921,8 +993,8 @@ std::vector<float> load_lidar2img_from_rosbag_single_frame(
         if (vad_camera_id >= 0 && vad_camera_id < 6) {
           std::copy(lidar2img_flat.begin(), lidar2img_flat.end(),
                     frame_lidar2img.begin() + vad_camera_id * 16);
-        }
-      }
+        
+      
     }
   }
 
@@ -1199,6 +1271,11 @@ int main(int argc, char **argv) {
   float scale_width = 640.0f / static_cast<float>(input_image_width);
   float scale_height = 384.0f / static_cast<float>(input_image_height);
   
+  // Read visualization configuration
+  float lidar_z_compensation = cfg["lidar_z_compensation"].get<float>();
+  float init_lidar_y = cfg["visualization"]["init_lidar_y"].get<float>();
+  float ground_height = cfg["visualization"]["ground_height"].get<float>();
+  
   // フレームごとに処理
   std::vector<float> prev_can_bus;
   for (int frame_id = 1; frame_id <= vad_topic_data_list.size(); frame_id++) {
@@ -1261,9 +1338,7 @@ int main(int argc, char **argv) {
         vad_input_data
             .command_; // VadInputDataのcommand_の値（2 = "KEEP FORWARD"）を使用
 
-    frame.img_metas_lidar2img = vad_model.nets_["head"]
-                                    ->bindings["img_metas.0[lidar2img]"]
-                                    ->cpu<float>();
+    frame.img_metas_lidar2img = frame_lidar2img;
 
     // pred -> frame.planning
     frame.planning = vad_output_data.predicted_trajectory_;
@@ -1300,7 +1375,7 @@ int main(int argc, char **argv) {
         std::vector<float> ret(11);
         ret[0] = raw[0];
         ret[1] = raw[1];
-        ret[2] = raw[4];
+        ret[2] = raw[4] + lidar_z_compensation;  // postprocessでlidar_z_compensationを適用
         ret[3] = std::exp(raw[2]);
         ret[4] = std::exp(raw[3]);
         ret[5] = std::exp(raw[5]);
@@ -1312,10 +1387,17 @@ int main(int argc, char **argv) {
         frame.det.push_back(ret);
       }
     }
+    // if frame is 13, print frame.det
+    if (frame_id == 13) {
+      for (const auto &det : frame.det) {
+        std::cout << "det: " << det[0] << ", " << det[1] << ", " << det[2] << ", " << det[3] << ", " << det[4] << ", " << det[5] << ", " << det[6] << ", " << det[7] << ", " << det[8] << ", " << det[9] << ", " << det[10] << std::endl;
+      }
+    }
     node->publishDetectedObjects(frame.det);
     nv::visualize(images, frame, font_path,
                   viz_dir + "/" + std::to_string(frame_id) + ".jpg",
-                  vad_model.stream_);
+                  vad_model.stream_,
+                  init_lidar_y, ground_height);
 
     printf("[INFO] %d, cmd=%d finished\n", frame_id, frame.cmd);
   }

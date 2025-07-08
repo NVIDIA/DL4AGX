@@ -303,32 +303,19 @@ def convert_bin_to_kinematic_state(can_bus_data: np.ndarray, timestamp: Time, fr
     
     return odom_msg
 
-def add_vad_base_link_to_base_link(ros_timestamp):
+def get_base_link_to_vad_base_link_transform_matrix() -> np.ndarray:
     """
     vad_base_link -> base_linkの変換を追加
     """
-    transform_stamped = TransformStamped()
-    transform_stamped.header.stamp = ros_timestamp
-    transform_stamped.header.frame_id = "vad_base_link"
-    transform_stamped.child_frame_id = "base_link"
-    # translation: vad_base_link -> base_linkは(0, 0, 0)
-    transform_stamped.transform.translation.x = 0.0
-    transform_stamped.transform.translation.y = 0.0
-    transform_stamped.transform.translation.z = 0.0
-    # rotation: vad_base_linkのy軸はbase_linkのx軸と同じ方向，vad_base_linkのx軸はbase_linkのy軸の-方向
-    # Z軸周りに+90度 (pi/2ラジアン) の回転
-    # オイラー角からクォータニオンを計算
-    quaternion = Quaternion(axis=[0, 0, 1], angle=np.pi/2)
-    transform_stamped.transform.rotation.x = float(quaternion.x)
-    transform_stamped.transform.rotation.y = float(quaternion.y)
-    transform_stamped.transform.rotation.z = float(quaternion.z)
-    transform_stamped.transform.rotation.w = float(quaternion.w)
-    
-    return transform_stamped
+    base_link_to_vad_base_link = np.array([[0, -1, 0,  0],
+                                            [1, 0, 0, 0],
+                                            [0, 0, 1, 0],
+                                            [0, 0, 0, 1]], dtype=np.float32)
+    return base_link_to_vad_base_link
 
-def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: Time, 
+def convert_bin_to_transform_matrix(lidar2img_data: dict[int, np.ndarray], timestamp: Time, 
                              scale_width: float = IMAGE_SCALE_WIDTH, 
-                             scale_height: float = IMAGE_SCALE_HIGHT) -> TFMessage:
+                             scale_height: float = IMAGE_SCALE_HIGHT) -> dict[str, np.ndarray]:
     """
     lidar2imgデータからTFメッセージへの変換
     
@@ -337,7 +324,7 @@ def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: T
         timestamp: メッセージのタイムスタンプ
         
     Returns:
-        TFMessage: 変換されたTFメッセージ
+        transform_matrix
     """
     # カメラの内部パラメータの設定
     cameras_intrinsics = {
@@ -393,6 +380,7 @@ def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: T
     inv_scale_factor[1, 1] = 1.0 / scale_height # y軸のスケールを元に戻す
 
     # 各カメラの変換を処理
+    lidar2cam_dict = {}
     for vad_camera_id, lidar2img in lidar2img_data.items():
         # 4x4の変換行列に変形
         lidar2img_matrx_scaled = lidar2img.reshape(4, 4)
@@ -439,26 +427,6 @@ def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: T
 
         # AutowareのカメラIDを取得
         autoware_camera_id = vad_to_autoware_camera_map[vad_camera_id]
-        
-        # TransformStampedメッセージの作成
-        transform_stamped = TransformStamped()
-        transform_stamped.header.stamp = timestamp
-        transform_stamped.header.frame_id = "vad_base_link"  # LiDARのフレーム
-        transform_stamped.child_frame_id = f"camera{autoware_camera_id}/camera_optical_link"  # カメラのフレーム
-        
-        # 平行移動の設定
-        transform_stamped.transform.translation.x = float(translation[0])
-        transform_stamped.transform.translation.y = float(translation[1])
-        transform_stamped.transform.translation.z = float(translation[2])
-        
-        # 回転の設定（クォータニオン）
-        transform_stamped.transform.rotation.x = float(quaternion.x)
-        transform_stamped.transform.rotation.y = float(quaternion.y)
-        transform_stamped.transform.rotation.z = float(quaternion.z)
-        transform_stamped.transform.rotation.w = float(quaternion.w)
-        
-        # TFMessageに追加
-        tf_msg.transforms.append(transform_stamped)
 
         def get_reconstructed_lidar2img(translation, quaternion, viewpad):
             reconstruted_lidar2cam_rt = np.eye(4, dtype=np.float32)
@@ -469,8 +437,10 @@ def convert_bin_to_tf_static(lidar2img_data: dict[int, np.ndarray], timestamp: T
             return reconstruted_lidar2img
 
         assert np.allclose(lidar2img_matrix, get_reconstructed_lidar2img(translation, quaternion, viewpad), atol=0.001)
+
+        lidar2cam_dict[autoware_camera_id] = lidar2cam_rt.T
     
-    return tf_msg
+    return lidar2cam_dict
 
 def create_camera_info_messages(timestamp: Time) -> dict[int, CameraInfo]:
     """

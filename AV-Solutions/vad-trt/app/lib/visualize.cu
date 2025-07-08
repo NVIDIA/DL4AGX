@@ -221,10 +221,11 @@ class ImageArtistImplement : public ImageArtist {
     nvtype::Float4 row0 = (this->param_.viewport_nx4x4.data() + camera_index * 4)[0];
     nvtype::Float4 row1 = (this->param_.viewport_nx4x4.data() + camera_index * 4)[1];
     nvtype::Float4 row2 = (this->param_.viewport_nx4x4.data() + camera_index * 4)[2];
-    float ground_height = -1.562;
-    float init_image_x = ground_height * row0.z + row0.w;
-    float init_image_y = ground_height * row1.z + row1.w;
-    float init_weight = ground_height * row2.z + row2.w;
+    float init_lidar_y = param_.init_lidar_y;
+    float ground_height = param_.ground_height;
+    float init_image_x = init_lidar_y * row0.y + ground_height * row0.z + row0.w;
+    float init_image_y = init_lidar_y * row1.y + ground_height * row1.z + row1.w;
+    float init_weight = init_lidar_y * row2.y + ground_height * row2.z + row2.w;
     if (init_image_x > 0 && init_image_y > 0 && init_weight > 0) {
       init_weight = std::max(1e-5f, std::min(1e5f, init_weight));
       image_points.push_back({init_image_x/init_weight, init_image_y/init_weight});

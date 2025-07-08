@@ -182,6 +182,9 @@ struct ImageArtistParameter {
   int num_camera;
   std::vector<nvtype::Float4> viewport_nx4x4;
   std::vector<NameAndColor> classes;
+  // Visualization configuration
+  float init_lidar_y;
+  float ground_height;
 };
 
 class ImageArtist {
@@ -205,6 +208,9 @@ struct BEVArtistParameter {
   float cx, cy, norm_size;
   float rotate_x;
   std::vector<NameAndColor> classes;
+  // Visualization configuration
+  float init_lidar_y;
+  float ground_height;
 };
 
 class BEVArtist {
@@ -264,7 +270,9 @@ void visualize(
   const VisualizeFrame& frame,
   const std::string& font_path,
   const std::string& save_path,
-  cudaStream_t stream
+  cudaStream_t stream,
+  float init_lidar_y,
+  float ground_height
 );
 
 };  // namespace nv

@@ -9,9 +9,12 @@ from sensor_msgs.msg import CompressedImage, PointCloud2, PointField
 from std_msgs.msg import Header
 from builtin_interfaces.msg import Time
 import rosbag2_py
-
-from convert_can_bus_bin_to_rosbag import convert_bin_to_imu, convert_bin_to_kinematic_state, write_to_rosbag, convert_bin_to_tf_static, create_camera_info_messages
-from convert_can_bus_bin_to_rosbag import ns2aw_kinematic_state, ns2aw_imu, add_vad_base_link_to_base_link
+from tf2_msgs.msg import TFMessage
+from rclpy.time import Time as RclpyTime
+import tf2_ros
+from pyquaternion import Quaternion
+from convert_can_bus_bin_to_rosbag import convert_bin_to_imu, convert_bin_to_kinematic_state, write_to_rosbag, convert_bin_to_transform_matrix, create_camera_info_messages
+from convert_can_bus_bin_to_rosbag import ns2aw_kinematic_state, ns2aw_imu, get_base_link_to_vad_base_link_transform_matrix
 
 def main():
     parser = argparse.ArgumentParser(
@@ -26,7 +29,7 @@ def main():
 
     input_dir = config.get("input_dir", "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/data/demo_data")
     n_frames = config.get("n_frames", 30)
-    output_file = config.get("output_file", "output_ns.db3")
+    output_file = config.get("output_file", "output_bag.ns-0708")
     topic_template = config.get("topic", "/sensing/camera/camera{i}/image_rect_color/compressed")
     image_format = config.get("image_format", "jpeg")
     init_time = config.get("init_time", 1672531200)
@@ -102,6 +105,7 @@ def main():
         writer.create_topic(camera_info_topic_metadata)
 
     for frame in range(1, n_frames + 1):
+        tf_buffer = tf2_ros.Buffer()
         frame_dir = os.path.join(input_dir, str(frame))
         
         # 画像データの処理
@@ -167,10 +171,52 @@ def main():
             for vad_camera_id in range(6):
                 lidar2img_dict[vad_camera_id] = lidar2img_data[16*vad_camera_id:16*(vad_camera_id+1)]
             
-            tf_static_msg = convert_bin_to_tf_static(lidar2img_dict, ros_timestamp)
-            # add vad_base_link to base_link        
-            tf_static_msg.transforms.append(add_vad_base_link_to_base_link(ros_timestamp))
-            write_to_rosbag(writer, "/tf_static", tf_static_msg, ros_timestamp)
+            lidar2cam_transform_dict = convert_bin_to_transform_matrix(lidar2img_dict, ros_timestamp)
+            base2vad_transform = get_base_link_to_vad_base_link_transform_matrix()
+
+            base2cam_transform_dict = {}
+            for autoware_camera_id, lidar2cam_transform in lidar2cam_transform_dict.items():
+                base2cam_transform = lidar2cam_transform @ base2vad_transform
+                base2cam_transform_dict[autoware_camera_id] = base2cam_transform
+            
+
+            
+            # 最終的なTFメッセージを作成（base_link → camera{i}/camera_optical_link）
+            final_tf_msg = TFMessage()
+            for autoware_camera_id, base2cam_transform in base2cam_transform_dict.items():
+                source_frame ="base_link"
+                target_frame = f"camera{autoware_camera_id}/camera_optical_link"
+                translation = base2cam_transform[:3, 3]
+                # 回転行列からクォータニオンへの変換
+                # rotation_matrixを正規化
+                def normalize_rotation_matrix(matrix):
+                    """回転行列を正規直交行列に正規化"""
+                    # SVD分解を使用して最も近い正規直交行列を見つける
+                    u, _, vh = np.linalg.svd(matrix)
+                    return np.dot(u, vh)
+
+                # 回転行列とクォータニオンの変換部分を修正
+                cam2base_rotation_matrix_normalized = normalize_rotation_matrix(base2cam_transform[:3, :3].T)
+                quaternion = Quaternion(matrix=cam2base_rotation_matrix_normalized)
+                
+                # cam2baseの平行移動成分を逆行列から計算
+                cam2base_transform = np.linalg.inv(base2cam_transform)
+                cam2base_translation = cam2base_transform[:3, 3]
+
+                final_transform_stamped = tf2_ros.TransformStamped()
+                final_transform_stamped.header.stamp = ros_timestamp
+                final_transform_stamped.header.frame_id = source_frame
+                final_transform_stamped.child_frame_id = target_frame
+                final_transform_stamped.transform.translation.x = float(cam2base_translation[0])
+                final_transform_stamped.transform.translation.y = float(cam2base_translation[1])
+                final_transform_stamped.transform.translation.z = float(cam2base_translation[2])
+                final_transform_stamped.transform.rotation.x = quaternion.x
+                final_transform_stamped.transform.rotation.y = quaternion.y
+                final_transform_stamped.transform.rotation.z = quaternion.z
+                final_transform_stamped.transform.rotation.w = quaternion.w
+                final_tf_msg.transforms.append(final_transform_stamped)
+            
+            write_to_rosbag(writer, "/tf_static", final_tf_msg, ros_timestamp)
 
         # camera_infoメッセージの作成と書き込み
         camera_infos = create_camera_info_messages(ros_timestamp)

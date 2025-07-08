@@ -2,8 +2,13 @@
   "project": "vadv1",
   "warm_up": 20,
   "n_frames": 30,
-  "input_image_width": 1600,
-  "input_image_hight": 960,
+  "input_image_width": 1920,
+  "input_image_hight": 1080,
+  "lidar_z_compensation": 1.4,
+  "visualization": {
+    "init_lidar_y": 1.6,
+    "ground_height": -0.3
+  },
   "plugins": ["home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/libplugins.so"],
   "font_path": "home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/simhei.ttf",
   "yaml_config_paths": [
