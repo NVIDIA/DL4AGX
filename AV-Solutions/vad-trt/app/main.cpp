@@ -533,22 +533,6 @@ load_image_from_rosbag_single_frame(const std::vector<sensor_msgs::msg::Image::C
   return frame_images;
 }
 
-// 元の関数は後方互換性のために残す
-std::unordered_map<int, std::vector<std::vector<float>>>
-load_image_from_rosbag(const std::vector<autoware::tensorrt_vad::VadTopicData>
-                           &vad_topic_data_list) {
-
-  std::unordered_map<int, std::vector<std::vector<float>>>
-      subscribed_image_dict;
-
-  for (size_t frame_id = 0; frame_id < vad_topic_data_list.size();
-       ++frame_id) {
-    subscribed_image_dict[frame_id + 1] = load_image_from_rosbag_single_frame(vad_topic_data_list[frame_id].images, frame_id);
-  }
-
-  return subscribed_image_dict;
-}
-
 void compare_with_reference(
     const std::vector<std::vector<float>> &subscribed_images,
     const std::string &reference_path) {
@@ -770,45 +754,6 @@ load_can_bus_shift_from_rosbag_single_frame(
   return std::make_pair(can_bus, shift);
 }
 
-// 元の関数は後方互換性のために残す
-std::tuple<std::unordered_map<int, std::vector<float>>,
-           std::unordered_map<int, std::vector<float>>>
-load_can_bus_shift_from_rosbag(
-    const std::vector<autoware::tensorrt_vad::VadTopicData>
-        &vad_topic_data_list) {
-  std::unordered_map<int, std::vector<float>> can_bus_dict;
-  std::unordered_map<int, std::vector<float>> shift_dict;
-
-  std::vector<float> prev_can_bus;
-  for (size_t frame_id = 0; frame_id < vad_topic_data_list.size();
-       ++frame_id) {
-    auto [can_bus, shift] = load_can_bus_shift_from_rosbag_single_frame(
-        vad_topic_data_list[frame_id].kinematic_state,
-        vad_topic_data_list[frame_id].imu_raw,
-        frame_id, prev_can_bus);
-    
-    can_bus_dict[frame_id + 1] = can_bus;
-    shift_dict[frame_id + 1] = shift;
-    prev_can_bus = can_bus;
-  }
-
-  return std::make_tuple(can_bus_dict, shift_dict);
-}
-
-std::optional<int> extract_autoware_camera_id(
-    const std::string &topic_name,
-    const std::unordered_map<int, int> &vad_to_autoware_camera) {
-
-  for (const auto &[vad_id, autoware_id] : vad_to_autoware_camera) {
-    std::string camera_topic =
-        "/sensing/camera/camera" + std::to_string(autoware_id) + "/camera_info";
-    if (topic_name == camera_topic) {
-      return autoware_id;
-    }
-  }
-  return std::nullopt;
-}
-
 std::vector<float> load_lidar2img_from_rosbag_single_frame(
     const tf2_msgs::msg::TFMessage::ConstSharedPtr &tf_static,
     const std::vector<sensor_msgs::msg::CameraInfo::ConstSharedPtr> &camera_infos,
@@ -999,24 +944,6 @@ std::vector<float> load_lidar2img_from_rosbag_single_frame(
   }
 
   return frame_lidar2img;
-}
-
-// 元の関数は後方互換性のために残す
-std::unordered_map<int, std::vector<float>> load_lidar2img_from_rosbag(
-    const std::vector<autoware::tensorrt_vad::VadTopicData>
-        &vad_topic_data_list,
-    float scale_width, float scale_height) {
-  std::unordered_map<int, std::vector<float>> result;
-
-  for (size_t frame_id = 0; frame_id < vad_topic_data_list.size();
-       ++frame_id) {
-    result[frame_id + 1] = load_lidar2img_from_rosbag_single_frame(
-        vad_topic_data_list[frame_id].tf_static,
-        vad_topic_data_list[frame_id].camera_infos,
-        frame_id, scale_width, scale_height);
-  }
-
-  return result;
 }
 
 void compare_with_reference_lidar2img(const std::vector<float> &lidar2img_data,
