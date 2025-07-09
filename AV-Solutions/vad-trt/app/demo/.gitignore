@@ -2,6 +2,7 @@ data/
 log/
 onnx_files/
 engines/
+rosbag/output_bag.*
 viz/
 *.so
 *.ttf
