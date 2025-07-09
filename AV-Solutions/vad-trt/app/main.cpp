@@ -987,10 +987,10 @@ void compare_with_reference_lidar2img(const std::vector<float> &lidar2img_data,
             << reference_file_path << std::endl;
 }
 
-std::vector<autoware::tensorrt_vad::VadTopicData>
+std::vector<autoware::tensorrt_vad::VadInputTopicData>
 extract_vad_topic_data_from_rosbag(const std::string &bag_path) {
 
-  std::vector<autoware::tensorrt_vad::VadTopicData> vad_topic_data_list;
+  std::vector<autoware::tensorrt_vad::VadInputTopicData> vad_topic_data_list;
 
   try {
     // ROSバッグの設定
@@ -1003,7 +1003,7 @@ extract_vad_topic_data_from_rosbag(const std::string &bag_path) {
     rosbag2_cpp::readers::SequentialReader reader;
     reader.open(storage_options, converter_options);
 
-    autoware::tensorrt_vad::VadTopicData current_frame;
+    autoware::tensorrt_vad::VadInputTopicData current_frame;
     bool frame_started = false;
 
     while (reader.has_next()) {
@@ -1130,7 +1130,7 @@ extract_vad_topic_data_from_rosbag(const std::string &bag_path) {
         vad_topic_data_list.push_back(current_frame);
 
         // 次のフレームの準備
-        current_frame = autoware::tensorrt_vad::VadTopicData();
+        current_frame = autoware::tensorrt_vad::VadInputTopicData();
         frame_started = false;
       }
     }

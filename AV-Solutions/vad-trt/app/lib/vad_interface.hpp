@@ -27,7 +27,7 @@
 namespace autoware::tensorrt_vad
 {
 
-struct VadTopicData
+struct VadInputTopicData
 {
   // このデータセットの基準となるタイムスタンプ
   rclcpp::Time stamp;

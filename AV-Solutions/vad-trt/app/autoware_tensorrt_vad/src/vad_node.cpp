@@ -46,7 +46,7 @@ VadNode::VadNode(const rclcpp::NodeOptions & options) : Node("vad_node", options
   RCLCPP_INFO(this->get_logger(), "VAD Node initialized");
 }
 
-// std::tuple<std::optional<autoware_planning_msgs::msg::Trajectory>, std::optional<autoware_perception_msgs::msg::DetectedObjects> > execute_inference(const VadTopicData vad_topic_data)
+// std::tuple<std::optional<autoware_planning_msgs::msg::Trajectory>, std::optional<autoware_perception_msgs::msg::DetectedObjects> > execute_inference(const VadInputTopicData vad_topic_data)
 // {
 //   // VadInterfaceを通じてVadInputDataに変換
 //   // scalingされた状態の画像を含む

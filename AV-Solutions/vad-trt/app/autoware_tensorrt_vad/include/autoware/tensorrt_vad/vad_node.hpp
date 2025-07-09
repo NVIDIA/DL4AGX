@@ -59,7 +59,7 @@ private:
   std::unique_ptr<VadModel<RosVadLogger>> vad_model_ptr_{};
 
   // VAD input topic
-  // std::unique_ptr<VadTopicData> vad_topic_data_ptr_{};
+  // std::unique_ptr<VadInputTopicData> vad_topic_data_ptr_{};
 
   // VAD interface
   // std::unique_ptr<VadInterface> vad_interface_ptr_{};
@@ -69,7 +69,7 @@ private:
   // rclcpp::Publisher<autoware_perception_msgs::msg::DetectedObjects>::SharedPtr detected_objects_pub_{nullptr};
 
   // 推論を実行するメソッド
-  // std::tuple<std::optional<autoware_planning_msgs::msg::Trajectory>, std::optional<autoware_perception_msgs::msg::DetectedObjects> > execute_inference(const VadTopicData & vad_topic_data);
+  // std::tuple<std::optional<autoware_planning_msgs::msg::Trajectory>, std::optional<autoware_perception_msgs::msg::DetectedObjects> > execute_inference(const VadInputTopicData & vad_topic_data);
 };
 }  // namespace autoware::tensorrt_vad
 
