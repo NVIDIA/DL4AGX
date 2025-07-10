@@ -32,7 +32,7 @@ cp test/test_config.yaml build/autoware_tensorrt_vad/
 colcon build --packages-select autoware_tensorrt_vad
 
 # テスト実行（lint系テストを除く）
-colcon test --packages-select autoware_tensorrt_vad --ctest-args -R test_vad_integration
+colcon test --packages-select autoware_tensorrt_vad --ctest-args -R test_vad_integration test_vad_interface
 ```
 
 #### 3. テスト結果の確認
@@ -59,7 +59,7 @@ colcon test-result --verbose
 
 3. **VadInferIntegrationTest.RealInferExecution**
    - 実際のデータを使用したVAD推論の実行
-   - エンドツーエンドの推論パイプラインを検証
+   - 推論パイプラインを検証
    - 予測された軌道の出力を確認
 
 ### トラブルシューティング

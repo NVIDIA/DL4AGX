@@ -25,6 +25,7 @@ ament_auto_find_build_dependencies()
 find_package(CUDA REQUIRED)
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(OpenCV REQUIRED)
 
 # TensorRTの設定
 option(TRT_ROOT "$ENV{TRT_ROOT}")
@@ -58,6 +59,8 @@ link_directories(
 # メインライブラリの追加（ヘッダーファイルは除外）
 ament_auto_add_library(${PROJECT_NAME}_lib SHARED
     lib/tensor.cpp
+    lib/vad_interface.cpp
+    lib/vad_model.cpp
 )
 
 # ライブラリのリンク設定
@@ -66,6 +69,7 @@ target_link_libraries(${PROJECT_NAME}_lib
     ${CUDA_LIBRARIES}
     cuda
     cudart
+    ${OpenCV_LIBS}
 )
 
 # コンポーネントの追加
@@ -100,6 +104,8 @@ function(add_testcase filepath)
   )
   target_sources(${test_name} PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/lib/tensor.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/lib/vad_interface.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/lib/vad_model.cpp
   )
   target_link_libraries(${test_name}
       ${PROJECT_NAME}_lib
@@ -109,6 +115,7 @@ function(add_testcase filepath)
       nvinfer
       nvonnxparser
       nvinfer_plugin
+      ${OpenCV_LIBS}
   )
   ament_target_dependencies(${test_name} ${${PROJECT_NAME}_FOUND_BUILD_DEPENDS})
 endfunction()
@@ -118,6 +125,7 @@ if(BUILD_TESTING)
     # find_package(ament_lint_auto REQUIRED)
     # ament_lint_auto_find_test_dependencies()
     add_testcase(test/test_vad_integration.cpp)
+    add_testcase(test/test_vad_interface.cpp)
 endif()
 
 ament_auto_package(
