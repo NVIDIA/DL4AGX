@@ -1,17 +1,17 @@
 test_config:
   # プラグインとエンジンのパス設定
-  plugins_path: "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/libplugins.so"
+  plugins_path: "../../test/test_data/libplugins.so"
   warm_up_num: 0  # テストなのでウォームアップは不要
   
   # エンジンの設定
   nets:
     backbone:
       name: "backbone"
-      engine_file: "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/engines/vadv1.extract_img_feat.fp16.engine"
+      engine_file: "../../test/test_data/engines/vadv1.extract_img_feat.fp16.engine"
       use_graph: true
     head:
       name: "head"
-      engine_file: "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/engines/vadv1_prev.pts_bbox_head.forward.engine"
+      engine_file: "../../test/test_data/engines/vadv1_prev.pts_bbox_head.forward.engine"
       use_graph: true
       inputs:
         img_feats:
@@ -19,7 +19,7 @@ test_config:
           name: "out.img_feats"
     head_no_prev:
       name: "head_no_prev"
-      engine_file: "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/engines/vadv1.pts_bbox_head.forward.engine"
+      engine_file: "../../test/test_data/engines/vadv1.pts_bbox_head.forward.engine"
       use_graph: true
       inputs:
         img_feats:
@@ -31,10 +31,10 @@ test_config:
     # テスト用の入力データ
     input_data:
       bev_embed:
-        src_path: "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX_ns_rosbag/DL4AGX/AV-Solutions/vad-trt/app/demo/bev_embed_frame1.bin"
+        src_path: "../../test/test_data/bev_embed_frame1.bin"
         dst_path: "bev_embed_frame1.bin"
       camera_images:
-        path: "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX_ns_rosbag/DL4AGX/AV-Solutions/vad-trt/app/demo/camera_images_frame2.bin"
+        path: "../../test/test_data/camera_images_frame2.bin"
       shift: [0.00224774843081832, -0.00130402739159763, 0.0]
       lidar2img: [
         379.27642822,  388.46176147,   17.67811966,    0.00000000,
