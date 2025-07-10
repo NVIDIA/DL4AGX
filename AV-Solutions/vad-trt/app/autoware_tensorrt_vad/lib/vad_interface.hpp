@@ -124,7 +124,7 @@ private:
   std::unordered_map<int32_t, int32_t> autoware_to_vad_camera_mapping_;
 
   // --- 内部処理関数 ---
-  std::optional<Eigen::Matrix4f> lookup_base_to_camera_rt(tf2_ros::Buffer & buffer, int32_t autoware_camera_id) const;
+  std::optional<Eigen::Matrix4f> lookup_base2cam(tf2_ros::Buffer & buffer, int32_t autoware_camera_id) const;
   Eigen::Matrix4f create_viewpad(const sensor_msgs::msg::CameraInfo::ConstSharedPtr & camera_info) const;
   Eigen::Matrix4f apply_scaling(const Eigen::Matrix4f & lidar2img, float scale_width, float scale_height) const;
   std::vector<float> matrix_to_flat(const Eigen::Matrix4f & matrix) const;

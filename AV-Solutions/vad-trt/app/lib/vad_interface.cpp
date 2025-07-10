@@ -59,7 +59,7 @@ VadInputData VadInterface::convert_input(const VadInputTopicData & vad_input_top
   return vad_input_data;
 }
 
-std::optional<Eigen::Matrix4f> VadInterface::lookup_base_to_camera_rt(tf2_ros::Buffer & buffer, int32_t autoware_camera_id) const
+std::optional<Eigen::Matrix4f> VadInterface::lookup_base2cam(tf2_ros::Buffer & buffer, int32_t autoware_camera_id) const
 {
   std::string target_frame = "camera" + std::to_string(autoware_camera_id) + "/camera_optical_link";
   std::string source_frame = "base_link";
@@ -137,8 +137,6 @@ Lidar2ImgData VadInterface::process_lidar2img(
 {
   std::vector<float> frame_lidar2img(16 * 6, 0.0f); // 6カメラ分のスペースを確保
 
-
-
   // vad_base_link -> base_link の変換をバッファに登録
   rclcpp::Time stamp(0, 0, RCL_ROS_TIME);
   if (!tf_static->transforms.empty()) {
@@ -151,19 +149,19 @@ Lidar2ImgData VadInterface::process_lidar2img(
       continue;
     }
 
-    auto base_to_camera_rt_opt = lookup_base_to_camera_rt(*tf_buffer_, autoware_camera_id);
-    if (!base_to_camera_rt_opt) continue;
-    Eigen::Matrix4f base_to_camera_rt = *base_to_camera_rt_opt;
+    auto base2cam_opt = lookup_base2cam(*tf_buffer_, autoware_camera_id);
+    if (!base2cam_opt) continue;
+    Eigen::Matrix4f base2cam = *base2cam_opt;
 
     Eigen::Matrix4f viewpad = create_viewpad(camera_infos[autoware_camera_id]);
-    Eigen::Matrix4f lidar2cam_rt = base_to_camera_rt * vad2base_;
+    Eigen::Matrix4f lidar2cam_rt = base2cam * vad2base_;
     Eigen::Matrix4f lidar2img = viewpad * lidar2cam_rt;
 
     // スケーリングを適用
-    lidar2img = apply_scaling(lidar2img, scale_width, scale_height);
+    Eigen::Matrix4f  lidar2img_scaled = apply_scaling(lidar2img, scale_width, scale_height);
 
     // 結果を格納
-    std::vector<float> lidar2img_flat = matrix_to_flat(lidar2img);
+    std::vector<float> lidar2img_flat = matrix_to_flat(lidar2img_scaled);
 
     // lidar2imgの計算後、VADカメラIDの位置に格納
     int32_t vad_camera_id = autoware_to_vad_camera_mapping_.at(autoware_camera_id);
