@@ -4,7 +4,7 @@
 #include <vector>
 #include <string>
 #include <filesystem>
-#include "vad_model.hpp"
+#include "autoware/tensorrt_vad/vad_model.hpp"
 #include "mock_vad_logger.hpp"
 
 namespace autoware::tensorrt_vad

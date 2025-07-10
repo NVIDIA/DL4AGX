@@ -3,7 +3,7 @@
 #include <vector>
 #include <tf2_msgs/msg/tf_message.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
-#include "vad_interface.hpp"
+#include "autoware/tensorrt_vad/vad_interface.hpp"
 
 namespace autoware::tensorrt_vad {
 

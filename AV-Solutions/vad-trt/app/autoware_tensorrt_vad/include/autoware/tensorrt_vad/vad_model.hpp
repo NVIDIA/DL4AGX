@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef AUTOWARE_TENSORRT_VAD_VAD_MODEL_HPP_
-#define AUTOWARE_TENSORRT_VAD_VAD_MODEL_HPP_
+#ifndef AUTOWARE_TENSORRT_VAD_VAD_TRT_HPP_
+#define AUTOWARE_TENSORRT_VAD_VAD_TRT_HPP_
 
 #include <optional>
 #include <string>
@@ -21,11 +21,11 @@
 #include <memory>
 #include <functional>
 #include <unordered_map>
-#include <map>
 #include <cuda_runtime.h>
 #include <NvInfer.h>
 #include <dlfcn.h>
 #include "net.h"
+#include <map>
 
 namespace autoware::tensorrt_vad
 {
@@ -84,12 +84,23 @@ struct VadOutputData
   // planning[0,1] = 1st point (x,y), planning[2,3] = 2nd point (x,y), ...
   std::vector<float> predicted_trajectory_{};  // size: 12 (6 points * 2 coordinates)
 
-  // 推論時間
-  double inference_time_ms_{0.0};
+  // // 検出されたオブジェクト
+  // std::vector<std::vector<float>> detected_objects_{};
 
-  // コマンドインデックス（選択された軌道のインデックス）
-  int32_t selected_command_index_{2};
+  // // コマンドインデックス（選択された軌道のインデックス）
+  // int32_t selected_command_index_{2};
 };
+
+// 後処理関数
+
+std::vector<std::vector<std::vector<std::vector<float>>>> postprocess_traj_preds(
+    const std::vector<float>& all_traj_preds_flat);
+
+std::vector<std::vector<float>> postprocess_traj_cls_scores(
+    const std::vector<float>& all_traj_cls_scores_flat);
+
+std::vector<std::vector<float>> postprocess_bbox_preds(
+    const std::vector<float>& all_bbox_preds_flat);
 
 // config for Net class
 struct NetConfig
@@ -132,14 +143,7 @@ class VadModel
 {
 public:
   VadModel(const VadConfig& config, std::shared_ptr<LoggerType> logger)
-    : runtime_(nullptr)
-    , stream_(nullptr)
-    , nets_()
-    , initialized_(false)
-    , saved_prev_bev_(nullptr)
-    , is_first_frame_(true)
-    , config_(config)
-    , logger_(std::move(logger))
+    : stream_(nullptr), initialized_(false), is_first_frame_(true), config_(config), logger_(std::move(logger))
   {
     // loggerはVadLoggerを継承したclassのみ受け取る
     static_assert(std::is_base_of_v<VadLogger, LoggerType>, 
@@ -194,6 +198,7 @@ public:
 
     // prev_bevを保存
     saved_prev_bev_ = save_prev_bev(head_name);
+
     // VadOutputDataに出力を変換
     VadOutputData output = postprocess(head_name, vad_input.command_);
 
@@ -227,7 +232,7 @@ private:
   // メンバ関数
   std::unique_ptr<nvinfer1::IRuntime, std::function<void(nvinfer1::IRuntime*)>> create_runtime() {
     static std::unique_ptr<Logger> logger_instance = std::make_unique<Logger>(logger_);
-    auto runtime_deleter = [](nvinfer1::IRuntime *runtime) { (void)runtime; };
+    auto runtime_deleter = []([[maybe_unused]] nvinfer1::IRuntime *runtime) {};
     std::unique_ptr<nvinfer1::IRuntime, decltype(runtime_deleter)> runtime{
         nvinfer1::createInferRuntime(*logger_instance), runtime_deleter};
     return runtime;
@@ -356,6 +361,15 @@ private:
 
   VadOutputData postprocess(const std::string& head_name, int32_t cmd) {
     std::vector<float> ego_fut_preds = nets_[head_name]->bindings["out.ego_fut_preds"]->cpu<float>();
+    std::vector<float> map_all_pts_preds_flat = nets_[head_name]->bindings["out.map_all_pts_preds"]->cpu<float>();
+    std::vector<float> all_traj_preds_flat = nets_[head_name]->bindings["out.all_traj_preds"]->cpu<float>();
+    std::vector<float> all_traj_cls_scores_flat = nets_[head_name]->bindings["out.all_traj_cls_scores"]->cpu<float>();
+    std::vector<float> all_bbox_preds_flat = nets_[head_name]->bindings["out.all_bbox_preds"]->cpu<float>();
+    
+    // flat -> structured
+    auto traj_preds = postprocess_traj_preds(all_traj_preds_flat);
+    auto traj_cls_scores = postprocess_traj_cls_scores(all_traj_cls_scores_flat);
+    auto bbox_preds = postprocess_bbox_preds(all_bbox_preds_flat);
     
     // Extract planning for the given command
     std::vector<float> planning(
@@ -375,4 +389,4 @@ private:
 
 }  // namespace autoware::tensorrt_vad
 
-#endif  // AUTOWARE_TENSORRT_VAD_VAD_MODEL_HPP_
+#endif  // AUTOWARE_TENSORRT_VAD_VAD_TRT_HPP_

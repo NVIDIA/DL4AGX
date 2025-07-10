@@ -48,8 +48,10 @@ add_executable(
 
 # ターゲットごとにインクルードディレクトリを絶対パスで指定
 get_filename_component(LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../lib ABSOLUTE)
+get_filename_component(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../include ABSOLUTE)
 target_include_directories(vad_tests PRIVATE
     ${LIB_DIR}
+    ${INCLUDE_DIR}
     ${CUDA_INCLUDE_DIRS}
     ${TENSORRT_INCLUDE_DIRS}
     ${YAML_CPP_INCLUDE_DIR}

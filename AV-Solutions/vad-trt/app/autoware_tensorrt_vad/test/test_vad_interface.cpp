@@ -4,7 +4,7 @@
 #include <tf2_msgs/msg/tf_message.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
-#include "vad_interface.hpp"
+#include "autoware/tensorrt_vad/vad_interface.hpp"
 
 namespace autoware::tensorrt_vad {
 

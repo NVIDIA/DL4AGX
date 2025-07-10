@@ -64,9 +64,9 @@
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
-#include "ros_vad_logger.hpp"
-#include "vad_interface.hpp"
-#include "vad_model.hpp"
+#include "autoware/tensorrt_vad/ros_vad_logger.hpp"
+#include "autoware/tensorrt_vad/vad_interface.hpp"
+#include "autoware/tensorrt_vad/vad_model.hpp"
 #include "visualize.hpp"
 
 #include <autoware_perception_msgs/msg/detected_object.hpp>

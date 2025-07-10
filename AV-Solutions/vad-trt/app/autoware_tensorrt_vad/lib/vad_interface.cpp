@@ -1,4 +1,4 @@
-#include "vad_interface.hpp"
+#include "autoware/tensorrt_vad/vad_interface.hpp"
 #include <opencv2/opencv.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <tf2/exceptions.h>
