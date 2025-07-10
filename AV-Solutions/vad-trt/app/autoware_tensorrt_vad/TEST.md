@@ -5,14 +5,16 @@
 ### 前提条件
 
 1. **必要なファイルの存在確認**
-   - TensorRTエンジンファイル（`demo/engines/`ディレクトリ内）
-   - プラグインファイル（`demo/libplugins.so`）
-   - テスト設定ファイル（`test/test_config.yaml`）
-   - テストデータファイル（`test/`ディレクトリ内のバイナリファイル）
+   - test用config（`test/test_config.yaml`）
+   - test data（`test/test_data`ディレクトリ内に格納）
+      - [TIER IV INTERNAL LINK](https://drive.google.com/file/d/1Y5nA-0As0K4sk-l68v2Qku_c5XfTF3rs/view?usp=drive_link)よりdownloadして展開してください．
 
 2. **CUDA環境**
-   - CUDA対応GPUが利用可能
-   - CUDAドライバーとランタイムがインストール済み
+   - engine, .soを使用するので，特定の環境でしか動きません
+   - 動作確認済みの環境
+     - NVIDIA GeForce RTX 3090
+     - Driver Version: 560.28.03
+     - CUDA Version: 12.6
 
 ### 実行方法
 
