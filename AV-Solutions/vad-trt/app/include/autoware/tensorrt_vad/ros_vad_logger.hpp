@@ -1,0 +1,1 @@
+../../../autoware_tensorrt_vad/include/autoware/tensorrt_vad/ros_vad_logger.hpp

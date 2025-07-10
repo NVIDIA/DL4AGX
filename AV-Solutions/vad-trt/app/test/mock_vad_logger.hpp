@@ -3,7 +3,7 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "vad_model.hpp" // VadLoggerの定義を含む
+#include "autoware/tensorrt_vad/vad_model.hpp" // VadLoggerの定義を含む
 
 namespace autoware::tensorrt_vad {
 

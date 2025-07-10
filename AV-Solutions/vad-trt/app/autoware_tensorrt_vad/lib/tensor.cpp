@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include "tensor.h"
+#include "autoware/tensorrt_vad/tensor.h"
 
 std::ostream& operator<<(std::ostream& os, nv::Tensor& t) {
   // os << "[" << (int)(t.iomode) << "] ";
