@@ -25,6 +25,7 @@
 #include <NvInfer.h>
 #include <dlfcn.h>
 #include "net.h"
+#include <map>
 
 namespace autoware::tensorrt_vad
 {
@@ -90,72 +91,16 @@ struct VadOutputData
   // int32_t selected_command_index_{2};
 };
 
-// 後処理関数の実装
+// 後処理関数
+
 std::vector<std::vector<std::vector<std::vector<float>>>> postprocess_traj_preds(
-    const std::vector<float>& all_traj_preds_flat) {
-  const int32_t num_objects = 900;
-  const int32_t num_fut_modes = 6; // 6 future modes(trajectories)
-  const int32_t num_fut_ts = 6; // 6 future time steps
-  const int32_t traj_coords = 2;  // x, y
-  
-  std::vector<std::vector<std::vector<std::vector<float>>>> traj_preds;
-  traj_preds.resize(num_objects); // [900, , , ]
-
-  for (int32_t obj = 0; obj < num_objects; ++obj) {
-    traj_preds[obj].resize(num_fut_modes); // [900, 6, , ]
-
-    for (int32_t fut_mode = 0; fut_mode < num_fut_modes; ++fut_mode) {
-      traj_preds[obj][fut_mode].resize(num_fut_ts); // [900, 6, 6, ]
-
-      for (int32_t ts = 0; ts < num_fut_ts; ++ts) {
-        traj_preds[obj][fut_mode][ts].resize(traj_coords); // [900, 6, 6, 2]
-
-        // flat -> structured
-        int32_t idx_occupied = obj * num_fut_modes * num_fut_ts * traj_coords; // obj*6*6*2
-        int32_t idx_flat = idx_occupied + fut_mode * num_fut_ts * traj_coords + ts * traj_coords; // idx_occupied + fut_mode*6*2 + ts*2
-        traj_preds[obj][fut_mode][ts][0] = all_traj_preds_flat[idx_flat];     // x
-        traj_preds[obj][fut_mode][ts][1] = all_traj_preds_flat[idx_flat + 1]; // y
-      }
-    }
-  }
-  return traj_preds;
-}
+    const std::vector<float>& all_traj_preds_flat);
 
 std::vector<std::vector<float>> postprocess_traj_cls_scores(
-    const std::vector<float>& all_traj_cls_scores_flat) {
-  const int32_t num_objects = 900;
-  const int32_t num_fut_modes = 6; // 6 future modes(trajectories)
-  
-  std::vector<std::vector<float>> traj_cls_scores;
-  traj_cls_scores.resize(num_objects);
-  for (int32_t obj = 0; obj < num_objects; ++obj) {
-    traj_cls_scores[obj].resize(num_fut_modes);
-    for (int32_t fut_mode = 0; fut_mode < num_fut_modes; ++fut_mode) {
-      int32_t idx_occupied = obj * num_fut_modes; // obj*6
-      int32_t idx_flat = idx_occupied + fut_mode; // idx_occupied + fut_mode
-      traj_cls_scores[obj][fut_mode] = all_traj_cls_scores_flat[idx_flat];
-    }
-  }
-  return traj_cls_scores;
-}
+    const std::vector<float>& all_traj_cls_scores_flat);
 
 std::vector<std::vector<float>> postprocess_bbox_preds(
-    const std::vector<float>& all_bbox_preds_flat) {
-  const int32_t num_objects = 900;
-  const int32_t bbox_features = 10;  // x,y,z,dx,dy,dz,vx,vy,label,prob
-  
-  std::vector<std::vector<float>> bbox_preds;
-  bbox_preds.resize(num_objects);
-  for (int32_t obj = 0; obj < num_objects; ++obj) {
-    bbox_preds[obj].resize(bbox_features);
-    for (int32_t feat = 0; feat < bbox_features; ++feat) {
-      int32_t idx_occupied = obj * bbox_features; // obj*10
-      int32_t idx_flat = idx_occupied + feat; // idx_occupied + feat
-      bbox_preds[obj][feat] = all_bbox_preds_flat[idx_flat];
-    }
-  }
-  return bbox_preds;
-}
+    const std::vector<float>& all_bbox_preds_flat);
 
 // config for Net class
 struct NetConfig

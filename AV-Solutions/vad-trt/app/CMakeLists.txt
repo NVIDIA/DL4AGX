@@ -19,6 +19,7 @@ find_package(autoware_perception_msgs REQUIRED)
 find_package(autoware_planning_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rosbag2_cpp REQUIRED)
+find_package(OpenCV REQUIRED)
 
 # Find CUDA package first
 find_package(CUDA REQUIRED)
@@ -98,6 +99,8 @@ target_compile_options(${APP}_cu PRIVATE
 # Main application
 add_executable(${APP}_app 
     main.cpp 
+    ${CMAKE_SOURCE_DIR}/lib/vad_model.cpp
+    ${CMAKE_SOURCE_DIR}/lib/vad_interface.cpp
     ${CMAKE_SOURCE_DIR}/lib/visualize.cpp 
     ${CMAKE_SOURCE_DIR}/lib/tensor.cpp 
     ${CMAKE_SOURCE_DIR}/lib/cuOSD/cuosd.cpp
@@ -113,6 +116,7 @@ target_link_libraries(${APP}_app
     ${DEPS}
     nlohmann_json::nlohmann_json
     rclcpp::rclcpp
+    ${OpenCV_LIBS}
     ${sensor_msgs_LIBRARIES}
     ${tf2_ros_LIBRARIES}
     ${tf2_eigen_LIBRARIES}
