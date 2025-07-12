@@ -137,12 +137,6 @@ Lidar2ImgData VadInterface::process_lidar2img(
 {
   std::vector<float> frame_lidar2img(16 * 6, 0.0f); // 6カメラ分のスペースを確保
 
-  // vad_base_link -> base_link の変換をバッファに登録
-  rclcpp::Time stamp(0, 0, RCL_ROS_TIME);
-  if (!tf_static->transforms.empty()) {
-    stamp = tf_static->transforms[0].header.stamp;
-  }
-
   // 各カメラの処理
   for (int32_t autoware_camera_id = 0; autoware_camera_id < 6; ++autoware_camera_id) {
     if (!camera_infos[autoware_camera_id]) {
