@@ -131,7 +131,7 @@ std::vector<float> VadInterface::matrix_to_flat(const Eigen::Matrix4f & matrix) 
 }
 
 Lidar2ImgData VadInterface::process_lidar2img(
-    const tf2_msgs::msg::TFMessage::ConstSharedPtr & tf_static,
+    [[maybe_unused]] const tf2_msgs::msg::TFMessage::ConstSharedPtr & tf_static,
     const std::vector<sensor_msgs::msg::CameraInfo::ConstSharedPtr> & camera_infos,
     float scale_width, float scale_height) const
 {
