@@ -9,6 +9,7 @@
 #include <yaml-cpp/yaml.h>
 #include "mock_vad_logger.hpp"
 #include "autoware/tensorrt_vad/vad_model.hpp"
+#include "test_config_constants.hpp"
 
 namespace autoware::tensorrt_vad {
 namespace test {
@@ -33,6 +34,13 @@ struct TestConfig {
     } expected_output;
 };
 
+/**
+ * @brief load VadConfig and TestConfig from a YAML file
+ * 
+ * @param config_path path to the YAML file
+ * @return pair of VadConfig and TestConfig
+ * @throws std::runtime_error if YAML loading fails
+ */
 std::pair<VadConfig, TestConfig> load_config_from_yaml(const std::string& config_path) {
     try {
         YAML::Node yaml_config = YAML::LoadFile(config_path);
@@ -89,7 +97,7 @@ class VadIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
         mock_logger_ = std::make_shared<MockVadLogger>();
-        auto [vad_config, test_config] = test::load_config_from_yaml("../../install/autoware_tensorrt_vad/share/autoware_tensorrt_vad/test/test_config.yaml");
+        auto [vad_config, test_config] = test::load_config_from_yaml(autoware::tensorrt_vad::test::getTestConfigPath());
         config_ = vad_config;
         test_config_ = test_config;
     }
@@ -123,7 +131,7 @@ class VadInferIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
         logger_ = std::make_shared<MockVadLogger>();
-        auto [vad_config, test_config] = test::load_config_from_yaml("../../install/autoware_tensorrt_vad/share/autoware_tensorrt_vad/test/test_config.yaml");
+        auto [vad_config, test_config] = test::load_config_from_yaml(autoware::tensorrt_vad::test::getTestConfigPath());
         config_ = vad_config;
         test_config_ = test_config;
         
@@ -251,9 +259,9 @@ TEST_F(VadInferIntegrationTest, RealInferExecution) {
     auto prev_bev_data = loadBevEmbedFromFile("bev_embed_frame1.bin");
     
     auto dummy_input = createFrame2InputData();
-    auto result1 = model->infer(dummy_input); 
-    (void)result1; // 戻り値を明示的に無視
-    
+    auto result1 = model->infer(dummy_input);
+    (void)result1; // ignore return value explictly
+
     model->is_first_frame_ = false;
 
     VadInputData input_data_frame2 = createFrame2InputData();
