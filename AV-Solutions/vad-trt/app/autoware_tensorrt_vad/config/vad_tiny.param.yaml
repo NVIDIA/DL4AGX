@@ -1,0 +1,6 @@
+/**:
+  ros__parameters:
+    model_params:
+      plugins_path: "/home/autoware/ghq/github.com/Shin-kyoto/DL4AGX/AV-Solutions/vad-trt/app/demo/libplugins.so"
+      warm_up_num: 20
+      default_command: 2  # 0: TURN RIGHT, 1: TURN LEFT, 2: KEEP FORWARD
