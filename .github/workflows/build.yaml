@@ -1,0 +1,86 @@
+# .github/workflows/build.yml
+
+name: Build autoware_tensorrt_vad (Differential)
+
+on:
+  pull_request:
+    branches: [ dev/ns-ros-node ] # dev/ns-ros-nodeブランチへのプルリクエスト作成・更新時 (ブランチ名は適宜変更してください)
+
+# ccacheを有効にするための環境変数
+env:
+  CC: /usr/lib/ccache/gcc
+  CXX: /usr/lib/ccache/g++
+  # ccacheのディレクトリを指定
+  CCACHE_DIR: /github/home/.ccache
+
+jobs:
+  build-differential:
+    # Autowareが提供するCUDA対応のコンテナイメージを使用
+    # これにより、TensorRTを含むパッケージのビルド環境が整います
+    container: ghcr.io/autowarefoundation/autoware-universe:latest-humble-cuda
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. PRの差分を正しく取得するために、コミット数に応じた深さでリポジトリをチェックアウト
+      - name: Set PR fetch depth
+        run: echo "PR_FETCH_DEPTH=$(( ${{ github.event.pull_request.commits }} + 1 ))" >> "${GITHUB_ENV}"
+        shell: bash
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: ${{ env.PR_FETCH_DEPTH }}
+
+      # 2. 変更があったパッケージを検出
+      - name: Get modified packages
+        id: get-modified-packages
+        uses: autowarefoundation/autoware-github-actions/get-modified-packages@v1
+        with:
+          base-ref: ${{ github.event.pull_request.base.sha }}
+
+      # 3. ccacheのキャッシュを復元
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          # キャッシュキー: ブランチ、アーキテクチャ、ROSディストロ、ベースコミットで構成
+          key: ccache-${{ github.ref_name }}-${{ runner.arch }}-humble-${{ github.event.pull_request.base.sha }}
+          restore-keys: |
+            ccache-${{ github.ref_name }}-${{ runner.arch }}-humble-
+
+      # 4. ビルド前のccache統計情報を表示（デバッグ用）
+      - name: Show ccache stats before build and reset stats
+        run: |
+          mkdir -p ${{ env.CCACHE_DIR }}
+          ccache -s
+          ccache -z
+        shell: bash
+
+      # 5. rosdepを使用して依存関係をインストール
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          rosdep update
+          # リポジトリ全体を対象に依存関係をチェックしてインストール
+          rosdep install --from-paths . --ignore-src -r -y
+        shell: bash
+
+      # 6. 変更があったパッケージをビルド
+      - name: Build modified packages
+        if: ${{ steps.get-modified-packages.outputs.modified-packages != '' }}
+        run: |
+          colcon build \
+            --packages-up-to autoware_tensorrt_vad \
+            --symlink-install \
+            --cmake-args \
+              -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+              -DCMAKE_BUILD_TYPE=Release \
+            --base-paths DL4AGX/AV-Solutions/vad-trt/app
+        shell: bash
+
+      # 7. ビルド後のccache統計情報を表示
+      - name: Show ccache stats after build
+        if: always()
+        run: ccache -s
+        shell: bash
