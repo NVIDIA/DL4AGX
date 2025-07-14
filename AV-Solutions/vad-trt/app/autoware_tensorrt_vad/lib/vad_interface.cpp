@@ -61,8 +61,8 @@ VadInputData VadInterface::convert_input(const VadInputTopicData & vad_input_top
 
 std::optional<Eigen::Matrix4f> VadInterface::lookup_base2cam(tf2_ros::Buffer & buffer, int32_t autoware_camera_id) const
 {
-  std::string target_frame = "camera" + std::to_string(autoware_camera_id) + "/camera_optical_link";
-  std::string source_frame = "base_link";
+  std::string target_frame = "base_link";
+  std::string source_frame = "camera" + std::to_string(autoware_camera_id) + "/camera_optical_link";
 
   try {
     geometry_msgs::msg::TransformStamped lookup_result =
@@ -83,8 +83,11 @@ std::optional<Eigen::Matrix4f> VadInterface::lookup_base2cam(tf2_ros::Buffer & b
         lookup_result.transform.rotation.y,
         lookup_result.transform.rotation.z);
     transform_matrix.block<3, 3>(0, 0) = q.toRotationMatrix();
-    
-    return transform_matrix;
+
+    // calculate the inverse transformation
+    Eigen::Matrix4f transform_matrix_inverse = transform_matrix.inverse();
+
+    return transform_matrix_inverse;
 
   } catch (const tf2::TransformException &ex) {
     RCLCPP_ERROR(rclcpp::get_logger("VadInterface"), "TF変換の取得に失敗: %s -> %s. Reason: %s",

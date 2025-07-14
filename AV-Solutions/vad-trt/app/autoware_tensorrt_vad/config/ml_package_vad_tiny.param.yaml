@@ -1,15 +1,30 @@
 /**:
   ros__parameters:
     interface_params:
-      input_image_width: 1920
-      input_image_height: 1080
+      # # awsim
+      # input_image_width: 1920
+      # input_image_height: 1080
+      # # autoware xx1
+      # input_image_width: 1466
+      # input_image_height: 1122
+      # nuScenes
+      input_image_width: 1653
+      input_image_height: 940
       target_image_width: 640
       target_image_height: 384
       point_cloud_range: [-15.0, -30.0, -2.0, 15.0, 30.0, 2.0]
       bev_h: 100
       bev_w: 100
-      default_patch_angle: -1.0353195667266846
+      default_patch_angle: 0.0
       default_shift: [0.0, 0.0]
+      # default_can_bus[0:3] x, y, z in_map_coordinate
+      # default_can_bus[3:7] quaternion(x, y, z, w)
+      # default_can_bus[7:10] ax, ay, az
+      # default_can_bus[10:13] angular velocity(vx, vy, vz)
+      # default_can_bus[13:16] linear velocity(vx, vy, vz)
+      # default_can_bus[16] yaw[rad]
+      # default_can_bus[17] patch_angle(difference between yaw and prev_yaw)[deg]
+      default_can_bus: [-42274.0312, 89140.4531, 6.92498255, -0.00156072155, -0.0132345976, -0.475291312, 0.879727542, 0.158691406, -2.24609375, -9.72595215, 0.0, 0.0, 0.00481297961, 0.0, 2.15303349, 0.0, 5.19237747, 303.230896]
       image_normalization_param_mean: [103.530, 116.280, 123.675]
       image_normalization_param_std: [1.0, 1.0, 1.0]
       autoware_to_vad_camera_mapping: [0, 0, # FRONT

@@ -138,6 +138,7 @@ convert_normalized_to_rgb(const std::vector<float> &normalized_data) {
 class VADNode : public rclcpp::Node {
 public:
   autoware::tensorrt_vad::VadInterfaceConfig vad_interface_config_;
+  std::vector<float> prev_can_bus_;
 
   VADNode(const std::vector<std::string> &yaml_config_paths)
       : Node("vad_node", createNodeOptions(yaml_config_paths)),
@@ -159,6 +160,10 @@ public:
         )
   {
 
+    std::vector<double> default_can_bus = this->declare_parameter<std::vector<double>>("interface_params.default_can_bus");
+    // default_can_bus: copy and convert
+    prev_can_bus_.clear();
+    for (auto v : default_can_bus) prev_can_bus_.push_back(static_cast<float>(v));
     // Publishers
     trajectory_publisher_ =
         this->create_publisher<autoware_planning_msgs::msg::Trajectory>(
@@ -631,7 +636,7 @@ int main(int argc, char **argv) {
 
   
   // フレームごとに処理
-  std::vector<float> prev_can_bus;
+  std::vector<float> prev_can_bus = node->prev_can_bus_;
   for (int32_t frame_id = 1; frame_id <= vad_topic_data_list.size(); frame_id++) {
     std::string frame_dir = data_dir + std::to_string(frame_id) + "/";
 
