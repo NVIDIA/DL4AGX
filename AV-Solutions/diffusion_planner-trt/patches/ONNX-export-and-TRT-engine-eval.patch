@@ -1,0 +1,1588 @@
+From dadeada43c28ee2968c25b0c0d77b7577f979fe9 Mon Sep 17 00:00:00 2001
+From: "John Yang (SW-TEGRA)" <johnyang@nvidia.com>
+Date: Thu, 7 Aug 2025 14:13:55 -0700
+Subject: [PATCH] ONNX-export-and-TRT-engine-eval
+
+---
+ deployment/build_trt_engine.sh                |  69 +++
+ deployment/model/__init__.py                  |   0
+ deployment/model/diffusion_planner_trt.py     |  34 ++
+ deployment/model/module/__init__.py           |   0
+ deployment/model/module/decoder_trt.py        | 173 +++++++
+ deployment/model/module/encoder_trt.py        | 284 ++++++++++++
+ deployment/onnx_export.py                     | 135 ++++++
+ deployment/planner/__init__.py                |   0
+ deployment/planner/planner.py                 | 278 ++++++++++++
+ deployment/trt_infer_app.cpp                  | 422 ++++++++++++++++++
+ .../config/planner/diffusion_planner_trt.yaml |  36 ++
+ sim_diffusion_planner_runner_trt.sh           |  54 +++
+ 12 files changed, 1485 insertions(+)
+ create mode 100644 deployment/build_trt_engine.sh
+ create mode 100644 deployment/model/__init__.py
+ create mode 100644 deployment/model/diffusion_planner_trt.py
+ create mode 100644 deployment/model/module/__init__.py
+ create mode 100644 deployment/model/module/decoder_trt.py
+ create mode 100644 deployment/model/module/encoder_trt.py
+ create mode 100644 deployment/onnx_export.py
+ create mode 100644 deployment/planner/__init__.py
+ create mode 100644 deployment/planner/planner.py
+ create mode 100644 deployment/trt_infer_app.cpp
+ create mode 100644 diffusion_planner/config/planner/diffusion_planner_trt.yaml
+ create mode 100755 sim_diffusion_planner_runner_trt.sh
+
+diff --git a/deployment/build_trt_engine.sh b/deployment/build_trt_engine.sh
+new file mode 100644
+index 0000000..d398357
+--- /dev/null
++++ b/deployment/build_trt_engine.sh
+@@ -0,0 +1,69 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++#!/bin/bash
++
++set -e
++
++show_help() {
++    echo "Usage: $0 --onnx <input.onnx> --engine <output.engine> [--fp16]"
++    echo ""
++    echo "Options:"
++    echo "  --onnx     Path to input ONNX model"
++    echo "  --engine   Path to output TensorRT engine"
++    echo "  --fp16     Enable mixed-precision mode (assumes ONNX is already FP16)"
++    exit 1
++}
++
++# Default
++USE_FP16=false
++
++# Parse args
++while [[ $# -gt 0 ]]; do
++    case $1 in
++        --onnx)
++            ONNX_PATH="$2"
++            shift 2
++            ;;
++        --engine)
++            ENGINE_PATH="$2"
++            shift 2
++            ;;
++        --fp16)
++            USE_FP16=true
++            shift
++            ;;
++        -*|--*)
++            echo "Unknown option $1"
++            show_help
++            ;;
++        *)
++            break
++            ;;
++    esac
++done
++
++# Validate required arguments
++if [[ -z "$ONNX_PATH" || -z "$ENGINE_PATH" ]]; then
++    echo "Error: --onnx and --engine are required."
++    show_help
++fi
++
++# Build
++COMMON_FLAGS="--onnx=$ONNX_PATH \
++              --saveEngine=$ENGINE_PATH \
++              --noTF32 \
++              --builderOptimizationLevel=5 \
++              --tilingOptimizationLevel=3 \
++              --maxTactics=2000 \
++              --sparsity=disable"
++
++if $USE_FP16; then
++    echo "🔧 Building FP16 engine with strongly typed model..."
++    trtexec $COMMON_FLAGS --stronglyTyped
++    echo "✅ FP16 TensorRT engine built: $ENGINE_PATH"
++else
++    echo "🔧 Building FP32 engine..."
++    trtexec $COMMON_FLAGS
++    echo "✅ FP32 TensorRT engine built: $ENGINE_PATH"
++fi
+diff --git a/deployment/model/__init__.py b/deployment/model/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/deployment/model/diffusion_planner_trt.py b/deployment/model/diffusion_planner_trt.py
+new file mode 100644
+index 0000000..e325426
+--- /dev/null
++++ b/deployment/model/diffusion_planner_trt.py
+@@ -0,0 +1,34 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++import torch.nn as nn
++from model.module.encoder_trt import Encoder_TRT
++from model.module.decoder_trt import Decoder_TRT
++
++class Diffusion_Planner_TRT(nn.Module):
++    def __init__(self, config):
++        super().__init__()
++        self.encoder = Encoder_TRT(config)
++        self.decoder = Decoder_TRT(config)
++
++    @property
++    def sde(self):
++        return self.decoder.decoder.sde
++
++    def forward(self, inputs):
++        ego_current_state, neighbor_agents_past, static_objects, lanes, \
++            lanes_speed_limit, lanes_has_speed_limit, route_lanes = inputs
++
++        dict_inputs = {
++            'ego_current_state': ego_current_state,
++            'neighbor_agents_past': neighbor_agents_past,
++            'static_objects': static_objects,
++            'lanes': lanes,
++            'lanes_speed_limit': lanes_speed_limit,
++            'lanes_has_speed_limit': lanes_has_speed_limit,
++            'route_lanes': route_lanes
++        }
++
++        encoder_outputs = self.encoder(dict_inputs)
++        decoder_outputs = self.decoder(encoder_outputs, dict_inputs)
++        return encoder_outputs, decoder_outputs
+\ No newline at end of file
+diff --git a/deployment/model/module/__init__.py b/deployment/model/module/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/deployment/model/module/decoder_trt.py b/deployment/model/module/decoder_trt.py
+new file mode 100644
+index 0000000..0bd12f1
+--- /dev/null
++++ b/deployment/model/module/decoder_trt.py
+@@ -0,0 +1,173 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++import torch
++import torch.nn as nn
++from timm.models.layers import Mlp
++from timm.layers import DropPath
++
++from diffusion_planner.model.diffusion_utils.sampling import dpm_sampler
++from diffusion_planner.model.diffusion_utils.sde import SDE, VPSDE_linear
++from diffusion_planner.utils.normalizer import ObservationNormalizer, StateNormalizer
++from diffusion_planner.model.module.mixer import MixerBlock
++from diffusion_planner.model.module.dit import TimestepEmbedder, DiTBlock, FinalLayer
++
++class Decoder_TRT(nn.Module):
++    def __init__(self, config):
++        super().__init__()
++
++        dpr = config.decoder_drop_path_rate
++        self._predicted_neighbor_num = config.predicted_neighbor_num
++        self._future_len = config.future_len
++        self._sde = VPSDE_linear()
++
++        self.dit = DiT(
++            sde=self._sde, 
++            route_encoder = RouteEncoder(config.route_num, config.lane_len, drop_path_rate=config.encoder_drop_path_rate, hidden_dim=config.hidden_dim),
++            depth=config.decoder_depth, 
++            output_dim= (config.future_len + 1) * 4, # x, y, cos, sin
++            hidden_dim=config.hidden_dim, 
++            heads=config.num_heads, 
++            dropout=dpr,
++            model_type=config.diffusion_model_type
++        )
++        
++        self._state_normalizer: StateNormalizer = config.state_normalizer
++        self._observation_normalizer: ObservationNormalizer = config.observation_normalizer
++        
++        self._guidance_fn = config.guidance_fn
++        
++    @property
++    def sde(self):
++        return self._sde
++    
++    def forward(self, encoder_outputs, inputs):
++        ego_current = inputs['ego_current_state'][:, None, :4]
++        neighbors_current = inputs["neighbor_agents_past"][:, :self._predicted_neighbor_num, -1, :4]
++        neighbor_current_mask = torch.sum(torch.ne(neighbors_current[..., :4], 0), dim=-1) == 0
++        inputs["neighbor_current_mask"] = neighbor_current_mask
++
++        current_states = torch.cat([ego_current, neighbors_current], dim=1)
++
++        B, P, _ = current_states.shape
++        assert P == (1 + self._predicted_neighbor_num)
++
++        ego_neighbor_encoding = encoder_outputs['encoding']
++        route_lanes = inputs['route_lanes']        
++
++        xT = torch.cat([current_states[:, :, None], torch.randn(B, P, self._future_len, 4).to(current_states.device) * 0.5], dim=2).reshape(B, P, -1)
++
++        def initial_state_constraint(xt, t, step):
++            xt = xt.reshape(B, P, -1, 4)
++            xt[:, :, 0, :] = current_states
++            return xt.reshape(B, P, -1)
++        
++        x0 = dpm_sampler(
++                    self.dit,
++                    xT,
++                    other_model_params={
++                        "cross_c": ego_neighbor_encoding, 
++                        "route_lanes": route_lanes,
++                        "neighbor_current_mask": neighbor_current_mask                            
++                    },
++                    dpm_solver_params={
++                        "correcting_xt_fn":initial_state_constraint,
++                    },
++                    model_wrapper_params={
++                        "classifier_fn": self._guidance_fn,
++                        "classifier_kwargs": {
++                            "model": self.dit,
++                            "model_condition": {
++                                "cross_c": ego_neighbor_encoding, 
++                                "route_lanes": route_lanes,
++                                "neighbor_current_mask": neighbor_current_mask                            
++                            },
++                            "inputs": inputs,
++                            "observation_normalizer": self._observation_normalizer,
++                            "state_normalizer": self._state_normalizer
++                        },
++                        "guidance_scale": 0.5,
++                        "guidance_type": "classifier" if self._guidance_fn is not None else "uncond"
++                    },
++            )
++        x0 = self._state_normalizer.inverse(x0.reshape(B, P, -1, 4))[:, :, 1:]
++
++        return {"prediction": x0}
++        
++class RouteEncoder(nn.Module):
++    def __init__(self, route_num, lane_len, drop_path_rate=0.3, hidden_dim=192, tokens_mlp_dim=32, channels_mlp_dim=64):
++        super().__init__()
++        self._channel = channels_mlp_dim
++        self.channel_pre_project = Mlp(in_features=4, hidden_features=channels_mlp_dim, out_features=channels_mlp_dim, act_layer=nn.GELU, drop=0.)
++        self.token_pre_project = Mlp(in_features=route_num * lane_len, hidden_features=tokens_mlp_dim, out_features=tokens_mlp_dim, act_layer=nn.GELU, drop=0.)
++        self.Mixer = MixerBlock(tokens_mlp_dim, channels_mlp_dim, drop_path_rate)
++        self.norm = nn.LayerNorm(channels_mlp_dim)
++        self.emb_project = Mlp(in_features=channels_mlp_dim, hidden_features=hidden_dim, out_features=hidden_dim, act_layer=nn.GELU, drop=drop_path_rate)
++
++    def forward(self, x):
++        x = x[..., :4]
++
++        B, P, V, _ = x.shape
++        mask_v = torch.sum(torch.ne(x[..., :4], 0), dim=-1).to(x.device) == 0
++        mask_p = torch.sum(~mask_v, dim=-1) == 0
++        mask_b = torch.sum(~mask_p, dim=-1) == 0
++        x = x.view(B, P * V, -1)
++
++        x = self.channel_pre_project(x)
++        x = x.permute(0, 2, 1)
++        x = self.token_pre_project(x)
++        x = x.permute(0, 2, 1)
++        x = self.Mixer(x)
++
++        x = torch.mean(x, dim=1)
++
++        x = self.emb_project(self.norm(x))
++        
++        return torch.where(~mask_b.view(-1, 1), x, torch.zeros_like(x)).view(B, -1)
++
++class DiT(nn.Module):
++    def __init__(self, sde: SDE, route_encoder: nn.Module, depth, output_dim, hidden_dim=192, heads=6, dropout=0.1, mlp_ratio=4.0, model_type="x_start"):
++        super().__init__()
++        
++        assert model_type in ["score", "x_start"], f"Unknown model type: {model_type}"
++        self._model_type = model_type
++        self.route_encoder = route_encoder
++        self.agent_embedding = nn.Embedding(2, hidden_dim)
++        self.preproj = Mlp(in_features=output_dim, hidden_features=512, out_features=hidden_dim, act_layer=nn.GELU, drop=0.)
++        self.t_embedder = TimestepEmbedder(hidden_dim)
++        self.blocks = nn.ModuleList([DiTBlock(hidden_dim, heads, dropout, mlp_ratio) for i in range(depth)])
++        self.final_layer = FinalLayer(hidden_dim, output_dim)
++        self._sde = sde
++        self.marginal_prob_std = self._sde.marginal_prob_std
++               
++    @property
++    def model_type(self):
++        return self._model_type
++
++    def forward(self, x, t, cross_c, route_lanes, neighbor_current_mask):
++        B, P, _ = x.shape
++        
++        x = self.preproj(x)
++
++        x_embedding = torch.cat([self.agent_embedding.weight[0][None, :], self.agent_embedding.weight[1][None, :].expand(P - 1, -1)], dim=0)  # (P, D)
++        x_embedding = x_embedding[None, :, :].expand(B, -1, -1) # (B, P, D)
++        x = x + x_embedding     
++
++        route_encoding = self.route_encoder(route_lanes)
++        y = route_encoding
++        y = y + self.t_embedder(t)      
++
++        attn_mask = torch.zeros((B, P), dtype=torch.bool, device=x.device)
++        attn_mask[:, 1:] = neighbor_current_mask
++        
++        for block in self.blocks:
++            x = block(x, cross_c, y, attn_mask)  
++            
++        x = self.final_layer(x, y)
++        
++        if self._model_type == "score":
++            return x / (self.marginal_prob_std(t)[:, None, None] + 1e-6)
++        elif self._model_type == "x_start":
++            return x
++        else:
++            raise ValueError(f"Unknown model type: {self._model_type}")
+\ No newline at end of file
+diff --git a/deployment/model/module/encoder_trt.py b/deployment/model/module/encoder_trt.py
+new file mode 100644
+index 0000000..949d408
+--- /dev/null
++++ b/deployment/model/module/encoder_trt.py
+@@ -0,0 +1,284 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++import torch
++import torch.nn as nn
++from timm.models.layers import Mlp
++from timm.layers import DropPath
++
++class MixerBlock(nn.Module):
++    def __init__(self, tokens_mlp_dim, channels_mlp_dim, drop_path_rate):
++        super().__init__()
++
++        self.norm1 = nn.LayerNorm(channels_mlp_dim)
++        self.channels_mlp = Mlp(in_features=channels_mlp_dim, hidden_features=channels_mlp_dim, act_layer=nn.GELU, drop=drop_path_rate)
++        self.norm2 = nn.LayerNorm(channels_mlp_dim)
++        self.tokens_mlp = Mlp(in_features=tokens_mlp_dim, hidden_features=tokens_mlp_dim, act_layer=nn.GELU, drop=drop_path_rate)
++        
++    def forward(self, x):
++        y = self.norm1(x)
++        y = y.permute(0, 2, 1)
++        y = self.tokens_mlp(y)
++        y = y.permute(0, 2, 1)
++        x = x + y
++        y = self.norm2(x)
++        return x + self.channels_mlp(y)
++
++class Encoder_TRT(nn.Module):
++    def __init__(self, config):
++        super().__init__()
++
++        self.hidden_dim = config.hidden_dim
++
++        self.token_num = config.agent_num + config.static_objects_num + config.lane_num
++
++        self.neighbor_encoder = AgentFusionEncoder(config.time_len, drop_path_rate=config.encoder_drop_path_rate, hidden_dim=config.hidden_dim, depth=config.encoder_depth)
++        self.static_encoder = StaticFusionEncoder(config.static_objects_state_dim, drop_path_rate=config.encoder_drop_path_rate, hidden_dim=config.hidden_dim)
++        self.lane_encoder = LaneFusionEncoder(config.lane_len, drop_path_rate=config.encoder_drop_path_rate, hidden_dim=config.hidden_dim, depth=config.encoder_depth)
++    
++        self.fusion = FusionEncoder(
++            hidden_dim=config.hidden_dim, 
++            num_heads=config.num_heads, 
++            drop_path_rate=config.encoder_drop_path_rate, 
++            depth=config.encoder_depth, 
++            device=config.device
++        )
++
++        # position embedding encode x, y, cos, sin, type
++        self.pos_emb = nn.Linear(7, config.hidden_dim)
++
++    def forward(self, inputs):
++
++        encoder_outputs = {}
++
++        # agents
++        neighbors = inputs['neighbor_agents_past']
++
++        # static objects
++        static = inputs['static_objects']
++
++        # vector maps
++        lanes = inputs['lanes']
++        lanes_speed_limit = inputs['lanes_speed_limit']
++        lanes_has_speed_limit = inputs['lanes_has_speed_limit']
++
++        B = neighbors.shape[0]
++
++        encoding_neighbors, neighbors_mask, neighbor_pos = self.neighbor_encoder(neighbors)
++        encoding_static, static_mask, static_pos = self.static_encoder(static)
++        encoding_lanes, lanes_mask, lane_pos = self.lane_encoder(lanes, lanes_speed_limit, lanes_has_speed_limit)
++
++        encoding_input = torch.cat([encoding_neighbors, encoding_static, encoding_lanes], dim=1)
++
++        encoding_pos = torch.cat([neighbor_pos, static_pos, lane_pos], dim=1).view(B * self.token_num, -1)
++        encoding_mask = torch.cat([neighbors_mask, static_mask, lanes_mask], dim=1).view(-1)
++        encoding_pos = self.pos_emb(encoding_pos)
++        encoding_pos = torch.where(~encoding_mask.unsqueeze(-1), encoding_pos, torch.zeros_like(encoding_pos))
++        encoding_input = encoding_input + encoding_pos.view(B, self.token_num, -1)
++
++        encoder_outputs['encoding'] = self.fusion(encoding_input, encoding_mask.view(B, self.token_num))
++
++        return encoder_outputs
++
++
++class SelfAttentionBlock(nn.Module):
++    def __init__(self, dim=192, heads=6, dropout=0.1, mlp_ratio=4.0):
++        super().__init__()
++
++        self.norm1 = nn.LayerNorm(dim)
++        self.attn = nn.MultiheadAttention(dim, heads, dropout, batch_first=True)
++
++        self.drop_path = DropPath(dropout) if dropout > 0.0 else nn.Identity()
++        self.norm2 = nn.LayerNorm(dim)
++        mlp_hidden_dim = int(dim * mlp_ratio)
++        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=nn.GELU, drop=dropout)
++
++    def forward(self, x, mask):
++        x = x + self.drop_path(self.attn(self.norm1(x), x, x, key_padding_mask=mask)[0])
++        x = x + self.drop_path(self.mlp(self.norm2(x)))
++        return x
++
++
++class AgentFusionEncoder(nn.Module):
++    def __init__(self, time_len, drop_path_rate=0.3, hidden_dim=192, depth=3, tokens_mlp_dim=64, channels_mlp_dim=128):
++        super().__init__()
++
++        self._hidden_dim = hidden_dim
++        self._channel = channels_mlp_dim
++
++        self.type_emb = nn.Linear(3, channels_mlp_dim)
++
++        self.channel_pre_project = Mlp(in_features=8+1, hidden_features=channels_mlp_dim, out_features=channels_mlp_dim, act_layer=nn.GELU, drop=0.)
++        self.token_pre_project = Mlp(in_features=time_len, hidden_features=tokens_mlp_dim, out_features=tokens_mlp_dim, act_layer=nn.GELU, drop=0.)
++
++        self.blocks = nn.ModuleList([MixerBlock(tokens_mlp_dim, channels_mlp_dim, drop_path_rate) for i in range(depth)])
++
++        self.norm = nn.LayerNorm(channels_mlp_dim)
++        self.emb_project = Mlp(in_features=channels_mlp_dim, hidden_features=hidden_dim, out_features=hidden_dim, act_layer=nn.GELU, drop=drop_path_rate)
++
++
++    def forward(self, x):
++        '''
++        x: B, P, V, D (x, y, cos, sin, vx, vy, w, l, type(3))
++        '''
++        neighbor_type = x[:, :, -1, 8:]
++        x = x[..., :8]
++
++        pos = x[:, :, -1, :7].clone() # x, y, cos, sin
++        # neighbor: [1,0,0]
++        pos[..., -3:] = 0.0
++        pos[..., -3] = 1.0
++        
++        B, P, V, _ = x.shape
++        mask_v = torch.sum(torch.ne(x[..., :8], 0), dim=-1).to(x.device) == 0
++        mask_p = torch.sum(~mask_v, dim=-1) == 0
++        x = torch.cat([x, (~mask_v).to(x.dtype).unsqueeze(-1)], dim=-1)
++        x = x.view(B * P, V, -1)
++
++        x = self.channel_pre_project(x)
++        x = x.permute(0, 2, 1)
++        x = self.token_pre_project(x)
++        x = x.permute(0, 2, 1)
++        for block in self.blocks:
++            x = block(x)  
++
++        # pooling
++        x = torch.mean(x, dim=1)
++
++        neighbor_type = neighbor_type.view(B * P, -1)
++        type_embedding = self.type_emb(neighbor_type)  # Type embedding for valid data
++        x = x + type_embedding
++
++        x = self.emb_project(self.norm(x))
++
++        x_result = torch.where(~mask_p.view(-1, 1), x, torch.zeros_like(x))
++        
++        return x_result.view(B, P, -1) , mask_p.reshape(B, -1), pos.view(B, P, -1)
++
++    
++class StaticFusionEncoder(nn.Module):
++    def __init__(self, dim, drop_path_rate=0.3, hidden_dim=192, device='cuda'):
++        super().__init__()
++
++        self._hidden_dim = hidden_dim
++
++        self.projection = Mlp(in_features=dim, hidden_features=hidden_dim, out_features=hidden_dim, act_layer=nn.GELU, drop=drop_path_rate)
++
++    def forward(self, x):
++        '''
++        x: B, P, D (x, y, cos, sin, w, l, type(4))
++        ''' 
++        B, P, _ = x.shape
++
++        pos = x[:, :, :7].clone() # x, y, cos, sin
++        # static: [0,1,0]
++        pos[..., -3:] = 0.0
++        pos[..., -2] = 1.0
++
++        mask_p = torch.sum(torch.ne(x[..., :10], 0), dim=-1).to(x.device) == 0
++
++        x = self.projection(x.view(B * P, -1))
++        x_result = torch.where(~mask_p.view(-1, 1), x, torch.zeros_like(x))
++
++        return x_result.view(B, P, -1), mask_p.view(B, P), pos.view(B, P, -1)
++    
++
++class LaneFusionEncoder(nn.Module):
++    def __init__(self, lane_len, drop_path_rate=0.3, hidden_dim=192, depth=3, tokens_mlp_dim=64, channels_mlp_dim=128):
++        super().__init__()
++
++        self._lane_len = lane_len
++        self._channel = channels_mlp_dim
++
++        self.speed_limit_emb = nn.Linear(1, channels_mlp_dim)
++        self.unknown_speed_emb = nn.Embedding(1, channels_mlp_dim)
++        self.traffic_emb = nn.Linear(4, channels_mlp_dim)
++
++        self.channel_pre_project = Mlp(in_features=8, hidden_features=channels_mlp_dim, out_features=channels_mlp_dim, act_layer=nn.GELU, drop=0.)
++        self.token_pre_project = Mlp(in_features=lane_len, hidden_features=tokens_mlp_dim, out_features=tokens_mlp_dim, act_layer=nn.GELU, drop=0.)
++
++        self.blocks = nn.ModuleList([MixerBlock(tokens_mlp_dim, channels_mlp_dim, drop_path_rate) for i in range(depth)])
++
++        self.norm = nn.LayerNorm(channels_mlp_dim)
++        self.emb_project = Mlp(in_features=channels_mlp_dim, hidden_features=hidden_dim, out_features=hidden_dim, act_layer=nn.GELU, drop=drop_path_rate)
++
++    def forward(self, x, speed_limit, has_speed_limit):
++        '''
++        x: B, P, V, D (x, y, x'-x, y'-y, x_left-x, y_left-y, x_right-x, y_right-y, traffic(4))
++        speed_limit: B, P, 1
++        has_speed_limit: B, P, 1
++        '''
++        traffic = x[:, :, 0, 8:]
++        x = x[..., :8]
++
++        pos = x[:, :, int(self._lane_len / 2), :7].clone() # x, y, x'-x, y'-y
++        heading = torch.atan2(pos[..., 3], pos[..., 2])
++        pos[..., 2] = torch.cos(heading)
++        pos[..., 3] = torch.sin(heading)
++        # lane: [0,0,1]
++        pos[..., -3:] = 0.0
++        pos[..., -1] = 1.0
++
++        B, P, V, _ = x.shape
++        mask_v = torch.sum(torch.ne(x[..., :8], 0), dim=-1).to(x.device) == 0
++        mask_p = torch.sum(~mask_v, dim=-1) == 0
++        x = x.view(B * P, V, -1)
++        x = self.channel_pre_project(x)
++        x = x.permute(0, 2, 1)
++        x = self.token_pre_project(x)
++        x = x.permute(0, 2, 1)
++        for block in self.blocks:
++            x = block(x)  
++
++        x = torch.mean(x, dim=1)
++
++        # Reshape speed_limit and traffic to match flattened dimensions
++        speed_limit = speed_limit.view(B * P, 1)
++        has_speed_limit = has_speed_limit.view(B * P, 1)
++        traffic = traffic.view(B * P, -1)
++
++        has_speed_limit = has_speed_limit.squeeze(-1)
++        speed_limit = speed_limit.squeeze(-1)
++
++        # Handle speed limit embeddings with masking
++        speed_limit_with_limit = self.speed_limit_emb(speed_limit.unsqueeze(-1))
++        speed_limit_no_limit = self.unknown_speed_emb.weight.expand(B * P, -1)
++        
++        speed_limit_embedding = torch.where(
++            has_speed_limit.unsqueeze(-1),
++            speed_limit_with_limit,
++            speed_limit_no_limit
++        )
++
++        # Process traffic lights with masking
++        traffic_light_embedding = self.traffic_emb(traffic)
++
++        # Combine embeddings and apply final projection
++        x = x + speed_limit_embedding + traffic_light_embedding
++        x = self.emb_project(self.norm(x))
++
++        # Mask invalid positions
++        x = torch.where(~mask_p.view(-1, 1), x, torch.zeros_like(x))
++
++        return x.view(B, P, -1), mask_p.reshape(B, -1), pos.view(B, P, -1)
++
++class FusionEncoder(nn.Module):
++    def __init__(self, hidden_dim=192, num_heads=6, drop_path_rate=0.3, depth=3, device='cuda'):
++        super().__init__()
++
++        dpr = drop_path_rate
++
++        self.blocks = nn.ModuleList(
++            [SelfAttentionBlock(hidden_dim, num_heads, dropout=dpr) for i in range(depth)]
++        )
++
++        self.norm = nn.LayerNorm(hidden_dim)
++
++    def forward(self, x, mask):
++
++        mask[:, 0] = False
++
++        for b in self.blocks:
++            x = b(x, mask)
++
++        return self.norm(x)
+\ No newline at end of file
+diff --git a/deployment/onnx_export.py b/deployment/onnx_export.py
+new file mode 100644
+index 0000000..1a1b0b3
+--- /dev/null
++++ b/deployment/onnx_export.py
+@@ -0,0 +1,135 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++import argparse
++import os, json
++import torch
++import torch.nn as nn
++from collections import OrderedDict
++
++import onnx
++from onnxsim import simplify
++
++from model.diffusion_planner_trt import Diffusion_Planner_TRT
++from diffusion_planner.utils.normalizer import ObservationNormalizer, StateNormalizer
++
++def get_args():
++    parser = argparse.ArgumentParser(description='Diffusion Planner ONNX Export')
++
++    parser.add_argument('--args_json', type=str, default='checkpoints/args.json',
++                        help='Path to args JSON file')
++    parser.add_argument('--model_ckpt', type=str, default='checkpoints/model.pth',
++                        help='Path to model checkpoint')
++    parser.add_argument('--onnx_output', type=str, default='diffusion_planner.onnx',
++                        help='Path to save the exported ONNX model')
++
++    # Model architecture
++    parser.add_argument('--hidden_dim', type=int, default=192)
++    parser.add_argument('--num_heads', type=int, default=6)
++    parser.add_argument('--encoder_depth', type=int, default=3)
++    parser.add_argument('--decoder_depth', type=int, default=3)
++    parser.add_argument('--encoder_drop_path_rate', type=float, default=0.1)
++    parser.add_argument('--decoder_drop_path_rate', type=float, default=0.1)
++    parser.add_argument('--diffusion_model_type', type=str, choices=['score', 'x_start'], default='x_start')
++    parser.add_argument('--device', type=str, default='cuda')
++
++    # Scenario structure
++    parser.add_argument('--agent_num', type=int, default=32)
++    parser.add_argument('--predicted_neighbor_num', type=int, default=10)
++    parser.add_argument('--time_len', type=int, default=21)
++    parser.add_argument('--future_len', type=int, default=80)
++    parser.add_argument('--static_objects_state_dim', type=int, default=10)
++    parser.add_argument('--static_objects_num', type=int, default=5)
++    parser.add_argument('--lane_len', type=int, default=20)
++    parser.add_argument('--lane_num', type=int, default=70)
++    parser.add_argument('--route_len', type=int, default=20)
++    parser.add_argument('--route_num', type=int, default=25)
++
++    # Normalization
++    parser.add_argument('--normalization_file_path', type=str, default='normalization.json')
++
++    args = parser.parse_args()
++
++    # Override with JSON config if available
++    if os.path.exists(args.args_json):
++        with open(args.args_json, 'r') as f:
++            json_args = json.load(f)
++        for k, v in json_args.items():
++            if k in ['state_normalizer', 'observation_normalizer']:
++                continue
++            setattr(args, k, v)
++
++    args.guidance_fn = None
++    args.state_normalizer = StateNormalizer.from_json(args)
++    args.observation_normalizer = ObservationNormalizer.from_json(args)
++
++    return args
++
++
++def load_ckpt_weights(model, ckpt_path, device='cuda'):
++    checkpoint = torch.load(ckpt_path, map_location=device)
++
++    if 'model' in checkpoint:
++        state_dict = checkpoint['model']
++    elif 'state_dict' in checkpoint:
++        state_dict = checkpoint['state_dict']
++    else:
++        state_dict = checkpoint
++
++    clean_state_dict = OrderedDict()
++    for k, v in state_dict.items():
++        clean_key = k.replace('module.', '')
++        clean_state_dict[clean_key] = v
++
++    model.load_state_dict(clean_state_dict, strict=False)
++    return model
++
++def generate_random_inputs(args):
++    input_dict = {
++        'ego_current_state':      torch.randn(1, args.predicted_neighbor_num, device=args.device),
++        'neighbor_agents_past':   torch.randn(1, args.agent_num, args.time_len, args.agent_state_dim, device=args.device),
++        'static_objects':         torch.randn(1, args.static_objects_num, args.static_objects_state_dim, device=args.device),
++        'lanes':                  torch.randn(1, args.lane_num, args.lane_len, args.lane_state_dim, device=args.device),
++        'lanes_speed_limit':      torch.randn(1, args.lane_num, 1, device=args.device),
++        'lanes_has_speed_limit':  torch.randint(0, 2, (1, args.lane_num, 1), dtype=torch.bool, device=args.device),
++        'route_lanes':            torch.randn(1, args.route_num, args.route_len, args.route_state_dim, device=args.device),
++    }
++    input_list = [input_dict[k] for k in input_dict]
++    return input_dict, input_list
++
++def main():
++    args = get_args()
++
++    model = Diffusion_Planner_TRT(args).to(args.device)
++    model = load_ckpt_weights(model, args.model_ckpt, device=args.device)
++    model.eval()
++
++    input_dict, inputs = generate_random_inputs(args)
++
++    # Disable advanced attention kernels to ensure ONNX-exportable operations.
++    # This ensures all attention ops fall back to math-based (non-fused) implementations,
++    # which are compatible with ONNX tracing and export.
++    torch.backends.cuda.enable_flash_sdp(False)
++    torch.backends.cuda.enable_mem_efficient_sdp(False)
++    torch.backends.cuda.enable_math_sdp(True)
++    torch.backends.mha.set_fastpath_enabled(False)
++
++    torch.onnx.export(
++        model,
++        inputs,
++        args.onnx_output,
++        input_names=list(input_dict.keys()),
++        output_names=["encoder_outputs", "decoder_outputs"],
++        opset_version=20
++    )
++    # ONNX simplification 
++    print("   ONNX Simplifying...")
++    model = onnx.load(args.onnx_output)
++    model_simp, check = simplify(model)
++    assert check, "Simplified ONNX model could not be validated"
++
++    onnx.save(model_simp, args.onnx_output)
++    print(f"Simplified ONNX model is save at: {args.onnx_output}")
++
++if __name__ == "__main__":
++    main()
+diff --git a/deployment/planner/__init__.py b/deployment/planner/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/deployment/planner/planner.py b/deployment/planner/planner.py
+new file mode 100644
+index 0000000..b0c67d7
+--- /dev/null
++++ b/deployment/planner/planner.py
+@@ -0,0 +1,278 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++import warnings
++import numpy as np
++import socket
++import struct
++from typing import Deque, Dict, List, Type
++
++warnings.filterwarnings("ignore")
++
++from nuplan.common.actor_state.ego_state import EgoState
++from nuplan.common.utils.interpolatable_state import InterpolatableState
++from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
++from nuplan.planning.simulation.trajectory.abstract_trajectory import AbstractTrajectory
++from nuplan.planning.simulation.trajectory.interpolated_trajectory import InterpolatedTrajectory
++from nuplan.planning.simulation.observation.observation_type import Observation, DetectionsTracks
++from nuplan.planning.simulation.planner.ml_planner.transform_utils import transform_predictions_to_states
++from nuplan.planning.simulation.planner.abstract_planner import AbstractPlanner, PlannerInitialization, PlannerInput
++
++from diffusion_planner.data_process.data_processor import DataProcessor
++from diffusion_planner.utils.config import Config
++
++# Global persistent socket per Ray worker
++_GLOBAL_SOCKET = None
++
++
++# ====================================================
++# Socket Management (Persistent Across Scenarios)
++# ====================================================
++
++def get_socket(app_ip, app_port, socket_timeout):
++    """
++    Establish or retrieve a persistent socket connection to TensorRT app.
++    Reconnects only if the socket is stale or timed out.
++    """
++    global _GLOBAL_SOCKET
++
++    if _GLOBAL_SOCKET is not None:
++        try:
++            # Test socket without sending data that could interfere with protocol
++            _GLOBAL_SOCKET.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
++            return _GLOBAL_SOCKET
++        except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
++            # print("[TRT App] Stale connection detected. Reconnecting...")
++            close_socket()
++
++    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
++    # Increase timeout for large data transfers
++    client.settimeout(max(socket_timeout, 120))  # At least 2 minutes
++    
++    # Set socket buffer sizes for large data transfers  
++    client.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 16 * 1024 * 1024)  # 16MB send buffer
++    client.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 * 1024 * 1024)  # 16MB recv buffer
++    
++    client.connect((app_ip, app_port))
++    # print(f"[TRT App] Connected to TRT App at {app_ip}:{app_port}")
++    _GLOBAL_SOCKET = client
++    return _GLOBAL_SOCKET
++
++
++def close_socket():
++    """
++    Cleanly closes the TensorRT app socket connection.
++    Called only when tearing down Ray workers (not after every scenario).
++    """
++    global _GLOBAL_SOCKET
++    if _GLOBAL_SOCKET:
++        try:
++            _GLOBAL_SOCKET.shutdown(socket.SHUT_RDWR)
++        except OSError:
++            pass
++        try:
++            _GLOBAL_SOCKET.close()
++        except OSError:
++            pass
++        # print("[TRT App] Socket closed.")
++        _GLOBAL_SOCKET = None
++
++
++# ====================================================
++# Diffusion Planner (NuPlan + TensorRT App)
++# ====================================================
++class DiffusionPlanner_TRT(AbstractPlanner):
++    """
++    NuPlan Planner using TensorRT engine over socket (replaces ONNXRuntime).
++    One persistent socket per Ray worker for all scenarios.
++    """
++
++    def __init__(
++        self,
++        config: Config,
++        ckpt_path: str,
++
++        past_trajectory_sampling: TrajectorySampling,
++        future_trajectory_sampling: TrajectorySampling,
++
++        app_ip: str,
++        app_port: int = 5555,
++        socket_timeout: int = 10,
++
++        # FP16 support
++        engine_dtype: str = "fp32",  # "fp32" or "fp16"
++        
++        device: str = "cpu",
++    ):
++        self._config = config
++        self._ckpt_path = ckpt_path
++
++        self._future_horizon = future_trajectory_sampling.time_horizon
++        self._step_interval = future_trajectory_sampling.time_horizon / future_trajectory_sampling.num_poses
++
++        self._past_trajectory_sampling = past_trajectory_sampling
++        self._future_trajectory_sampling = future_trajectory_sampling
++
++        self.app_ip = app_ip
++        self.app_port = app_port
++        self.socket_timeout = socket_timeout
++
++        # FP16 support
++        self.engine_dtype = engine_dtype.lower()
++        if self.engine_dtype not in ["fp32", "fp16"]:
++            raise ValueError(f"engine_dtype must be 'fp32' or 'fp16', got '{engine_dtype}'")
++
++        self.data_processor = DataProcessor(config)
++        self.observation_normalizer = config.observation_normalizer
++
++        self._map_api = None
++        self._route_roadblock_ids = None
++        self._initialization = None
++        self._data_count = 0
++
++        # TensorRT engine input order — must match TRT binding order!
++        self.trt_input_order = [
++            "ego_current_state",
++            "neighbor_agents_past",
++            "static_objects",
++            "lanes",
++            "lanes_speed_limit",
++            "lanes_has_speed_limit",
++            "route_lanes",
++        ]
++        self.trt_output_name = "decoder_outputs"
++
++    def name(self) -> str:
++        return "diffusion_planner_trt"
++
++    def observation_type(self) -> Type[Observation]:
++        return DetectionsTracks
++
++    def initialize(self, initialization: PlannerInitialization) -> None:
++        """
++        Called by NuPlan inside Ray worker (runs once per worker, not per scenario).
++        """
++        self._map_api = initialization.map_api
++        self._route_roadblock_ids = initialization.route_roadblock_ids
++        self._initialization = initialization
++        get_socket(self.app_ip, self.app_port, self.socket_timeout)  # ✅ Persistent connection established early
++
++    def planner_input_to_model_inputs(self, planner_input: PlannerInput) -> Dict[str, np.ndarray]:
++        """
++        Converts NuPlan inputs into normalized numpy arrays for TRT.
++        """
++        history = planner_input.history
++        traffic_light_data = list(planner_input.traffic_light_data)
++
++        model_inputs = self.data_processor.observation_adapter(
++            history, traffic_light_data, self._map_api, self._route_roadblock_ids, device="cpu"
++        )
++        model_inputs = self.observation_normalizer(model_inputs)
++        
++        # Convert to appropriate dtype based on engine_dtype
++        target_dtype = np.float16 if self.engine_dtype == "fp16" else np.float32
++        inputs_np = {k: v.cpu().numpy().astype(target_dtype) for k, v in model_inputs.items()}
++
++        for name, arr in inputs_np.items():
++            expected_dtype = np.float16 if self.engine_dtype == "fp16" else np.float32
++            assert arr.dtype == expected_dtype, f"Input {name} is not {expected_dtype}! Got {arr.dtype}"
++
++        # Patch missing neighbor agents (if any)
++        if "neighbor_agents_past" in inputs_np and inputs_np["neighbor_agents_past"].shape[1] == 0:
++            orig_shape = inputs_np["neighbor_agents_past"].shape
++            inputs_np["neighbor_agents_past"] = np.zeros(
++                (orig_shape[0], 1, orig_shape[2], orig_shape[3]), dtype=target_dtype
++            )
++            print(f"[Patch] Injected dummy neighbor agent")
++
++        return inputs_np
++
++    def _run_trt_inference(self, inputs_np: Dict[str, np.ndarray]) -> np.ndarray:
++        try:
++            client = get_socket(self.app_ip, self.app_port, self.socket_timeout)
++            tensors = [inputs_np[name] for name in self.trt_input_order]
++
++            # Convert tensors to appropriate dtype for transmission
++            target_dtype = np.float16 if self.engine_dtype == "fp16" else np.float32
++            tensors = [t.astype(target_dtype, copy=False) for t in tensors]
++
++            # 1) Build header (explicit little-endian)
++            header = [len(tensors)]
++            data_bytes = []
++            for t in tensors:
++                header.append(len(t.shape))
++                header.extend(list(map(int, t.shape)))
++                data_bytes.append(t.tobytes())
++            header_bytes = struct.pack("<" + "i" * len(header), *header)
++
++            payload = header_bytes + b"".join(data_bytes)
++            msg_size = len(payload)
++
++            # 2) Send size (little-endian 4 bytes), then payload
++            client.sendall(struct.pack("<i", msg_size))
++            client.sendall(payload)
++
++            # 3) Receive output size
++            sz_bytes = client.recv(4)
++            if len(sz_bytes) < 4:
++                raise ConnectionError("[TRT App] Failed to read output size.")
++            (out_size,) = struct.unpack("<i", sz_bytes)
++
++            # FAIL-FAST: app returns 0 when binding/order check fails
++            if out_size == 0:
++                raise ConnectionError("[TRT App] App returned 0, invalid request.")
++
++            # 4) Receive output payload
++            out_buffer = bytearray()
++            while len(out_buffer) < out_size:
++                packet = client.recv(out_size - len(out_buffer))
++                if not packet:
++                    raise ConnectionError("[TRT App] Lost connection during recv.")
++                out_buffer += packet
++
++            return np.frombuffer(out_buffer, dtype=np.float32)
++
++        except (TimeoutError, ConnectionError, OSError) as e:
++            print("[TRT App] Timeout or connection lost. Reconnecting...")
++            close_socket()
++            client = get_socket(self.app_ip, self.app_port, self.socket_timeout)
++            return self._run_trt_inference(inputs_np)
++
++    def outputs_to_trajectory(
++        self, decoder_outputs: np.ndarray, ego_state_history: Deque[EgoState]
++    ) -> List[InterpolatableState]:
++        """
++        Converts raw TRT outputs into NuPlan trajectory.
++        """
++        predictions = decoder_outputs.reshape(1, 11, 80, 4)[0, 0].astype(np.float64)
++        heading = np.arctan2(predictions[:, 3], predictions[:, 2])[..., None]
++        predictions = np.concatenate([predictions[..., :2], heading], axis=-1)
++        return transform_predictions_to_states(
++            predictions, ego_state_history, self._future_horizon, self._step_interval
++        )
++
++    def compute_planner_trajectory(self, current_input: PlannerInput) -> AbstractTrajectory:
++        """
++        Executes TensorRT inference and returns trajectory.
++        """
++        inputs_np = self.planner_input_to_model_inputs(current_input)
++        decoder_outputs = self._run_trt_inference(inputs_np)
++        trajectory = InterpolatedTrajectory(
++            trajectory=self.outputs_to_trajectory(decoder_outputs, current_input.history.ego_states)
++        )
++        return trajectory
++
++    def __getstate__(self):
++        state = self.__dict__.copy()
++        return state
++
++    def __setstate__(self, state):
++        self.__dict__.update(state)
++        get_socket(self.app_ip, self.app_port, self.socket_timeout)  # Reconnect on Ray worker deserialization
++
++    def __del__(self):
++        """
++        Clean up only when Ray worker exits.
++        """
++        close_socket()
++
+diff --git a/deployment/trt_infer_app.cpp b/deployment/trt_infer_app.cpp
+new file mode 100644
+index 0000000..9dba9c6
+--- /dev/null
++++ b/deployment/trt_infer_app.cpp
+@@ -0,0 +1,422 @@
++// SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++// SPDX-License-Identifier: Apache-2.0
++
++// trt_infer_app.cpp - Compatible client for both TensorRT inference servers
++
++#include <iostream>
++#include <vector>
++#include <string>
++#include <cstring>
++#include <fstream>
++#include <algorithm>
++#include <sys/socket.h>
++#include <netinet/in.h>
++#include <arpa/inet.h>
++#include <unistd.h>
++#include <cerrno>
++#include <numeric>
++#include <chrono>
++
++// Configuration constants
++namespace {
++    constexpr int DEFAULT_PORT = 5555;
++    constexpr const char* DEFAULT_HOST = "127.0.0.1";
++    constexpr size_t MAX_BUFFER_SIZE = 1500 * 1024 * 1024; // 1.5GB to match Orin server
++}
++
++// Socket helper functions (compatible with both server implementations)
++class SocketClient {
++private:
++    int sock_fd;
++    bool connected;
++
++public:
++    SocketClient() : sock_fd(-1), connected(false) {}
++    
++    ~SocketClient() {
++        disconnect();
++    }
++
++    bool connect(const std::string& host, int port) {
++        sock_fd = socket(AF_INET, SOCK_STREAM, 0);
++        if (sock_fd < 0) {
++            std::cerr << "[Client] Failed to create socket: " << strerror(errno) << std::endl;
++            return false;
++        }
++
++        // Set socket timeouts
++        struct timeval timeout;
++        timeout.tv_sec = 120;  // 120 second timeout to match server
++        timeout.tv_usec = 0;
++        setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
++        setsockopt(sock_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
++
++        // Set socket buffer sizes for large transfers
++        int bufsize = 16 * 1024 * 1024;  // 16MB buffer
++        setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, &bufsize, sizeof(bufsize));
++        setsockopt(sock_fd, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize));
++
++        struct sockaddr_in server_addr;
++        memset(&server_addr, 0, sizeof(server_addr));
++        server_addr.sin_family = AF_INET;
++        server_addr.sin_port = htons(port);
++        
++        if (inet_pton(AF_INET, host.c_str(), &server_addr.sin_addr) <= 0) {
++            std::cerr << "[Client] Invalid address: " << host << std::endl;
++            close(sock_fd);
++            return false;
++        }
++
++        if (::connect(sock_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
++            std::cerr << "[Client] Connection failed: " << strerror(errno) << std::endl;
++            close(sock_fd);
++            return false;
++        }
++
++        connected = true;
++        std::cout << "[Client] Connected to " << host << ":" << port << std::endl;
++        return true;
++    }
++
++    void disconnect() {
++        if (connected && sock_fd >= 0) {
++            close(sock_fd);
++            connected = false;
++            std::cout << "[Client] Disconnected" << std::endl;
++        }
++    }
++
++    // Send data with proper error handling
++    bool sendAll(const void* data, size_t size) {
++        if (!connected) return false;
++        
++        const char* ptr = static_cast<const char*>(data);
++        size_t sent = 0;
++        
++        while (sent < size) {
++            ssize_t result = send(sock_fd, ptr + sent, size - sent, 0);
++            if (result <= 0) {
++                if (result < 0) {
++                    std::cerr << "[Client] Send error: " << strerror(errno) << std::endl;
++                } else {
++                    std::cerr << "[Client] Connection closed by server" << std::endl;
++                }
++                return false;
++            }
++            sent += result;
++        }
++        return true;
++    }
++
++    // Receive data with proper error handling
++    bool recvAll(void* data, size_t size) {
++        if (!connected) return false;
++        
++        char* ptr = static_cast<char*>(data);
++        size_t received = 0;
++        
++        while (received < size) {
++            ssize_t result = recv(sock_fd, ptr + received, size - received, 0);
++            if (result <= 0) {
++                if (result < 0) {
++                    std::cerr << "[Client] Receive error: " << strerror(errno) << std::endl;
++                } else {
++                    std::cerr << "[Client] Connection closed by server" << std::endl;
++                }
++                return false;
++            }
++            received += result;
++        }
++        return true;
++    }
++
++    // Send 32-bit integer in little-endian format (compatible with both servers)
++    bool sendInt32LE(int32_t value) {
++        uint8_t bytes[4];
++        bytes[0] = value & 0xFF;
++        bytes[1] = (value >> 8) & 0xFF;
++        bytes[2] = (value >> 16) & 0xFF;
++        bytes[3] = (value >> 24) & 0xFF;
++        return sendAll(bytes, 4);
++    }
++
++    // Receive 32-bit integer in little-endian format
++    bool recvInt32LE(int32_t& value) {
++        uint8_t bytes[4];
++        if (!recvAll(bytes, 4)) return false;
++        value = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
++        return true;
++    }
++};
++
++// Tensor data structure
++struct Tensor {
++    std::vector<int> shape;
++    std::vector<float> data;
++    
++    size_t volume() const {
++        if (shape.empty()) return 0;
++        return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
++    }
++    
++    void print_stats(const std::string& name) const {
++        if (data.empty()) {
++            std::cout << "[" << name << "] Empty tensor" << std::endl;
++            return;
++        }
++        
++        float sum = std::accumulate(data.begin(), data.end(), 0.0f);
++        float mean = sum / data.size();
++        auto minmax = std::minmax_element(data.begin(), data.end());
++        
++        std::cout << "[" << name << "] Shape: [";
++        for (size_t i = 0; i < shape.size(); ++i) {
++            std::cout << shape[i] << (i + 1 == shape.size() ? "" : ", ");
++        }
++        std::cout << "] Volume: " << volume() 
++                  << " Mean: " << mean 
++                  << " Min: " << *minmax.first 
++                  << " Max: " << *minmax.second << std::endl;
++    }
++};
++
++// Load tensor data from file (simple binary format: shape_dims, shape_values..., float_data...)
++bool loadTensorFromFile(const std::string& filename, Tensor& tensor) {
++    std::ifstream file(filename, std::ios::binary);
++    if (!file) {
++        std::cerr << "[Client] Failed to open tensor file: " << filename << std::endl;
++        return false;
++    }
++
++    // Read shape
++    int32_t ndims;
++    file.read(reinterpret_cast<char*>(&ndims), sizeof(ndims));
++    if (ndims <= 0 || ndims > 8) {
++        std::cerr << "[Client] Invalid tensor dimensions: " << ndims << std::endl;
++        return false;
++    }
++
++    tensor.shape.resize(ndims);
++    file.read(reinterpret_cast<char*>(tensor.shape.data()), ndims * sizeof(int32_t));
++
++    // Read data
++    size_t vol = tensor.volume();
++    tensor.data.resize(vol);
++    file.read(reinterpret_cast<char*>(tensor.data.data()), vol * sizeof(float));
++
++    if (!file) {
++        std::cerr << "[Client] Failed to read tensor data from file" << std::endl;
++        return false;
++    }
++
++    return true;
++}
++
++// Save tensor data to file
++bool saveTensorToFile(const std::string& filename, const Tensor& tensor) {
++    std::ofstream file(filename, std::ios::binary);
++    if (!file) {
++        std::cerr << "[Client] Failed to create output file: " << filename << std::endl;
++        return false;
++    }
++
++    // Write shape
++    int32_t ndims = static_cast<int32_t>(tensor.shape.size());
++    file.write(reinterpret_cast<const char*>(&ndims), sizeof(ndims));
++    file.write(reinterpret_cast<const char*>(tensor.shape.data()), ndims * sizeof(int32_t));
++
++    // Write data
++    file.write(reinterpret_cast<const char*>(tensor.data.data()), tensor.data.size() * sizeof(float));
++
++    return file.good();
++}
++
++// Create a simple test tensor
++Tensor createTestTensor(const std::vector<int>& shape, float base_value = 1.0f) {
++    Tensor tensor;
++    tensor.shape = shape;
++    size_t vol = tensor.volume();
++    tensor.data.resize(vol);
++    
++    // Fill with simple pattern
++    for (size_t i = 0; i < vol; ++i) {
++        tensor.data[i] = base_value + static_cast<float>(i) * 0.001f;
++    }
++    
++    return tensor;
++}
++
++// Perform inference using the compatible protocol
++bool performInference(SocketClient& client, const std::vector<Tensor>& inputs, Tensor& output) {
++    auto start_time = std::chrono::high_resolution_clock::now();
++    
++    // Send number of input tensors
++    if (!client.sendInt32LE(static_cast<int32_t>(inputs.size()))) {
++        std::cerr << "[Client] Failed to send tensor count" << std::endl;
++        return false;
++    }
++
++    // Send tensor shapes
++    for (const auto& tensor : inputs) {
++        // Send rank
++        if (!client.sendInt32LE(static_cast<int32_t>(tensor.shape.size()))) {
++            std::cerr << "[Client] Failed to send tensor rank" << std::endl;
++            return false;
++        }
++        
++        // Send dimensions
++        for (int dim : tensor.shape) {
++            if (!client.sendInt32LE(dim)) {
++                std::cerr << "[Client] Failed to send tensor dimension" << std::endl;
++                return false;
++            }
++        }
++    }
++
++    // Send tensor data
++    for (const auto& tensor : inputs) {
++        size_t data_size = tensor.data.size() * sizeof(float);
++        if (!client.sendAll(tensor.data.data(), data_size)) {
++            std::cerr << "[Client] Failed to send tensor data" << std::endl;
++            return false;
++        }
++        std::cout << "[Client] Sent tensor data: " << data_size << " bytes" << std::endl;
++    }
++
++    // Receive response size
++    int32_t response_size;
++    if (!client.recvInt32LE(response_size)) {
++        std::cerr << "[Client] Failed to receive response size" << std::endl;
++        return false;
++    }
++
++    if (response_size <= 0) {
++        std::cerr << "[Client] Server returned error (response_size=" << response_size << ")" << std::endl;
++        return false;
++    }
++
++    std::cout << "[Client] Receiving response: " << response_size << " bytes" << std::endl;
++
++    // Receive output data
++    size_t num_floats = response_size / sizeof(float);
++    output.data.resize(num_floats);
++    if (!client.recvAll(output.data.data(), response_size)) {
++        std::cerr << "[Client] Failed to receive output data" << std::endl;
++        return false;
++    }
++
++    // Set output shape (assume 1D for simplicity, can be enhanced)
++    output.shape = {static_cast<int>(num_floats)};
++
++    auto end_time = std::chrono::high_resolution_clock::now();
++    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
++    std::cout << "[Client] Inference completed in " << duration.count() << " ms" << std::endl;
++
++    return true;
++}
++
++void printUsage(const char* program_name) {
++    std::cout << "Usage: " << program_name << " [options]\n"
++              << "Options:\n"
++              << "  --host <host>        Server host (default: " << DEFAULT_HOST << ")\n"
++              << "  --port <port>        Server port (default: " << DEFAULT_PORT << ")\n"
++              << "  --input <file>       Input tensor file (binary format)\n"
++              << "  --output <file>      Output tensor file (binary format)\n"
++              << "  --test               Run with generated test data\n"
++              << "  --help               Show this help message\n"
++              << "\nExamples:\n"
++              << "  " << program_name << " --test\n"
++              << "  " << program_name << " --host 192.168.1.100 --input tensor.bin --output result.bin\n";
++}
++
++int main(int argc, char* argv[]) {
++    std::string host = DEFAULT_HOST;
++    int port = DEFAULT_PORT;
++    std::string input_file;
++    std::string output_file;
++    bool use_test_data = false;
++
++    // Parse command line arguments
++    for (int i = 1; i < argc; ++i) {
++        std::string arg = argv[i];
++        if (arg == "--help") {
++            printUsage(argv[0]);
++            return 0;
++        } else if (arg == "--host" && i + 1 < argc) {
++            host = argv[++i];
++        } else if (arg == "--port" && i + 1 < argc) {
++            port = std::atoi(argv[++i]);
++        } else if (arg == "--input" && i + 1 < argc) {
++            input_file = argv[++i];
++        } else if (arg == "--output" && i + 1 < argc) {
++            output_file = argv[++i];
++        } else if (arg == "--test") {
++            use_test_data = true;
++        } else {
++            std::cerr << "Unknown argument: " << arg << std::endl;
++            printUsage(argv[0]);
++            return 1;
++        }
++    }
++
++    try {
++        SocketClient client;
++        
++        // Connect to server
++        if (!client.connect(host, port)) {
++            return 1;
++        }
++
++        // Prepare input tensors
++        std::vector<Tensor> inputs;
++        
++        if (use_test_data) {
++            std::cout << "[Client] Using generated test data" << std::endl;
++            // Create some test tensors with different shapes
++            inputs.push_back(createTestTensor({1, 3, 224, 224}, 0.5f));  // Typical image input
++            inputs.push_back(createTestTensor({1, 1000}, 1.0f));         // Typical classifier input
++        } else if (!input_file.empty()) {
++            std::cout << "[Client] Loading tensor from file: " << input_file << std::endl;
++            Tensor input_tensor;
++            if (!loadTensorFromFile(input_file, input_tensor)) {
++                return 1;
++            }
++            inputs.push_backs(input_tensor);
++        } else {
++            std::cerr << "[Client] No input specified. Use --test or --input <file>" << std::endl;
++            return 1;
++        }
++
++        // Print input statistics
++        for (size_t i = 0; i < inputs.size(); ++i) {
++            inputs[i].print_stats("Input_" + std::to_string(i));
++        }
++
++        // Perform inference
++        Tensor output;
++        if (!performInference(client, inputs, output)) {
++            std::cerr << "[Client] Inference failed" << std::endl;
++            return 1;
++        }
++
++        // Print output statistics
++        output.print_stats("Output");
++
++        // Save output if requested
++        if (!output_file.empty()) {
++            if (saveTensorToFile(output_file, output)) {
++                std::cout << "[Client] Output saved to: " << output_file << std::endl;
++            } else {
++                std::cerr << "[Client] Failed to save output to file" << std::endl;
++            }
++        }
++
++        std::cout << "[Client] Inference completed successfully" << std::endl;
++
++    } catch (const std::exception& e) {
++        std::cerr << "[Client] Error: " << e.what() << std::endl;
++        return 1;
++    }
++
++    return 0;
++} 
+\ No newline at end of file
+diff --git a/diffusion_planner/config/planner/diffusion_planner_trt.yaml b/diffusion_planner/config/planner/diffusion_planner_trt.yaml
+new file mode 100644
+index 0000000..c08bb16
+--- /dev/null
++++ b/diffusion_planner/config/planner/diffusion_planner_trt.yaml
+@@ -0,0 +1,36 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++diffusion_planner:
++  _target_: deployment.planner.planner.DiffusionPlanner_TRT
++  _convert_: "all"
++
++  config:
++    _target_: diffusion_planner.utils.config.Config
++    _convert_: "all"
++
++    args_file: ???
++
++    guidance_fn: null
++  ckpt_path: ???
++
++  past_trajectory_sampling:
++    _target_: nuplan.planning.simulation.trajectory.trajectory_sampling.TrajectorySampling
++    _convert_: "all"
++
++    num_poses: 20
++    time_horizon: 2
++
++  future_trajectory_sampling:
++    _target_: nuplan.planning.simulation.trajectory.trajectory_sampling.TrajectorySampling
++    _convert_: "all"
++
++    num_poses: 80
++    time_horizon: 8
++
++  app_ip: ???
++  app_port: 5555
++  socket_timeout: 10
++  engine_dtype: fp32
++
++  device: cpu
+diff --git a/sim_diffusion_planner_runner_trt.sh b/sim_diffusion_planner_runner_trt.sh
+new file mode 100755
+index 0000000..3f0e575
+--- /dev/null
++++ b/sim_diffusion_planner_runner_trt.sh
+@@ -0,0 +1,54 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
++export HYDRA_FULL_ERROR=1
++
++export NUPLAN_DEVKIT_ROOT="REPLACE_WITH_NUPLAN_DEVIKIT_DIR"  # nuplan-devkit absolute path (e.g., "/home/user/nuplan-devkit")
++export NUPLAN_DATA_ROOT="REPLACE_WITH_DATA_DIR"  # nuplan dataset absolute path (e.g. "/data")
++export NUPLAN_MAPS_ROOT="REPLACE_WITH_MAPS_DIR" # nuplan maps absolute path (e.g. "/data/nuplan-v1.1/maps")
++export NUPLAN_EXP_ROOT="REPLACE_WITH_EXP_DIR" # nuplan experiment absolute path (e.g. "/data/nuplan-v1.1/exp")
++SPLIT="val14"  
++CHALLENGE="closed_loop_reactive_agents"  # e.g., "closed_loop_nonreactive_agents"
++BRANCH_NAME=diffusion_planner_trt_release
++ARGS_FILE=REPLACE_WITH_ARGS_FILE_DIR # e.g., /your/path/to/checkpoints/args.json
++CKPT_FILE=REPLACE_WITH_CKPT_FILE_DIR # e.g., /your/path/to/checkpoints/model.pth
++
++# TensorRT App Configuration
++TRT_APP_IP="REPLACE_WITH_TRT_APP_IP"  # e.g., "localhost" or "192.168.1.100"
++TRT_APP_PORT=5555  # Default port, change if needed
++SOCKET_TIMEOUT=10  # Socket timeout in seconds
++
++if [ "$SPLIT" == "val14" ]; then
++    SCENARIO_BUILDER="nuplan"
++else
++    SCENARIO_BUILDER="nuplan_challenge"
++fi
++echo "Processing $CKPT_FILE..."
++FILENAME=$(basename "$CKPT_FILE")
++FILENAME_WITHOUT_EXTENSION="${FILENAME%.*}"
++
++PLANNER=diffusion_planner_trt
++ENGINE_FILE="REPLACE_WITH_TENSORRT_ENGINE_FILE_DIR"
++ENGINE_DTYPE="fp32" # "fp32" or "fp16"
++
++python $NUPLAN_DEVKIT_ROOT/nuplan/planning/script/run_simulation.py \
++    +simulation=$CHALLENGE \
++    planner=$PLANNER \
++    planner.diffusion_planner.config.args_file=$ARGS_FILE \
++    planner.diffusion_planner.ckpt_path=$CKPT_FILE \
++    planner.diffusion_planner.app_ip=$TRT_APP_IP \
++    planner.diffusion_planner.app_port=$TRT_APP_PORT \
++    planner.diffusion_planner.socket_timeout=$SOCKET_TIMEOUT \
++    planner.diffusion_planner.engine_dtype=$ENGINE_DTYPE \
++    +planner.diffusion_planner.engine_path=$ENGINE_FILE \
++    scenario_builder=$SCENARIO_BUILDER \
++    scenario_filter=$SPLIT \
++    experiment_uid=$PLANNER/$SPLIT/$BRANCH_NAME/${FILENAME_WITHOUT_EXTENSION}_TRT_$(date "+%Y-%m-%d-%H-%M-%S") \
++    verbose=true \
++    worker=ray_distributed \
++    worker.threads_per_node=1 \
++    distributed_mode='SINGLE_NODE' \
++    number_of_gpus_allocated_per_simulation=0.15 \
++    enable_simulation_progress_bar=true \
++    hydra.searchpath="[pkg://diffusion_planner.config.scenario_filter, pkg://diffusion_planner.config, pkg://nuplan.planning.script.config.common, pkg://nuplan.planning.script.experiments  ]"
+\ No newline at end of file
+-- 
+2.25.1
+

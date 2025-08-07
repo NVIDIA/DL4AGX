@@ -1,0 +1,73 @@
+
+This project includes the following third-party open source software components:
+
+-------------------------------------------------------------------------------
+
+1. PyTorch
+   - License: BSD-3-Clause
+   - URL: https://pytorch.org/
+   - License Text: https://github.com/pytorch/pytorch/blob/main/LICENSE
+
+-------------------------------------------------------------------------------
+
+2. NumPy
+   - License: BSD-3-Clause
+   - URL: https://numpy.org/
+   - License Text: https://github.com/numpy/numpy/blob/main/LICENSE.txt
+
+-------------------------------------------------------------------------------
+
+3. ONNX
+   - License: Apache-2.0
+   - URL: https://onnx.ai/
+   - License Text: https://github.com/onnx/onnx/blob/main/LICENSE
+
+-------------------------------------------------------------------------------
+
+4. onnxsim
+   - License: MIT
+   - URL: https://github.com/daquexian/onnx-simplifier
+   - License Text: https://github.com/daquexian/onnx-simplifier/blob/main/LICENSE
+
+-------------------------------------------------------------------------------
+
+5. TensorRT (NVIDIA)
+   - License: NVIDIA Software License
+   - URL: https://developer.nvidia.com/tensorrt
+   - Note: Proprietary; redistribution may be subject to NVIDIA EULA.
+
+-------------------------------------------------------------------------------
+
+6. Polygraphy
+   - License: Apache-2.0
+   - URL: https://github.com/NVIDIA/TensorRT/tree/main/tools/Polygraphy
+   - License Text: https://github.com/NVIDIA/TensorRT/blob/main/LICENSE.txt
+
+-------------------------------------------------------------------------------
+
+7. timm
+   - License: Apache-2.0
+   - URL: https://github.com/huggingface/pytorch-image-models
+   - License Text: https://github.com/huggingface/pytorch-image-models/blob/main/LICENSE
+
+-------------------------------------------------------------------------------
+
+8. NuPlan
+   - License: Apache-2.0
+   - URL: https://github.com/motional/nuplan-devkit
+   - License Text: https://github.com/motional/nuplan-devkit/blob/main/LICENSE
+
+-------------------------------------------------------------------------------
+
+9. dpm-solver (DPM-Solver++)
+   - License: MIT
+   - URL: https://github.com/CompVis/dpm-solver
+   - License Text: https://github.com/CompVis/dpm-solver/blob/main/LICENSE
+
+-------------------------------------------------------------------------------
+
+10. Python Standard Library
+    - License: Python Software Foundation License (PSF)
+    - URL: https://docs.python.org/3/license.html
+
+-------------------------------------------------------------------------------
