@@ -132,7 +132,6 @@ cd deployment/
 - `--builderOptimizationLevel=5`:  Applies the highest level of engine build optimization                                                            
 - `--tilingOptimizationLevel=3`: Enables maximum tiling optimization for performance tuning                                                   
 - `--maxTactics=2000`: Expands the tactic search space to explore more optimized kernels     
-- `--sparsity=disable`: Disables sparsity optimizations, typically used when the model doesn't utilize sparse matrices.
                                      
 
 ## Evaluation on nuPlan Closed-loop Simulation
@@ -289,7 +288,6 @@ where:
 - `r_0 = h_0 / h`, with `h_0 = λ_t0 - λ_t1` and `h = λ_t - λ_t0`  
 - `ε_θ` is the model's noise prediction.
 
-This update uses the difference between consecutive model outputs
 This update uses the difference between consecutive model outputs (`model_prev_0 - model_prev_1` [in code](https://github.com/ZhengYinan-AIR/Diffusion-Planner/blob/5659e494250523a603902e1c3dca0651d2e4c6fa/diffusion_planner/model/diffusion_utils/dpm_solver_pytorch.py#L823)) as an estimate of the first-order derivative. Since each step’s input depends on the outputs of previous steps, even small numerical deviations can lead to cumulative errors. Specifically:
 
 - Even small deviations in earlier outputs (e.g., between PyTorch and ONNX/TRT) lead to different inputs at the next step.

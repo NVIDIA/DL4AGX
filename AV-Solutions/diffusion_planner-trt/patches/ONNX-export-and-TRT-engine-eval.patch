@@ -1,10 +1,10 @@
-From dadeada43c28ee2968c25b0c0d77b7577f979fe9 Mon Sep 17 00:00:00 2001
+From 91e1e3eef8eb0e46be2793f625c6d9dcc0ffa85c Mon Sep 17 00:00:00 2001
 From: "John Yang (SW-TEGRA)" <johnyang@nvidia.com>
-Date: Thu, 7 Aug 2025 14:13:55 -0700
-Subject: [PATCH] ONNX-export-and-TRT-engine-eval
+Date: Thu, 7 Aug 2025 17:24:03 -0700
+Subject: [PATCH] ONNX-export-and-TRT-eval
 
 ---
- deployment/build_trt_engine.sh                |  69 +++
+ deployment/build_trt_engine.sh                |  68 +++
  deployment/model/__init__.py                  |   0
  deployment/model/diffusion_planner_trt.py     |  34 ++
  deployment/model/module/__init__.py           |   0
@@ -16,7 +16,7 @@ Subject: [PATCH] ONNX-export-and-TRT-engine-eval
  deployment/trt_infer_app.cpp                  | 422 ++++++++++++++++++
  .../config/planner/diffusion_planner_trt.yaml |  36 ++
  sim_diffusion_planner_runner_trt.sh           |  54 +++
- 12 files changed, 1485 insertions(+)
+ 12 files changed, 1484 insertions(+)
  create mode 100644 deployment/build_trt_engine.sh
  create mode 100644 deployment/model/__init__.py
  create mode 100644 deployment/model/diffusion_planner_trt.py
@@ -32,10 +32,10 @@ Subject: [PATCH] ONNX-export-and-TRT-engine-eval
 
 diff --git a/deployment/build_trt_engine.sh b/deployment/build_trt_engine.sh
 new file mode 100644
-index 0000000..d398357
+index 0000000..83fce7e
 --- /dev/null
 +++ b/deployment/build_trt_engine.sh
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,68 @@
 +# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 +# SPDX-License-Identifier: Apache-2.0
 +
@@ -93,8 +93,7 @@ index 0000000..d398357
 +              --noTF32 \
 +              --builderOptimizationLevel=5 \
 +              --tilingOptimizationLevel=3 \
-+              --maxTactics=2000 \
-+              --sparsity=disable"
++              --maxTactics=2000"
 +
 +if $USE_FP16; then
 +    echo "🔧 Building FP16 engine with strongly typed model..."
@@ -1053,15 +1052,15 @@ index 0000000..b0c67d7
 +
 diff --git a/deployment/trt_infer_app.cpp b/deployment/trt_infer_app.cpp
 new file mode 100644
-index 0000000..9dba9c6
+index 0000000..6d820b4
 --- /dev/null
 +++ b/deployment/trt_infer_app.cpp
 @@ -0,0 +1,422 @@
-+// SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-+// SPDX-License-Identifier: Apache-2.0
-+
-+// trt_infer_app.cpp - Compatible client for both TensorRT inference servers
-+
++/*
++ * SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++ * SPDX-License-Identifier: Apache-2.0
++ */
++ 
 +#include <iostream>
 +#include <vector>
 +#include <string>
