@@ -1,4 +1,4 @@
-From 91e1e3eef8eb0e46be2793f625c6d9dcc0ffa85c Mon Sep 17 00:00:00 2001
+From 724ea58f7cd5cdb954645154fe667f9ddb9b1d58 Mon Sep 17 00:00:00 2001
 From: "John Yang (SW-TEGRA)" <johnyang@nvidia.com>
 Date: Thu, 7 Aug 2025 17:24:03 -0700
 Subject: [PATCH] ONNX-export-and-TRT-eval
@@ -1052,7 +1052,7 @@ index 0000000..b0c67d7
 +
 diff --git a/deployment/trt_infer_app.cpp b/deployment/trt_infer_app.cpp
 new file mode 100644
-index 0000000..6d820b4
+index 0000000..f3b5ed9
 --- /dev/null
 +++ b/deployment/trt_infer_app.cpp
 @@ -0,0 +1,422 @@
@@ -1079,7 +1079,7 @@ index 0000000..6d820b4
 +namespace {
 +    constexpr int DEFAULT_PORT = 5555;
 +    constexpr const char* DEFAULT_HOST = "127.0.0.1";
-+    constexpr size_t MAX_BUFFER_SIZE = 1500 * 1024 * 1024; // 1.5GB to match Orin server
++    constexpr size_t MAX_BUFFER_SIZE = 1500 * 1024 * 1024; // 1.5GB - Safety limit for tensor data transfers
 +}
 +
 +// Socket helper functions (compatible with both server implementations)
