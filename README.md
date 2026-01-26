@@ -17,8 +17,10 @@ This repository contains model designs, deployment solutions for state-of-the-ar
    - [StreamPETR TensorRT](./AV-Solutions/streampetr-trt/)
    - [UniAD TensorRT](./AV-Solutions/uniad-trt/)
    - [VAD-TensorRT](./AV-Solutions/vad-trt/)
+   - [Diffusion-Planner-TensorRT](./AV-Solutions/diffusion_planner-trt/)
    
 - [Hardware-friendly Models](./Models/)
+   - [ConvSelfAttention](./Models/ConvSelfAttention/)
    - [DEST](./Models/DEST/)
    - [ReduceFormer](./Models/ReduceFormer/)
    - [Swin-Free](./Models/SwinFree/)

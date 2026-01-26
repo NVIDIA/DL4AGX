@@ -36,7 +36,7 @@ index 0000000..adbc135
 --- /dev/null
 +++ b/deployment/build_trt_engine.sh
 @@ -0,0 +1,80 @@
-+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 +# SPDX-License-Identifier: Apache-2.0
 +#
 +# Licensed under the Apache License, Version 2.0 (the "License");
@@ -125,7 +125,7 @@ index 0000000..fe14f4b
 --- /dev/null
 +++ b/deployment/model/diffusion_planner_trt.py
 @@ -0,0 +1,46 @@
-+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 +# SPDX-License-Identifier: Apache-2.0
 +#
 +# Licensed under the Apache License, Version 2.0 (the "License");
@@ -181,7 +181,7 @@ index 0000000..0981b3c
 --- /dev/null
 +++ b/deployment/model/module/decoder_trt.py
 @@ -0,0 +1,185 @@
-+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 +# SPDX-License-Identifier: Apache-2.0
 +#
 +# Licensed under the Apache License, Version 2.0 (the "License");
@@ -373,7 +373,7 @@ index 0000000..27b5e32
 --- /dev/null
 +++ b/deployment/model/module/encoder_trt.py
 @@ -0,0 +1,296 @@
-+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 +# SPDX-License-Identifier: Apache-2.0
 +#
 +# Licensed under the Apache License, Version 2.0 (the "License");
@@ -676,7 +676,7 @@ index 0000000..ea4309c
 --- /dev/null
 +++ b/deployment/onnx_export.py
 @@ -0,0 +1,147 @@
-+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 +# SPDX-License-Identifier: Apache-2.0
 +#
 +# Licensed under the Apache License, Version 2.0 (the "License");
@@ -832,7 +832,7 @@ index 0000000..e811f08
 --- /dev/null
 +++ b/deployment/planner/planner.py
 @@ -0,0 +1,290 @@
-+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 +# SPDX-License-Identifier: Apache-2.0
 +#
 +# Licensed under the Apache License, Version 2.0 (the "License");
@@ -1129,7 +1129,7 @@ index 0000000..051fbc6
 +++ b/deployment/trt_infer_app.cpp
 @@ -0,0 +1,434 @@
 +/*
-+ * SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++ * SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 + * SPDX-License-Identifier: Apache-2.0
 + *
 + * Licensed under the Apache License, Version 2.0 (the "License");
@@ -1569,7 +1569,7 @@ index 0000000..bdc181c
 --- /dev/null
 +++ b/diffusion_planner/config/planner/diffusion_planner_trt.yaml
 @@ -0,0 +1,48 @@
-+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 +# SPDX-License-Identifier: Apache-2.0
 +#
 +# Licensed under the Apache License, Version 2.0 (the "License");
@@ -1623,7 +1623,7 @@ index 0000000..ea664be
 --- /dev/null
 +++ b/sim_diffusion_planner_runner_trt.sh
 @@ -0,0 +1,66 @@
-+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 +# SPDX-License-Identifier: Apache-2.0
 +#
 +# Licensed under the Apache License, Version 2.0 (the "License");

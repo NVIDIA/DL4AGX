@@ -8,13 +8,13 @@ This repository provides guidance to enable ONNX export and deployment on NVIDIA
 
 The patches extends the original Diffusion-Planner repository with the following features:
 
-- **Model export with mixed precision**: Convert the PyTorch model to ONNX with FP16 conversion using [NVIDIA TensorRT Model Optimizer](https://github.com/NVIDIA/TensorRT-Model-Optimizer)
+- **Model export with mixed precision**: Convert the PyTorch model to ONNX with FP16 conversion using [NVIDIA Model Optimizer](https://github.com/NVIDIA/Model-Optimizer)
 - **TensorRT deployment**: Build high-performance inference engines for FP32 and FP16 precision
 - **Evaluation**: Run closed-loop nuPlan simulations with TensorRT engines
 
-## Results on nuPlan Dataset
+## Results on nuPlan Benchmark
 
-The table below shows closed-loop nuPlan performance across different settings. Latency and the closed-loop planning results on nuPlan dataset of TensorRT engine were conducted on NVIDIA **DRIVE Thor-X** and **DRIVE Orin-X** using **TensorRT 10.15**. 
+The table below shows closed-loop nuPlan performance across different settings. Latency and the closed-loop planning results on nuPlan benchmark of TensorRT engine were conducted on NVIDIA **DRIVE Thor-X** and **DRIVE Orin-X** using **TensorRT 10.15**. 
 To get access to TensorRT 10.15 used in our experiments on NVIDIA DRIVE platforms, please refer to details on the [NVIDIA DRIVE site](https://developer.nvidia.com/drive/downloads?sortBy=drive_downloads%2Fsort%2Fdate%3Adesc).
 
 
@@ -95,7 +95,7 @@ The output is a simplified ONNX model generated using the [onnx-simplifier](http
 
 
 ### FP16 Conversion
-Convert the model to FP16 using [NVIDIA TensorRT Model Optimizer](https://github.com/NVIDIA/TensorRT-Model-Optimizer), leveraging its [autocast tool](https://github.com/NVIDIA/TensorRT-Model-Optimizer/blob/main/docs/source/guides/8_autocast.rst) for efficient low-precision deployment with TensorRT :
+Convert the model to FP16 using [NVIDIA Model Optimizer](https://github.com/NVIDIA/Model-Optimizer), leveraging its [AutoCast tool](https://github.com/NVIDIA/Model-Optimizer/blob/main/docs/source/guides/8_autocast.rst) for efficient low-precision deployment with TensorRT :
 
 ```bash
 python -m modelopt.onnx.autocast \
@@ -109,12 +109,6 @@ It selectively lowers precision while retaining critical operations in FP32 for 
 
 ## Build TensorRT Engines
 
-### Requirements
-- NVIDIA DRIVE Thor or Orin platform
-- TensorRT 10.15 for NVIDIA DRIVE platforms
-
-
-### Build TensorRT Engines
 You can generate optimized TensorRT engines for deployment on the target device using the provided build script:
 ```bash
 cd deployment/
@@ -126,17 +120,12 @@ cd deployment/
 ./build_trt_engine.sh --onnx path/to/diffusion_planner_fp16.onnx \
                       --engine path/to/diffusion_planner_fp16.engine \
                       --fp16
-```
-- `--noTF32`: Disables TensorFloat32 fallback on Ampere+ GPUs to prioritize precision                                           
-- `--stronglyTyped`: (Applied internally when `--fp16` is set) Enforces strict ONNX type casting to avoid implicit precision conversion
-- `--builderOptimizationLevel=5`:  Applies the highest level of engine build optimization                                                            
-- `--tilingOptimizationLevel=3`: Enables maximum tiling optimization for performance tuning                                                   
-- `--maxTactics=2000`: Expands the tactic search space to explore more optimized kernels     
+``` 
                                      
 
 ## Evaluation on nuPlan Closed-loop Simulation
 
-We evaluate the TensorRT engine built/run on the target against the nuPlan simulation dataset to validate accuracy and performance across autonomous driving scenarios.
+We evaluate the TensorRT engine built/run on the target against [nuPlan simulation benchmark](https://www.nuscenes.org/nuplan) to validate accuracy and performance across autonomous driving scenarios.
 
 The following evaluation system enables responsive streaming validation between the nuPlan simulation environment running on x86 and the TensorRT engine running on the target. This architecture enables proper evaluation of diffusion-based trajectory planning through continuous interaction between the simulation environment and inference engine.
 
@@ -195,7 +184,7 @@ g++ trt_infer_app.cpp -o trt_infer_app \
 The inference app is implemented with [CUDA Graph optimization](https://docs.nvidia.com/deeplearning/tensorrt/latest/reference/command-line-programs.html) by capturing the execution pattern on the first inference and reusing it for subsequent calls, reducing latency through minimized kernel scheduling overhead.
 
 ### Launch TensorRT Inference App on Target
-Transfer the TensorRT engine file ```diffusion_planner.engine``` to your target device.
+Ensure the TensorRT engine file `diffusion_planner.engine` is available on your target device.
 Start the inference app to listen for tensor data from the nuPlan simulation (default port: 5555):
 
 ```bash
