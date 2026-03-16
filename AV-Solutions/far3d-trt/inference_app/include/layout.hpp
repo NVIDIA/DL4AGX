@@ -40,13 +40,13 @@ namespace  nv
         };
 
         // batch, camera, height, width, channel
-        struct NCHWC: LayoutBase<4>
+        struct NCHWC: LayoutBase<5>
         {
 
         };
 
         // batch, camera, channel, height, width
-        struct NCCHW: LayoutBase<4>
+        struct NCCHW: LayoutBase<5>
         {
             
         };
