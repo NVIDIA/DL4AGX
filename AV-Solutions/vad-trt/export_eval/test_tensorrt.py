@@ -348,33 +348,30 @@ def main():
                         ("map_enc_pts_preds", None),
                         ("ego_fut_preds", [1, 3, 6, 2])]
                     ret = dict()
-                    # please beware of the order of input tensors
-                    # make sure they match with the engine
-                    if prev_bev is not None:
-                        args = [
-                            mlvl_feats[0].data_ptr(),
-                            m[0]["can_bus"].data_ptr(),
-                            m[0]["shift"].data_ptr(),
-                            lidar2img.data_ptr(),]
-                        args.append(prev_bev.data_ptr())
-                    else:
-                        args = [
-                            mlvl_feats[0].data_ptr(),
-                            m[0]["shift"].data_ptr(),
-                            lidar2img.data_ptr(),
-                            m[0]["can_bus"].data_ptr(),]
-
                     for k, v in lut:
                         if v is None:
                             ret[k] = None
                         else:
                             ret[k] = torch.zeros(size=v, dtype=torch.float32, device=dev)
-                            args.append(ret[k].data_ptr())
 
+                    infer = me.infer_prev if prev_bev is not None else me.infer
+
+                    # key names follow AutoInspectHelper naming convention:
+                    # list args as "param.idx", dict args as "param[key]", outputs as "out.name"
+                    tensor_map = {
+                        "mlvl_feats.0":           mlvl_feats[0].data_ptr(),
+                        "img_metas.0[can_bus]":   m[0]["can_bus"].data_ptr(),
+                        "img_metas.0[shift]":     m[0]["shift"].data_ptr(),
+                        "img_metas.0[lidar2img]": lidar2img.data_ptr(),
+                    }
                     if prev_bev is not None:
-                        me.infer_prev.forward(args)
-                    else:
-                        me.infer.forward(args)
+                        tensor_map["prev_bev"] = prev_bev.data_ptr()
+                    for k, v in lut:
+                        if v is not None:
+                            tensor_map[f"out.{k}"] = ret[k].data_ptr()
+
+                    args = [tensor_map[name] for name in infer.names]
+                    infer.forward(args)
 
                     torch.cuda.synchronize()
                     return ret
